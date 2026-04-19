@@ -4,6 +4,9 @@ import time
 import queue
 from datetime import datetime
 
+from otaServer import OTAServer
+
+
 class Core:
     def __init__(self, db, mqtt_client=None):
         self.db = db
@@ -11,20 +14,72 @@ class Core:
         self.running = False
         self.processing_thread = None
         self.stop_event = threading.Event()
+        self.otaServ = OTAServer()
+
+    def start_update_controllers(self, topics):
+        if self.otaServ.is_running:
+            self.otaServ.stop()
+
+        # Очищаем старые файлы и добавляем новые
+        self.otaServ.file_mapping.clear()  # Очищаем старые маппинги
+        self.otaServ.add_binary_file('/firmware.bin', 'firmware.bin')
+        self.otaServ.add_text_file('/version.txt', 'version.txt')
+        self.otaServ.start()
+        # self.otaServ.add_binary_file('/firmware.bin', 'firmware.bin')
+        # self.otaServ.add_text_file('/version.txt', 'version.txt')
+        # self.otaServ.start()
+        for topic in topics:
+            self.mqtt_client.publish(topic, "update")
+
+        #TODO Добавить проверку загрузки контроллера с новой версией и после подтверждения от всех остановить сервер
 
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
+
+
 
     def parse(self, topic, payload):
 
         # TODO: Добавить логику обработки сообщений
         print(f"[PARSE] Обработка сообщения: топик={topic}, данные={payload}")
 
-        if payload == "40:91:51:51:97:3A/init":
-            self.mqtt_client.publish("40:91:51:51:97:3A", "update")
-            #self.mqtt_client.publish("40:91:51:51:97:3A", "connections/btn/15/relay/2")
-        if payload == "40:91:51:51:97:3A/trig":
-            self.mqtt_client.publish("40:91:51:51:97:3A", "triggers/btn/15/value/equal/1/do/40:91:51:51:97:3A/relay/2/toggle/next")
+        parts = payload.split('/')
+
+        controllers = self.db.get_all_controllers()
+
+        if len(parts) >= 2:
+            if parts[1] == "init":
+                for controller in controllers:
+                    if parts[0] == controller.mac:
+                        devices = self.db.get_devices_by_controller(controller.id)
+                        req_parts = ["connections"]
+                        for device in devices:
+                            req_parts.append(self.db.get_device_type(device.type_id).name)
+                            if device.port:
+                                req_parts.append(device.port)
+                            if device.params:
+                                req_parts.append(device.params)
+                        req = "/".join(req_parts)
+                        self.mqtt_client.publish(controller.mac, req)
+            if parts[1] == "trig":
+                for controller in controllers:
+                    if parts[0] == controller.mac:
+                        devices = self.db.get_devices_by_controller(controller.id)
+                        req_parts = ["triggers"]
+                        for device in devices:
+                            req_parts.append(self.db.get_device_type(device.type_id).name)
+                            if device.port:
+                                req_parts.append(device.port)
+                            if device.params:
+                                req_parts.append(device.params)
+                        req = "/".join(req_parts)
+                        self.mqtt_client.publish(controller.mac, req)
+
+        # if payload == "40:91:51:51:97:3A/init":
+        #     #self.mqtt_client.publish("40:91:51:51:97:3A", "update")
+        #     self.mqtt_client.publish("40:91:51:51:97:3A", "connections/btn/15/relay/2")
+        # if payload == "40:91:51:51:97:3A/trig":
+        #     self.mqtt_client.publish("40:91:51:51:97:3A", "triggers/btn/15/value/equal/1/do/40:91:51:51:97:3A/relay/2/toggle/next")
 
 
     def process_messages(self):

@@ -1,3 +1,4 @@
+import socket
 import subprocess
 import paho.mqtt.client as mqtt
 import os
@@ -8,7 +9,7 @@ import threading
 class servMqtt:
     def __init__(self):
         self.client = mqtt.Client()
-        self.broker_address = "192.168.1.171"
+        self.broker_address = "localhost"
         self.port = 1883
         self.message_queue = queue.Queue()
         self.message_callback = None
@@ -28,7 +29,7 @@ class servMqtt:
         if rc == 0:
             self.connected = True
             client.subscribe("serv/#")
-            client.subscribe("#")
+            #client.subscribe("#")
         else:
             print(f"Ошибка подключения: {rc}")
 
@@ -55,7 +56,7 @@ class servMqtt:
             #     self.message_callback(message.topic, payload)
 
         except Exception as e:
-            print(f"❌ Ошибка обработки сообщения: {e}")
+            print(f"Ошибка обработки сообщения: {e}")
             import traceback
             traceback.print_exc()
 
@@ -88,21 +89,23 @@ class servMqtt:
         """Установить callback функцию для обработки сообщений"""
         self.message_callback = callback
 
+    def get_local_ip(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return 'localhost'
+
     def startBroker(self):
         current_directory = os.path.dirname(os.path.realpath(__file__))
         mosquitto_directory = os.path.join(current_directory, "mosquitto")
         os.chdir(mosquitto_directory)
-        # result = subprocess.run('ipconfig', stdout=subprocess.PIPE, text=True, encoding="cp866").stdout.lower()
-        # scan = 0
-        # for i in result.split('\n'):
-        #     if 'беспроводная' in i:
-        #         scan = 1
-        #     if scan:
-        #         if 'ipv4' in i:
-        #             self.broker_address = i.split(':')[1].strip()
-        #             print("ip =", self.broker_address)
         os.system('cmd /k "mosquitto -v -c conf.conf"')
         os.chdir(current_directory)
+        self.broker_address = self.get_local_ip()
 
     def startClient(self):
         try:
