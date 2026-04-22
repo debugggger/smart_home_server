@@ -54,7 +54,7 @@ class Core:
                         devices = self.db.get_devices_by_controller(controller.id)
                         req_parts = ["connections"]
                         for device in devices:
-                            req_parts.append(self.db.get_device_type(device.type_id).name)
+                            req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
                             if device.port:
                                 req_parts.append(device.port)
                             if device.params:
@@ -64,16 +64,40 @@ class Core:
             if parts[1] == "trig":
                 for controller in controllers:
                     if parts[0] == controller.mac:
-                        devices = self.db.get_devices_by_controller(controller.id)
-                        req_parts = ["triggers"]
-                        for device in devices:
-                            req_parts.append(self.db.get_device_type(device.type_id).name)
-                            if device.port:
-                                req_parts.append(device.port)
-                            if device.params:
-                                req_parts.append(device.params)
-                        req = "/".join(req_parts)
-                        self.mqtt_client.publish(controller.mac, req)
+                        triggers = self.db.get_triggers_by_controller(controller.id)
+                        if len(triggers) > 0:
+                            req_parts = ["triggers"]
+                            condCount = 0
+
+                            for trig in triggers:
+                                trigConditions = self.db.get_trig_conditions_by_trigger(trig.id)
+                                for cond in trigConditions:
+                                    if condCount > 0:
+                                        req_parts.append("and")
+                                    device = self.db.get_device_by_id(cond.device_id)
+                                    req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
+                                    if device.port:
+                                        req_parts.append(device.port)
+                                    req_parts.append(cond.condition)
+                                    condCount += 1
+
+                                req_parts.append("do")
+                                req_parts.append(self.db.get_controller_by_id(trig.controller_resp_id).mac)
+                                trigResps = self.db.get_trig_responses_by_trigger(trig.id)
+
+                                for resp in trigResps:
+                                    device = self.db.get_device_by_id(resp.device_id)
+                                    req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
+                                    if device.port:
+                                        req_parts.append(device.port)
+                                    req_parts.append(resp.resp)
+                                req_parts.append("next")
+
+                            req = "/".join(req_parts)
+                            self.mqtt_client.publish(controller.mac, req)
+
+
+
 
         # if payload == "40:91:51:51:97:3A/init":
         #     #self.mqtt_client.publish("40:91:51:51:97:3A", "update")
