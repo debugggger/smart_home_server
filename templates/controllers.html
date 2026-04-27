@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Управление контроллерами - Умный дом</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        h1 {
+            color: #1e2a3a;
+            font-size: 28px;
+        }
+
+        .back-btn {
+            background: #64748b;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #475569;
+        }
+
+        .add-btn {
+            background: #4fc3f7;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            color: #1e2a3a;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        .add-btn:hover {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            padding: 24px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            min-width: 800px;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 14px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1e293b;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #edf2f7;
+            vertical-align: middle;
+        }
+
+        .editable-cell {
+            cursor: pointer;
+            transition: 0.2s;
+            padding: 4px 8px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .editable-cell:hover {
+            background: #f1f5f9;
+        }
+
+        .device-btn {
+            background: #4fc3f7;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+
+        .delete-btn {
+            background: #fee2e2;
+            border: none;
+            color: #b91c1c;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .delete-btn:hover {
+            background: #fecaca;
+        }
+
+        /* Модальные окна */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #1e2a3a;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #334155;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .modal-buttons button:first-child {
+            background: #4fc3f7;
+            color: white;
+        }
+
+        .modal-buttons button:last-child {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: #1e2a3a;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: 0.2s;
+            pointer-events: none;
+        }
+
+        .toast-msg.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .card {
+                padding: 16px;
+            }
+            th, td {
+                padding: 10px 8px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🎮 Управление контроллерами</h1>
+            </div>
+            <div>
+                <button class="back-btn" onclick="goBack()">← На главную</button>
+                <button class="add-btn" onclick="showAddControllerModal()">+ Добавить контроллер</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="table-wrapper">
+                <table id="controllersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Имя контроллера</th>
+                            <th>MAC адрес</th>
+                            <th>Комната</th>
+                            <th>Устройств</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="controllersTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно добавления контроллера -->
+    <div id="addControllerModal" class="modal">
+        <div class="modal-content">
+            <h3>➕ Добавить контроллер</h3>
+            <div class="form-group">
+                <label>Имя контроллера</label>
+                <input type="text" id="controllerName" placeholder="Например: ESP8266 в гостиной">
+            </div>
+            <div class="form-group">
+                <label>MAC адрес</label>
+                <input type="text" id="controllerMac" placeholder="AA:BB:CC:DD:EE:FF">
+            </div>
+            <div class="form-group">
+                <label>Комната</label>
+                <select id="controllerRoomId"></select>
+            </div>
+            <div class="modal-buttons">
+                <button onclick="saveController()">Сохранить</button>
+                <button onclick="closeModal('addControllerModal')">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно редактирования имени -->
+    <div id="editNameModal" class="modal">
+        <div class="modal-content">
+            <h3>✏️ Редактировать имя</h3>
+            <div class="form-group">
+                <label>Новое имя</label>
+                <input type="text" id="editNameInput">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="saveEditedName()">Сохранить</button>
+                <button onclick="closeModal('editNameModal')">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastMsg" class="toast-msg"></div>
+
+    <script>
+        let currentEditControllerId = null;
+        let currentEditElement = null;
+
+        // Загрузка комнат для выпадающего списка
+        async function loadRoomsForSelect() {
+            const response = await fetch('/api/rooms');
+            const rooms = await response.json();
+            const select = document.getElementById('controllerRoomId');
+            select.innerHTML = '<option value="">Выберите комнату</option>';
+            rooms.forEach(room => {
+                select.innerHTML += `<option value="${room.id}">${room.name}</option>`;
+            });
+        }
+
+        // Загрузка контроллеров
+        async function loadControllers() {
+            const response = await fetch('/api/controllers');
+            const controllers = await response.json();
+            const tbody = document.getElementById('controllersTableBody');
+            tbody.innerHTML = '';
+
+            controllers.forEach(ctrl => {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = ctrl.id;
+
+                // Редактируемая ячейка имени
+                const nameCell = row.insertCell(1);
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'editable-cell';
+                nameSpan.innerText = ctrl.name;
+                nameSpan.onclick = () => showEditNameModal(ctrl.id, ctrl.name, nameSpan);
+                nameCell.appendChild(nameSpan);
+
+                row.insertCell(2).innerText = ctrl.mac;
+                row.insertCell(3).innerText = ctrl.room_name;
+                row.insertCell(4).innerText = ctrl.devices_count;
+
+                const actionCell = row.insertCell(5);
+                const devicesBtn = document.createElement('button');
+                devicesBtn.innerText = '📟 Устройства';
+                devicesBtn.className = 'device-btn';
+                devicesBtn.onclick = () => showDevices(ctrl.id, ctrl.name);
+                actionCell.appendChild(devicesBtn);
+
+                const delBtn = document.createElement('button');
+                delBtn.innerText = 'Удалить';
+                delBtn.className = 'delete-btn';
+                delBtn.onclick = () => deleteController(ctrl.id);
+                actionCell.appendChild(delBtn);
+            });
+        }
+
+        function showEditNameModal(controllerId, currentName, element) {
+            currentEditControllerId = controllerId;
+            currentEditElement = element;
+            document.getElementById('editNameInput').value = currentName;
+            document.getElementById('editNameModal').classList.add('active');
+        }
+
+        async function saveEditedName() {
+            const newName = document.getElementById('editNameInput').value;
+            if (!newName) {
+                alert('Введите имя');
+                return;
+            }
+
+            const response = await fetch(`/api/controllers/${currentEditControllerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+
+            if (response.ok) {
+                currentEditElement.innerText = newName;
+                showToast('✅ Имя обновлено');
+                closeModal('editNameModal');
+            } else {
+                showToast('❌ Ошибка обновления');
+            }
+        }
+
+        async function deleteController(controllerId) {
+            if (!confirm('Удалить контроллер? Все устройства также будут удалены!')) return;
+            const response = await fetch(`/api/controllers/${controllerId}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('✅ Контроллер удален');
+                loadControllers();
+            } else {
+                showToast('❌ Ошибка удаления');
+            }
+        }
+
+        function showAddControllerModal() {
+            loadRoomsForSelect();
+            document.getElementById('addControllerModal').classList.add('active');
+        }
+
+        async function saveController() {
+            const name = document.getElementById('controllerName').value;
+            const mac = document.getElementById('controllerMac').value;
+            const roomId = document.getElementById('controllerRoomId').value;
+
+            if (!name || !mac || !roomId) {
+                alert('Заполните все поля');
+                return;
+            }
+
+            const response = await fetch('/api/controllers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, mac, room_id: parseInt(roomId) })
+            });
+
+            if (response.ok) {
+                closeModal('addControllerModal');
+                showToast('✅ Контроллер добавлен');
+                loadControllers();
+                document.getElementById('controllerName').value = '';
+                document.getElementById('controllerMac').value = '';
+            } else {
+                showToast('❌ Ошибка добавления');
+            }
+        }
+
+        function showDevices(controllerId, controllerName) {
+            // Сохраняем в localStorage выбранный контроллер
+            localStorage.setItem('selectedControllerId', controllerId);
+            localStorage.setItem('selectedControllerName', controllerName);
+            window.location.href = '/devices-page';
+        }
+
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastMsg');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // Инициализация
+        loadControllers();
+    </script>
+</body>
+</html>

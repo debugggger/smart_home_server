@@ -5,6 +5,7 @@ import queue
 from datetime import datetime
 
 from otaServer import OTAServer
+from database import Database, Room, Controller, Device, DeviceType, Trigger, TrigCondition, TrigResponse
 
 
 class Core:
@@ -16,31 +17,25 @@ class Core:
         self.stop_event = threading.Event()
         self.otaServ = OTAServer()
 
-    def start_update_controllers(self, topics):
-        if self.otaServ.is_running:
-            self.otaServ.stop()
-
-        # Очищаем старые файлы и добавляем новые
-        self.otaServ.file_mapping.clear()  # Очищаем старые маппинги
-        self.otaServ.add_binary_file('/firmware.bin', 'firmware.bin')
-        self.otaServ.add_text_file('/version.txt', 'version.txt')
-        self.otaServ.start()
-        # self.otaServ.add_binary_file('/firmware.bin', 'firmware.bin')
-        # self.otaServ.add_text_file('/version.txt', 'version.txt')
-        # self.otaServ.start()
-        for topic in topics:
-            self.mqtt_client.publish(topic, "update")
-
-        #TODO Добавить проверку загрузки контроллера с новой версией и после подтверждения от всех остановить сервер
 
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
 
+    def start_update_controllers(self, topics):
+        if self.otaServ.is_running:
+            self.otaServ.stop()
+
+        self.otaServ.file_mapping.clear()
+        self.otaServ.add_binary_file('/firmware.bin', 'firmware.bin')
+        self.otaServ.add_text_file('/version.txt', 'version.txt')
+        self.otaServ.start()
+        for topic in topics:
+            self.mqtt_client.publish(topic, "update")
+        #TODO Добавить проверку загрузки контроллера с новой версией и после подтверждения от всех остановить сервер
 
 
     def parse(self, topic, payload):
 
-        # TODO: Добавить логику обработки сообщений
         print(f"[PARSE] Обработка сообщения: топик={topic}, данные={payload}")
 
         parts = payload.split('/')

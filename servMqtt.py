@@ -1,10 +1,12 @@
-import socket
 import subprocess
 import paho.mqtt.client as mqtt
 import os
 import queue
 import time
 import threading
+
+from utils import get_local_ip
+
 
 class servMqtt:
     def __init__(self):
@@ -89,23 +91,13 @@ class servMqtt:
         """Установить callback функцию для обработки сообщений"""
         self.message_callback = callback
 
-    def get_local_ip(self):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except:
-            return 'localhost'
-
     def startBroker(self):
         current_directory = os.path.dirname(os.path.realpath(__file__))
         mosquitto_directory = os.path.join(current_directory, "mosquitto")
         os.chdir(mosquitto_directory)
         os.system('cmd /k "mosquitto -v -c conf.conf"')
         os.chdir(current_directory)
-        self.broker_address = self.get_local_ip()
+        self.broker_address = get_local_ip()
 
     def startClient(self):
         try:

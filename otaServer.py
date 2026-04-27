@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
-import socket
+#import socket
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
 
+from utils import get_local_ip
 
 
 class CustomHandler(BaseHTTPRequestHandler):
@@ -42,21 +42,12 @@ class CustomHandler(BaseHTTPRequestHandler):
 class OTAServer:
     def __init__(self, port=8001, host=None, file_mapping=None):
         self.port = port
-        self.host = host if host else self._get_local_ip()
+        self.host = host if host else get_local_ip()
         self.server = None
         self.server_thread = None
         self.is_running = False
         self.file_mapping = file_mapping or {}
 
-    def _get_local_ip(self):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except:
-            return 'localhost'
 
     def start(self):
         if self.is_running:

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Управление устройствами - Умный дом</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        h1 {
+            color: #1e2a3a;
+            font-size: 28px;
+        }
+
+        .back-btn {
+            background: #64748b;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #475569;
+        }
+
+        .add-btn {
+            background: #4fc3f7;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            color: #1e2a3a;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        .add-btn:hover {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            padding: 24px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            min-width: 600px;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 14px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1e293b;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #edf2f7;
+            vertical-align: middle;
+        }
+
+        .delete-btn {
+            background: #fee2e2;
+            border: none;
+            color: #b91c1c;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .delete-btn:hover {
+            background: #fecaca;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+
+        /* Модальные окна */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #1e2a3a;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #334155;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .modal-buttons button:first-child {
+            background: #4fc3f7;
+            color: white;
+        }
+
+        .modal-buttons button:last-child {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: #1e2a3a;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: 0.2s;
+            pointer-events: none;
+        }
+
+        .toast-msg.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .card {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 id="pageTitle">📟 Устройства контроллера</h1>
+            </div>
+            <div>
+                <button class="back-btn" onclick="goBack()">← Назад к контроллерам</button>
+                <button class="add-btn" onclick="showAddDeviceModal()">+ Добавить устройство</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="table-wrapper">
+                <table id="devicesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Имя устройства</th>
+                            <th>Тип</th>
+                            <th>Порт</th>
+                            <th>Параметры</th>
+                            <th>Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devicesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно добавления устройства -->
+    <div id="addDeviceModal" class="modal">
+        <div class="modal-content">
+            <h3>➕ Добавить устройство</h3>
+            <div class="form-group">
+                <label>Имя устройства</label>
+                <input type="text" id="deviceName" placeholder="Например: Датчик температуры">
+            </div>
+            <div class="form-group">
+                <label>Тип устройства</label>
+                <select id="deviceTypeId"></select>
+            </div>
+            <div class="form-group">
+                <label>Порт</label>
+                <input type="text" id="devicePort" placeholder="GPIO2, A0 и т.д.">
+            </div>
+            <div class="form-group">
+                <label>Параметры (JSON)</label>
+                <input type="text" id="deviceParams" placeholder='{"threshold": 25}'>
+            </div>
+            <div class="modal-buttons">
+                <button onclick="saveDevice()">Сохранить</button>
+                <button onclick="closeModal('addDeviceModal')">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastMsg" class="toast-msg"></div>
+
+    <script>
+        let currentControllerId = null;
+        let currentControllerName = '';
+
+        // Загрузка устройств
+        async function loadDevices() {
+            const response = await fetch(`/api/devices/controller/${currentControllerId}`);
+            const devices = await response.json();
+            const tbody = document.getElementById('devicesTableBody');
+            tbody.innerHTML = '';
+
+            if (devices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
+                return;
+            }
+
+            devices.forEach(device => {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = device.id;
+                row.insertCell(1).innerText = device.name;
+                row.insertCell(2).innerText = device.type_name;
+                row.insertCell(3).innerText = device.port;
+                row.insertCell(4).innerText = device.params;
+
+                const actionCell = row.insertCell(5);
+                const delBtn = document.createElement('button');
+                delBtn.innerText = 'Удалить';
+                delBtn.className = 'delete-btn';
+                delBtn.onclick = () => deleteDevice(device.id);
+                actionCell.appendChild(delBtn);
+            });
+        }
+
+        async function loadDeviceTypes() {
+            const response = await fetch('/api/device-types');
+            const types = await response.json();
+            const select = document.getElementById('deviceTypeId');
+            select.innerHTML = '<option value="">Выберите тип</option>';
+            types.forEach(type => {
+                select.innerHTML += `<option value="${type.id}">${type.name}</option>`;
+            });
+        }
+
+        function showAddDeviceModal() {
+            if (!currentControllerId) return;
+            loadDeviceTypes();
+            document.getElementById('addDeviceModal').classList.add('active');
+        }
+
+        async function saveDevice() {
+            const name = document.getElementById('deviceName').value;
+            const typeId = document.getElementById('deviceTypeId').value;
+            const port = document.getElementById('devicePort').value;
+            const params = document.getElementById('deviceParams').value;
+
+            if (!name || !typeId) {
+                alert('Заполните имя и тип устройства');
+                return;
+            }
+
+            const response = await fetch('/api/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    controller_id: currentControllerId,
+                    type_id: parseInt(typeId),
+                    port: port,
+                    params: params || '{}'
+                })
+            });
+
+            if (response.ok) {
+                closeModal('addDeviceModal');
+                showToast('✅ Устройство добавлено');
+                loadDevices();
+                document.getElementById('deviceName').value = '';
+                document.getElementById('devicePort').value = '';
+                document.getElementById('deviceParams').value = '';
+            } else {
+                showToast('❌ Ошибка добавления');
+            }
+        }
+
+        async function deleteDevice(deviceId) {
+            if (!confirm('Удалить устройство?')) return;
+            const response = await fetch(`/api/devices/${deviceId}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('✅ Устройство удалено');
+                loadDevices();
+            } else {
+                showToast('❌ Ошибка удаления');
+            }
+        }
+
+        function goBack() {
+            window.location.href = '/controllers-page';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastMsg');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // Инициализация
+        currentControllerId = localStorage.getItem('selectedControllerId');
+        currentControllerName = localStorage.getItem('selectedControllerName');
+
+        if (currentControllerId) {
+            document.getElementById('pageTitle').innerHTML = `📟 Устройства контроллера: ${currentControllerName}`;
+            loadDevices();
+        } else {
+            document.getElementById('devicesTableBody').innerHTML = '<tr><td colspan="6" class="empty-state">❌ Ошибка: контроллер не выбран</td></tr>';
+        }
+    </script>
+</body>
+</html>

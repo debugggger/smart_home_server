@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Умный дом</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ========== МЕНЮ ========== */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 260px;
+            background: linear-gradient(135deg, #1e2a3a 0%, #0f1724 100%);
+            color: white;
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            box-shadow: 2px 0 20px rgba(0,0,0,0.1);
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        .menu-toggle {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            background: #1e2a3a;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1100;
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .menu-toggle:hover {
+            background: #2c3e4e;
+        }
+
+        .sidebar-header {
+            padding: 30px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .menu-items {
+            list-style: none;
+            padding: 20px 0;
+        }
+
+        .menu-items li {
+            padding: 14px 24px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 16px;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-items li:hover {
+            background: rgba(255,255,255,0.1);
+            border-left-color: #4fc3f7;
+        }
+
+        .menu-items li.active {
+            background: rgba(79,195,247,0.15);
+            border-left-color: #4fc3f7;
+        }
+
+        /* ========== ОСНОВНОЙ КОНТЕНТ ========== */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            transition: margin-left 0.3s ease;
+            padding: 20px;
+            width: 100%;
+        }
+
+        .sidebar.collapsed+.main-content {
+            margin-left: 0;
+        }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            padding: 24px;
+            margin-top: 60px;
+            text-align: center;
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            color: #1e2a3a;
+        }
+
+        .card p {
+            margin-bottom: 30px;
+            color: #64748b;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        .nav-btn {
+            background: #4fc3f7;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            color: #1e2a3a;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .nav-btn:hover {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+
+        .right-float-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #1e2a3a;
+            color: white;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 240px;
+            }
+            .card {
+                padding: 16px;
+                margin-top: 70px;
+            }
+            .right-float-btn {
+                display: flex;
+            }
+            .nav-btn {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <button class="menu-toggle" id="menuToggleBtn">☰</button>
+    <button class="right-float-btn" id="rightFloatBtn">☰</button>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">🏠 Умный дом</div>
+        <ul class="menu-items">
+            <li data-page="main" class="active">🏠 Главная</li>
+            <li data-page="controllers">🎮 Контроллеры</li>
+            <li data-page="rooms">🏠 Комнаты</li>
+            <li data-page="triggers">⚡ Сценарии</li>
+        </ul>
+    </div>
+
+    <div class="main-content" id="mainContent">
+        <div class="card">
+            <h2>🏠 Добро пожаловать в систему умного дома</h2>
+            <p>Выберите раздел для управления</p>
+            <div class="nav-buttons">
+                <button class="nav-btn" onclick="navigateTo('controllers')">🎮 Управление контроллерами</button>
+                <button class="nav-btn" onclick="navigateTo('rooms')">🏠 Управление комнатами</button>
+                <button class="nav-btn" onclick="navigateTo('triggers')">⚡ Управление сценариями</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.getElementById('menuToggleBtn');
+        const rightFloatBtn = document.getElementById('rightFloatBtn');
+
+        function toggleMenu() {
+            sidebar.classList.toggle('collapsed');
+        }
+
+        menuToggle.addEventListener('click', toggleMenu);
+        rightFloatBtn.addEventListener('click', toggleMenu);
+
+        // Функция навигации - ИСПРАВЛЕНА
+        function navigateTo(page) {
+            if (page === 'controllers') {
+                window.location.href = '/controllers-page';
+            } else if (page === 'rooms') {
+                window.location.href = '/rooms-page';
+            } else if (page === 'triggers') {
+                window.location.href = '/triggers-page';
+            } else if (page === 'main') {
+                window.location.href = '/';
+            }
+        }
+
+        // Обработка кликов по пунктам меню
+        document.querySelectorAll('.menu-items li').forEach(item => {
+            item.addEventListener('click', function() {
+                const page = this.getAttribute('data-page');
+                navigateTo(page);
+            });
+        });
+    </script>
+</body>
+</html>

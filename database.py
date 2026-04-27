@@ -109,6 +109,7 @@ class TrigResponse:
 
 
 
+
 @dataclass
 class Trigger:
     """Сущность триггера"""
@@ -142,7 +143,7 @@ class Database:
         self.connection.close()
         print("[INFO] Close connection with DB")
 
-    # ============= ВНУТРЕННИЕ МЕТОДЫ =============
+        # ============= ВНУТРЕННИЕ МЕТОДЫ =============
 
     def _execute_query(self, query: str, params: tuple = None,
                        fetch_one: bool = False, fetch_all: bool = False):
@@ -184,6 +185,7 @@ class Database:
         """Получение всех комнат"""
         query = "SELECT id, name FROM rooms ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
+        print(results)
         return [Room(id=r[0], name=r[1]) for r in results] if results else []
 
     def delete_room(self, room_id: int) -> bool:
