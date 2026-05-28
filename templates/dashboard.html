@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Умный дом - Панель управления</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        h1 {
+            color: #1e2a3a;
+            font-size: 28px;
+        }
+
+        .refresh-btn {
+            background: #4fc3f7;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: #1e2a3a;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+
+        /* Группы комнат */
+        .room-section {
+            margin-bottom: 30px;
+        }
+
+        .room-header {
+            background: white;
+            border-radius: 16px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .room-header h2 {
+            color: #1e2a3a;
+            font-size: 22px;
+        }
+
+        .room-header .room-icon {
+            font-size: 28px;
+        }
+
+        .room-header .devices-count {
+            background: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #475569;
+            margin-left: auto;
+        }
+
+        /* Сетка устройств */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        /* Карточка устройства */
+        .device-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .device-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e2a3a;
+        }
+
+        .device-type {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .device-info {
+            margin-bottom: 15px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e2e8f0;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        .device-value {
+            background: #f0fdf4;
+            padding: 10px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .value-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #10b981;
+        }
+
+        .value-unit {
+            font-size: 14px;
+            color: #64748b;
+            margin-left: 5px;
+        }
+
+        .value-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+
+        /* Кнопки управления */
+        .device-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .control-btn {
+            background: #f1f5f9;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: 0.2s;
+            color: #334155;
+        }
+
+        .control-btn:hover {
+            background: #e2e8f0;
+            transform: scale(1.02);
+        }
+
+        .control-btn.primary {
+            background: #4fc3f7;
+            color: white;
+        }
+
+        .control-btn.danger {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .control-btn.success {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        /* Модальное окно для ввода параметров */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 450px;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #1e2a3a;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #334155;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .modal-buttons button:first-child {
+            background: #4fc3f7;
+            color: white;
+        }
+
+        .modal-buttons button:last-child {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        /* Статус онлайн/офлайн */
+        .status-online {
+            color: #10b981;
+        }
+
+        .status-offline {
+            color: #ef4444;
+        }
+
+        /* Загрузка */
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #64748b;
+        }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: #1e2a3a;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: 0.2s;
+        }
+
+        .toast-msg.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .devices-grid {
+                grid-template-columns: 1fr;
+            }
+            .device-card {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 Умный дом - панель управления</h1>
+            <button class="refresh-btn" onclick="loadAllData()">🔄 Обновить данные</button>
+        </div>
+
+        <div id="dashboardContent">
+            <div class="loading">Загрузка устройств...</div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для ввода параметров -->
+    <div id="paramsModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Введите параметры</h3>
+            <div id="modalFields"></div>
+            <div class="modal-buttons">
+                <button onclick="executeCommand()">Выполнить</button>
+                <button onclick="closeModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastMsg" class="toast-msg"></div>
+
+    <script>
+        // Данные устройств (в реальном приложении получаем с сервера)
+        let devicesData = [];
+        let pendingCommand = null;
+
+        // Типы устройств и их команды
+        const deviceCommands = {
+            'btn': [
+                { name: 'getCurrentValue', params: [{ name: 'тип', type: 'select', options: [
+                    { value: 0, label: 'Удержание' },
+                    { value: 1, label: 'Одиночное нажатие' },
+                    { value: 2, label: 'Двойное нажатие' },
+                    { value: 3, label: 'Длинное нажатие' },
+                    { value: 4, label: 'Отпущена' }
+                ]}]}
+            ],
+            'binOut': [
+                { name: 'toggle', params: [], label: 'Переключить' },
+                { name: 'setHigh', params: [], label: 'Включить' },
+                { name: 'setLow', params: [], label: 'Выключить' }
+            ],
+            'aht': [
+                { name: 'getCurrentValue', params: [{ name: 'тип', type: 'select', options: [
+                    { value: 0, label: 'Температура' },
+                    { value: 2, label: 'Влажность' }
+                ]}]}
+            ],
+            'bin': [
+                { name: 'getCurrentValue', params: [{ name: 'тип', type: 'select', options: [
+                    { value: 0, label: 'Высокий уровень' },
+                    { value: 1, label: 'Низкий уровень' },
+                    { value: 2, label: 'Переход в высокий' },
+                    { value: 3, label: 'Переход в низкий' }
+                ]}]}
+            ],
+            'analog': [
+                { name: 'getCurrentValue', params: [] }
+            ],
+            'led': [
+                { name: 'turnOn', params: [], label: 'Включить' },
+                { name: 'turnOff', params: [], label: 'Выключить' },
+                { name: 'setColor', params: [{ name: 'HEX цвет', type: 'color', placeholder: '#FF0000' }], label: 'Установить цвет' },
+                { name: 'setBrightness', params: [{ name: 'яркость', type: 'number', min: 0, max: 255, placeholder: '0-255' }], label: 'Яркость' },
+                { name: 'setSpeed', params: [{ name: 'скорость', type: 'number', placeholder: 'скорость' }], label: 'Скорость' },
+                { name: 'setEffect', params: [
+                    { name: 'эффект', type: 'select', options: [
+                        { value: 0, label: 'OFF' },
+                        { value: 1, label: 'SOLID_COLOR' },
+                        { value: 2, label: 'RAINBOW_STATIC' },
+                        { value: 3, label: 'RAINBOW_MOVING' },
+                        { value: 4, label: 'CYBERPUNK' },
+                        { value: 5, label: 'WARM' },
+                        { value: 6, label: 'COLD' },
+                        { value: 7, label: 'FIRE' },
+                        { value: 8, label: 'OCEAN' },
+                        { value: 9, label: 'FOREST' },
+                        { value: 10, label: 'SUNSET' }
+                    ]},
+                    { name: 'скорость', type: 'number', placeholder: 'скорость' },
+                    { name: 'цвет', type: 'color', placeholder: '#FFFFFF' }
+                ], label: 'Эффект' },
+                { name: 'setSoundReaction', params: [
+                    { name: 'эффект', type: 'select', options: [
+                        { value: 0, label: 'OFF' },
+                        { value: 1, label: 'BRIGHTNESS' },
+                        { value: 2, label: 'COLOR_SHIFT' },
+                        { value: 3, label: 'FLASH' },
+                        { value: 4, label: 'SPECTRUM' },
+                        { value: 5, label: 'PULSE' }
+                    ]},
+                    { name: 'чувствительность', type: 'number', min: 0, max: 255, placeholder: '0-255' }
+                ], label: 'Реакция на звук' },
+                { name: 'setSoundWeights', params: [
+                    { name: 'басы', type: 'number', placeholder: 'басы' },
+                    { name: 'миды', type: 'number', placeholder: 'миды' },
+                    { name: 'высокие', type: 'number', placeholder: 'высокие' }
+                ], label: 'Вес звука' },
+                { name: 'setSoundBeatColor', params: [{ name: 'HEX цвет', type: 'color', placeholder: '#FF0000' }], label: 'Цвет бита' },
+                { name: 'setMicro', params: [{ name: 'порт', type: 'text', placeholder: 'порт микрофона' }], label: 'Микрофон' }
+            ],
+            'stepper': [
+                { name: 'setSpeed', params: [{ name: 'скорость', type: 'number', placeholder: 'скорость' }], label: 'Скорость' },
+                { name: 'setDir', params: [{ name: 'направление', type: 'select', options: [
+                    { value: 'CW', label: 'По часовой' },
+                    { value: 'CCW', label: 'Против часовой' }
+                ]}], label: 'Направление' },
+                { name: 'startInf', params: [], label: 'Бесконечное вращение' },
+                { name: 'startSteps', params: [{ name: 'шаги', type: 'number', placeholder: 'число шагов' }], label: 'Вращение на шагов' },
+                { name: 'stop', params: [], label: 'Стоп' }
+            ],
+            'micro': [
+                { name: 'getCurrentValue', params: [] }
+            ]
+        };
+
+        // Функция для получения данных с сервера (имитация)
+        async function loadAllData() {
+            try {
+                // В реальном приложении здесь будет fetch к API
+                // const response = await fetch('/api/devices/all');
+                // devicesData = await response.json();
+
+                // Имитация данных для демонстрации
+                await simulateDataLoading();
+
+                renderDashboard();
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+                showToast('❌ Ошибка загрузки данных');
+            }
+        }
+
+        // Имитация загрузки данных (замени на реальный API)
+        async function simulateDataLoading() {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    devicesData = [
+                        // Гостиная
+                        { id: 1, name: 'Датчик температуры', type: 'aht', room: 'Гостиная', controller: 'ESP-01', port: 'GPIO4', value: 23.5, unit: '°C', status: 'online' },
+                        { id: 2, name: 'Светодиодная лента', type: 'led', room: 'Гостиная', controller: 'ESP-01', port: 'GPIO2', params: { led_count: 60 }, status: 'online' },
+                        { id: 3, name: 'Кнопка включения', type: 'btn', room: 'Гостиная', controller: 'ESP-01', port: 'GPIO0', status: 'online' },
+                        // Спальня
+                        { id: 4, name: 'Шаговый двигатель', type: 'stepper', room: 'Спальня', controller: 'ESP8266', port: 'EN:D1,DIR:D2,STEP:D3', status: 'online' },
+                        { id: 5, name: 'Датчик движения', type: 'bin', room: 'Спальня', controller: 'ESP8266', port: 'GPIO5', value: 'Не активен', status: 'online' },
+                        // Кухня
+                        { id: 6, name: 'Аналоговый датчик', type: 'analog', room: 'Кухня', controller: 'ESP32', port: 'A0', value: 512, status: 'online' },
+                        { id: 7, name: 'Двоичный выход', type: 'binOut', room: 'Кухня', controller: 'ESP32', port: 'GPIO15', status: 'online' },
+                        { id: 8, name: 'Микрофон', type: 'micro', room: 'Кухня', controller: 'ESP32', port: 'GPIO36', value: 0, unit: 'хлопков', status: 'online' }
+                    ];
+                    resolve();
+                }, 500);
+            });
+        }
+
+        // Получить значение устройства для отображения
+        function getDeviceValue(device) {
+            if (device.value !== undefined) {
+                return `${device.value}${device.unit ? ' ' + device.unit : ''}`;
+            }
+
+            switch (device.type) {
+                case 'aht':
+                    return 'Нажмите для обновления';
+                case 'bin':
+                    return device.value || '—';
+                case 'analog':
+                    return device.value || '—';
+                case 'micro':
+                    return device.value || '0 хлопков';
+                default:
+                    return '—';
+            }
+        }
+
+        // Получить команды для устройства
+        function getDeviceCommands(deviceType) {
+            return deviceCommands[deviceType] || [];
+        }
+
+        // Выполнить команду
+        function executeCommandOnDevice(device, command, params = {}) {
+            showToast(`📟 Отправлена команда ${command} на устройство ${device.name}`);
+            // Здесь будет реальный запрос к API
+            // fetch(`/api/devices/${device.id}/command`, {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify({ command, params })
+            // });
+
+            // Имитация ответа
+            setTimeout(() => {
+                showToast(`✅ Команда ${command} выполнена`);
+            }, 500);
+        }
+
+        // Показать модальное окно для ввода параметров
+        function showParamsModal(device, commandInfo) {
+            pendingCommand = { device, command: commandInfo.name, params: {} };
+
+            const modalTitle = document.getElementById('modalTitle');
+            const modalFields = document.getElementById('modalFields');
+
+            modalTitle.innerText = `${commandInfo.label || commandInfo.name} - ${device.name}`;
+            modalFields.innerHTML = '';
+
+            if (commandInfo.params && commandInfo.params.length > 0) {
+                commandInfo.params.forEach((param, index) => {
+                    const fieldDiv = document.createElement('div');
+                    fieldDiv.className = 'form-group';
+
+                    let inputHtml = `<label>${param.name}</label>`;
+
+                    if (param.type === 'select') {
+                        let optionsHtml = '';
+                        param.options.forEach(opt => {
+                            optionsHtml += `<option value="${opt.value}">${opt.label}</option>`;
+                        });
+                        inputHtml += `<select id="param_${index}">${optionsHtml}</select>`;
+                    } else if (param.type === 'color') {
+                        inputHtml += `<input type="color" id="param_${index}" value="${param.placeholder || '#FF0000'}">`;
+                    } else {
+                        inputHtml += `<input type="${param.type || 'text'}" id="param_${index}" placeholder="${param.placeholder || ''}" ${param.min !== undefined ? `min="${param.min}"` : ''} ${param.max !== undefined ? `max="${param.max}"` : ''}>`;
+                    }
+
+                    fieldDiv.innerHTML = inputHtml;
+                    modalFields.appendChild(fieldDiv);
+                });
+            }
+
+            document.getElementById('paramsModal').classList.add('active');
+        }
+
+        // Выполнить команду из модального окна
+        function executeCommand() {
+            if (!pendingCommand) return;
+
+            const params = {};
+            const fields = document.querySelectorAll('#modalFields .form-group input, #modalFields .form-group select');
+
+            fields.forEach((field, index) => {
+                params[`param_${index}`] = field.value;
+            });
+
+            executeCommandOnDevice(pendingCommand.device, pendingCommand.command, params);
+            closeModal();
+        }
+
+        function closeModal() {
+            document.getElementById('paramsModal').classList.remove('active');
+            pendingCommand = null;
+        }
+
+        // Рендер дашборда
+        function renderDashboard() {
+            const container = document.getElementById('dashboardContent');
+
+            // Группировка по комнатам
+            const rooms = {};
+            devicesData.forEach(device => {
+                if (!rooms[device.room]) {
+                    rooms[device.room] = [];
+                }
+                rooms[device.room].push(device);
+            });
+
+            if (Object.keys(rooms).length === 0) {
+                container.innerHTML = '<div class="loading">📭 Нет устройств в сети</div>';
+                return;
+            }
+
+            let html = '';
+
+            for (const [roomName, devices] of Object.entries(rooms)) {
+                html += `
+                    <div class="room-section">
+                        <div class="room-header">
+                            <span class="room-icon">🏠</span>
+                            <h2>${roomName}</h2>
+                            <span class="devices-count">${devices.length} устройств</span>
+                        </div>
+                        <div class="devices-grid">
+                `;
+
+                devices.forEach(device => {
+                    const deviceValue = getDeviceValue(device);
+                    const commands = getDeviceCommands(device.type);
+
+                    html += `
+                        <div class="device-card">
+                            <div class="device-header">
+                                <span class="device-name">${device.name}</span>
+                                <span class="device-type">${device.type}</span>
+                            </div>
+                            <div class="device-info">
+                                <div class="info-row">
+                                    <span class="info-label">Контроллер:</span>
+                                    <span class="info-value">${device.controller}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Порт:</span>
+                                    <span class="info-value">${device.port}</span>
+                                </div>
+                                ${device.params && device.params.led_count ? `
+                                <div class="info-row">
+                                    <span class="info-label">LEDs:</span>
+                                    <span class="info-value">${device.params.led_count}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                    `;
+
+                    // Показания для датчиков
+                    if (['aht', 'bin', 'analog', 'micro', 'btn'].includes(device.type)) {
+                        html += `
+                            <div class="device-value">
+                                <div class="value-number">${deviceValue}</div>
+                                <div class="value-label">текущее значение</div>
+                            </div>
+                        `;
+                    }
+
+                    // Кнопки управления
+                    if (commands.length > 0) {
+                        html += `<div class="device-controls">`;
+                        commands.forEach(cmd => {
+                            if (cmd.params && cmd.params.length > 0) {
+                                html += `<button class="control-btn" onclick='showParamsModal(${JSON.stringify(device)}, ${JSON.stringify(cmd)})'>${cmd.label || cmd.name}</button>`;
+                            } else {
+                                html += `<button class="control-btn primary" onclick='executeCommandOnDevice(${JSON.stringify(device)}, "${cmd.name}", {})'>${cmd.label || cmd.name}</button>`;
+                            }
+                        });
+                        html += `</div>`;
+                    }
+
+                    html += `</div>`;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastMsg');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // Делаем функции глобальными для доступа из HTML
+        window.executeCommandOnDevice = executeCommandOnDevice;
+        window.showParamsModal = showParamsModal;
+        window.executeCommand = executeCommand;
+        window.closeModal = closeModal;
+        window.loadAllData = loadAllData;
+
+        // Загрузка при старте
+        loadAllData();
+
+        // Автообновление каждые 30 секунд
+        setInterval(loadAllData, 30000);
+    </script>
+</body>
+</html>

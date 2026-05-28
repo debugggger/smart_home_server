@@ -12,18 +12,6 @@ if __name__ == '__main__':
     load_dotenv()
 
     db = Database()
-
-    web_interface = WebInterface(
-        port=5000,
-        auto_open_browser=True,
-        db_instance=db
-    )
-
-    web_interface.start()
-
-    print(db.get_all_rooms())
-
-
     smqtt = servMqtt()
     smqtt.start()
     trying = 0
@@ -34,8 +22,19 @@ if __name__ == '__main__':
         time.sleep(1)
 
     if smqtt.connected:
+        port_core = 5001
         core = Core(db, smqtt)
-        core.start_processing()
+        core.start_processing(port=port_core)
+
+
+        web_interface = WebInterface(
+            port=5000,
+            port_core=port_core,
+            auto_open_browser=False,
+            db_instance=db
+        )
+
+        web_interface.start()
 
 
         #core.parse("serv", "40:91:51:51:97:3A/init")

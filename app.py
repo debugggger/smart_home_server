@@ -1,11 +1,21 @@
 # web_interface.py
+import os
+import tempfile
 import threading
 import webbrowser
+
+
+import requests
+
 from flask import Flask, render_template, request, jsonify
+from werkzeug.utils import secure_filename
+
 from database import Database, Room, Controller, Device, DeviceType, Trigger, TrigCondition, TrigResponse
 import time
 import logging
 import json
+
+from utils import get_local_ip
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -13,20 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 class WebInterface:
-    """Класс для управления веб-интерфейсом умного дома в отдельном потоке"""
-
-    def __init__(self, host='0.0.0.0', port=5000, auto_open_browser=True, db_instance=None):
-        """
-        Инициализация веб-интерфейса
-
-        Args:
-            host: хост для запуска (по умолчанию '0.0.0.0')
-            port: порт для запуска (по умолчанию 5000)
-            auto_open_browser: автоматически открывать браузер (по умолчанию True)
-            db_instance: экземпляр Database (если None - создаст новый)
-        """
+    def __init__(self, host='0.0.0.0', port=5000, port_core=5001, auto_open_browser=True, db_instance=None):
+        if host == '0.0.0.0':
+            host = get_local_ip()
         self.host = host
         self.port = port
+        self.core_addr = "http://" + str(host)+":"+str(port_core)
         self.auto_open_browser = auto_open_browser
         self.db = db_instance if db_instance else Database()
         self.app = None
@@ -34,10 +36,7 @@ class WebInterface:
         self.is_running = False
 
     def _create_app(self):
-        """Создание Flask приложения со всеми маршрутами"""
         app = Flask(__name__)
-
-        # ============= ОСНОВНЫЕ МАРШРУТЫ =============
 
         @app.route('/')
         def index():
@@ -58,6 +57,183 @@ class WebInterface:
         @app.route('/triggers-page')
         def triggers_page():
             return render_template('triggers.html')
+
+        @app.route('/dashboard')
+        def dashboard():
+            return render_template('dashboard.html')
+
+        @app.route('/firmware-update')
+        def firmware_update_page():
+            """Страница обновления прошивки"""
+            return render_template('firmware_update.html')
+
+        @app.route('/api/devices/all', methods=['GET'])
+        def get_all_devices_with_status():
+            devices = []
+            all_devices = self.db.get_all_devices()
+
+            for device in all_devices:
+                controller = self.db.get_controller_by_id(device.controller_id)
+                room = None
+                if controller:
+                    room = self.db.get_room_by_id(controller.room_id)
+
+                device_type = self.db.get_device_type_by_id(device.type_id)
+
+                devices.append({
+                    'id': device.id,
+                    'name': device.name,
+                    'type': device_type.name.lower() if device_type else 'unknown',
+                    'room': room.name if room else 'Без комнаты',
+                    'controller': controller.name if controller else 'Unknown',
+                    'port': device.port,
+                    'params': json.loads(device.params) if device.params else {},
+                    'status': 'online',  # Здесь нужно получать реальный статус
+                    'value': None  # Здесь нужно получать реальное значение с контроллера
+                })
+
+            return jsonify(devices)
+
+        @app.route('/api/update-controller', methods=['POST'])
+        def start_update():
+
+            try:
+                data = request.json
+
+                if not data:
+                    return jsonify({'error': 'No data provided'}), 400
+
+                topics = data.get('topics')
+
+                if not topics:
+                    return jsonify({'error': 'topics field is required'}), 400
+
+                if isinstance(topics, list):
+                    if len(topics) == 0:
+                        return jsonify({'error': 'topics list is empty'}), 400
+
+                    if "AllESP" in topics or len(topics) == 1 and topics[0] == "AllESP":
+                        topics_for_mqtt = "AllESP"
+                    else:
+                        topics_for_mqtt = topics
+
+                elif isinstance(topics, str):
+                    # Если передан строка
+                    topics_for_mqtt = topics
+                else:
+                    return jsonify({'error': 'topics must be list or string'}), 400
+
+                target_url = f"{self.core_addr}/core_api/ota_start_update"
+                payload = {'topics': topics_for_mqtt}
+
+                response = requests.post(
+                    target_url,
+                    json=payload,
+                    timeout=30,
+                    headers={'Content-Type': 'application/json'}
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return jsonify({
+                        'success': True,
+                        'message': f'OTA update started successfully',
+                        'forwarded_to': self.core_addr,
+                        'topics_sent': topics_for_mqtt,
+                        'response': result
+                    }), 200
+                else:
+                    return jsonify({
+                        'error': f'OTA service returned error: {response.status_code}',
+                        'details': response.text
+                    }), response.status_code
+
+            except requests.exceptions.ConnectionError:
+                return jsonify({'error': f'Cannot connect to OTA service at {self.core_addr}'}), 503
+            except Exception as e:
+                print(f"Error in ota_start_update: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/verify-files', methods=['POST'])
+        def verify_files():
+            """Проверяет существование файлов на сервере"""
+            try:
+                data = request.json
+                firmware_path = data.get('firmware_path')
+                version_path = data.get('version_path')
+
+                firmware_exists = os.path.exists(firmware_path) if firmware_path else False
+                version_exists = os.path.exists(version_path) if version_path else False
+
+                return jsonify({
+                    'success': firmware_exists and version_exists,
+                    'firmware_exists': firmware_exists,
+                    'version_exists': version_exists
+                })
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+
+        @app.route('/api/upload-firmware', methods=['POST'])
+        def upload_firmware():
+            try:
+                if 'firmware' not in request.files or 'version' not in request.files:
+                    return jsonify({'error': 'Файлы не найдены'}), 400
+
+                firmware = request.files['firmware']
+                version = request.files['version']
+
+                temp_dir = tempfile.mkdtemp()
+
+                firmware_filename = secure_filename(firmware.filename)
+                version_filename = secure_filename(version.filename)
+
+                firmware_path = os.path.join(temp_dir, firmware_filename)
+                version_path = os.path.join(temp_dir, version_filename)
+
+                firmware.save(firmware_path)
+                version.save(version_path)
+
+                firmware_abs_path = os.path.abspath(firmware_path)
+                version_abs_path = os.path.abspath(version_path)
+
+                target_url = f"{self.core_addr}/core_api/load_files_on_ota"
+                response = requests.post(
+                    target_url,
+                    json={
+                        'firmware_path': firmware_path,
+                        'version_path': version_path
+                    },
+                    timeout=30
+                )
+
+                return jsonify({
+                    'success': True,
+                    'firmware_absolute_path': firmware_abs_path,
+                    'version_absolute_path': version_abs_path
+                })
+
+            except Exception as e:
+                print(f"Error: {str(e)}")
+                return jsonify({'error': str(e)}), 500
+
+
+
+        # Эндпоинт для отправки команд на устройство
+        @app.route('/api/devices/<int:device_id>/command', methods=['POST'])
+        def send_device_command(device_id):
+            """Отправить команду на устройство"""
+            data = request.json
+            command = data.get('command')
+            params = data.get('params', {})
+
+            # Здесь нужно реализовать отправку команды на соответствующий контроллер
+            logger.info(f"Sending command {command} to device {device_id} with params {params}")
+
+            # Имитация отправки
+            return jsonify({'success': True, 'message': f'Command {command} sent'})
 
         # ============= API ДЛЯ КОМНАТ =============
 
@@ -128,6 +304,7 @@ class WebInterface:
             except Exception as e:
                 logger.error(f"Error updating controller: {e}")
                 return jsonify({'success': False}), 400
+
 
         @app.route('/api/controllers/<int:controller_id>', methods=['DELETE'])
         def delete_controller(controller_id):
@@ -421,7 +598,6 @@ class WebInterface:
 
             return jsonify({'success': True})
 
-        # ============= СТАТУС И ДОПОЛНИТЕЛЬНЫЕ ЭНДПОИНТЫ =============
 
         @app.route('/api/status', methods=['GET'])
         def get_status():
@@ -483,6 +659,8 @@ class WebInterface:
         if self.is_running:
             logger.warning("Web interface is already running")
             return False
+
+
 
         self.server_thread = threading.Thread(target=self._run_server, daemon=True)
         self.server_thread.start()

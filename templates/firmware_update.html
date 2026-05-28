@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Обновление прошивки - Умный дом</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        h1 {
+            color: #1e2a3a;
+            font-size: 28px;
+        }
+
+        .back-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+            font-weight: 500;
+            background: #64748b;
+            color: white;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Drag & Drop зоны */
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .drop-zone {
+            background: white;
+            border-radius: 24px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 2px dashed #cbd5e1;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .drop-zone.drag-over {
+            border-color: #4fc3f7;
+            background: #f0f9ff;
+            transform: scale(1.02);
+        }
+
+        .drop-zone.has-file {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .drop-zone.uploading {
+            border-color: #f59e0b;
+            background: #fffbeb;
+            cursor: wait;
+        }
+
+        .drop-zone.uploaded {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .drop-zone.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .drop-zone-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e2a3a;
+            margin-bottom: 8px;
+        }
+
+        .drop-zone-subtitle {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 15px;
+        }
+
+        .file-info {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 12px;
+            margin-top: 15px;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #1e2a3a;
+        }
+
+        .file-size {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .file-path {
+            color: #64748b;
+            font-size: 11px;
+            margin-top: 4px;
+            word-break: break-all;
+            font-family: monospace;
+        }
+
+        .upload-status {
+            font-size: 12px;
+            margin-top: 8px;
+            padding: 4px;
+            border-radius: 6px;
+        }
+
+        .upload-status.success {
+            color: #10b981;
+            background: #d1fae5;
+        }
+
+        .upload-status.error {
+            color: #ef4444;
+            background: #fee2e2;
+        }
+
+        .upload-status.uploading {
+            color: #f59e0b;
+            background: #fed7aa;
+        }
+
+        .remove-file-btn {
+            background: #fee2e2;
+            border: none;
+            color: #b91c1c;
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        /* Карточка выбора контроллеров */
+        .controllers-card {
+            background: white;
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .controllers-card h3 {
+            margin-bottom: 20px;
+            color: #1e2a3a;
+        }
+
+        .controller-select-all {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .controller-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .controller-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .controller-item:hover {
+            background: #f8fafc;
+        }
+
+        .controller-item.selected {
+            background: #f0f9ff;
+        }
+
+        .controller-item input {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .controller-info {
+            flex: 1;
+        }
+
+        .controller-name {
+            font-weight: 600;
+            color: #1e2a3a;
+        }
+
+        .controller-mac {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .controller-room {
+            font-size: 12px;
+            background: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        /* Кнопка обновления */
+        .update-btn {
+            width: 100%;
+            background: #8b5cf6;
+            border: none;
+            padding: 15px;
+            border-radius: 16px;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 30px;
+        }
+
+        .update-btn:hover:not(:disabled) {
+            background: #7c3aed;
+            transform: translateY(-2px);
+        }
+
+        .update-btn:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        /* Прогресс бар */
+        .progress-section {
+            background: white;
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 30px;
+            display: none;
+        }
+
+        .progress-section.show {
+            display: block;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            background: #e2e8f0;
+            border-radius: 20px;
+            overflow: hidden;
+            height: 30px;
+        }
+
+        .progress-fill {
+            background: #8b5cf6;
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .log-container {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 16px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #334155;
+            color: #e2e8f0;
+        }
+
+        .log-entry.success {
+            color: #10b981;
+        }
+
+        .log-entry.error {
+            color: #ef4444;
+        }
+
+        .log-entry.info {
+            color: #4fc3f7;
+        }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: #1e2a3a;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: 0.2s;
+        }
+
+        .toast-msg.show {
+            opacity: 1;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Обновление прошивки контроллеров</h1>
+            <button class="back-btn" onclick="goBack()">← Назад к контроллерам</button>
+        </div>
+
+        <!-- Drag & Drop зоны для файлов -->
+        <div class="upload-section">
+            <div class="drop-zone" id="firmwareZone" onclick="document.getElementById('firmwareInput').click()">
+                <div class="drop-zone-icon">📦</div>
+                <div class="drop-zone-title">Файл прошивки</div>
+                <div class="drop-zone-subtitle">Перетащите файл .bin или нажмите для выбора</div>
+                <div id="firmwareInfo" style="display: none;"></div>
+                <input type="file" id="firmwareInput" accept=".bin,.hex">
+            </div>
+
+            <div class="drop-zone" id="versionZone" onclick="document.getElementById('versionInput').click()">
+                <div class="drop-zone-icon">📄</div>
+                <div class="drop-zone-title">Файл версии</div>
+                <div class="drop-zone-subtitle">Перетащите файл версии (.json, .txt) или нажмите для выбора</div>
+                <div id="versionInfo" style="display: none;"></div>
+                <input type="file" id="versionInput" accept=".json,.txt,.yml,.yaml">
+            </div>
+        </div>
+
+        <!-- Выбор контроллеров -->
+        <div class="controllers-card">
+            <h3>🎯 Выберите контроллеры для обновления</h3>
+            <div class="controller-select-all">
+                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                <label for="selectAllCheckbox">Выбрать все</label>
+            </div>
+            <div class="controller-list" id="controllerList">
+                <div class="loading">Загрузка контроллеров...</div>
+            </div>
+        </div>
+
+        <!-- Кнопка обновления -->
+        <button class="update-btn" id="updateBtn" onclick="startUpdate()" disabled>
+            🚀 Начать обновление прошивки
+        </button>
+
+        <!-- Прогресс обновления -->
+        <div class="progress-section" id="progressSection">
+            <div class="progress-header">
+                <span>Прогресс обновления</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div class="log-container" id="logContainer">
+                <div class="log-entry info">📋 Ожидание начала обновления...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastMsg" class="toast-msg"></div>
+
+    <script>
+        // Хранение выбранных файлов
+        let selectedFirmware = null;
+        let selectedVersion = null;
+        let controllers = [];
+        let selectedControllers = new Set();
+        let isUpdating = false;
+
+        // Хранение путей к загруженным файлам
+        let uploadedFirmwarePath = null;
+        let uploadedVersionPath = null;
+        let uploadedFirmwareName = null;
+        let uploadedVersionName = null;
+        let isUploading = false;
+
+        // Drag & Drop настройки
+        const firmwareZone = document.getElementById('firmwareZone');
+        const versionZone = document.getElementById('versionZone');
+        const firmwareInput = document.getElementById('firmwareInput');
+        const versionInput = document.getElementById('versionInput');
+
+        // Ключи для localStorage
+        const STORAGE_KEYS = {
+            FIRMWARE_PATH: 'uploaded_firmware_path',
+            FIRMWARE_NAME: 'uploaded_firmware_name',
+            VERSION_PATH: 'uploaded_version_path',
+            VERSION_NAME: 'uploaded_version_name'
+        };
+
+        setupDragAndDrop(firmwareZone, 'firmware');
+        setupDragAndDrop(versionZone, 'version');
+
+        function setupDragAndDrop(zone, type) {
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('drag-over');
+            });
+
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('drag-over');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileSelect(files[0], type);
+                }
+            });
+        }
+
+        firmwareInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0], 'firmware');
+            }
+        });
+
+        versionInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0], 'version');
+            }
+        });
+
+        // Загрузка сохраненных файлов при загрузке страницы
+        async function loadSavedFiles() {
+            console.log('Loading saved files from localStorage...');
+
+            const savedFirmwarePath = localStorage.getItem(STORAGE_KEYS.FIRMWARE_PATH);
+            const savedFirmwareName = localStorage.getItem(STORAGE_KEYS.FIRMWARE_NAME);
+            const savedVersionPath = localStorage.getItem(STORAGE_KEYS.VERSION_PATH);
+            const savedVersionName = localStorage.getItem(STORAGE_KEYS.VERSION_NAME);
+
+            console.log('Saved firmware:', savedFirmwarePath);
+            console.log('Saved version:', savedVersionPath);
+
+            if (savedFirmwarePath && savedFirmwareName) {
+                uploadedFirmwarePath = savedFirmwarePath;
+                uploadedFirmwareName = savedFirmwareName;
+                displaySavedFileInfo('firmware', savedFirmwareName, savedFirmwarePath);
+                document.getElementById('firmwareZone').classList.add('uploaded');
+            }
+
+            if (savedVersionPath && savedVersionName) {
+                uploadedVersionPath = savedVersionPath;
+                uploadedVersionName = savedVersionName;
+                displaySavedFileInfo('version', savedVersionName, savedVersionPath);
+                document.getElementById('versionZone').classList.add('uploaded');
+            }
+
+            // Если оба файла загружены, проверяем их существование на сервере
+            if (uploadedFirmwarePath && uploadedVersionPath) {
+                console.log('Both files found, verifying on server...');
+                await verifyFilesOnServer();
+                checkUpdateButton();
+            }
+        }
+
+        function displaySavedFileInfo(type, fileName, filePath) {
+            const infoDiv = document.getElementById(`${type}Info`);
+            const zone = document.getElementById(`${type}Zone`);
+
+            infoDiv.innerHTML = `
+                <div class="file-info">
+                    <div class="file-name">📄 ${fileName}</div>
+                    <div class="file-size">Сохранен</div>
+                    <div class="file-path">📁 ${filePath}</div>
+                    <div id="${type}UploadStatus" class="upload-status success">✅ Загружено на сервер</div>
+                    <button class="remove-file-btn" onclick="removeFile('${type}')">Удалить</button>
+                </div>
+            `;
+            infoDiv.style.display = 'block';
+            zone.classList.add('has-file');
+        }
+
+        async function verifyFilesOnServer() {
+            console.log('Verifying files on server...');
+            console.log('Firmware path:', uploadedFirmwarePath);
+            console.log('Version path:', uploadedVersionPath);
+
+            try {
+                const response = await fetch('/api/verify-files', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        firmware_path: uploadedFirmwarePath,
+                        version_path: uploadedVersionPath
+                    })
+                });
+
+                console.log('Verify response status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('Verify result:', result);
+
+                if (!result.success) {
+                    console.log('Files no longer exist on server, clearing saved state');
+                    addLog('⚠️ Сохраненные файлы не найдены на сервере', 'error');
+                    clearSavedFiles();
+
+                    // Очищаем отображение
+                    document.getElementById('firmwareInfo').style.display = 'none';
+                    document.getElementById('versionInfo').style.display = 'none';
+                    document.getElementById('firmwareZone').classList.remove('uploaded', 'has-file');
+                    document.getElementById('versionZone').classList.remove('uploaded', 'has-file');
+
+                    showToast('❌ Сохраненные файлы не найдены на сервере. Выберите файлы заново.');
+                } else {
+                    console.log('Files verified successfully');
+                    addLog('✅ Сохраненные файлы найдены на сервере', 'success');
+                }
+
+            } catch (error) {
+                console.error('Error verifying files:', error);
+                addLog(`❌ Ошибка проверки файлов: ${error.message}`, 'error');
+            }
+        }
+
+        function clearSavedFiles() {
+            console.log('Clearing saved files from localStorage');
+            localStorage.removeItem(STORAGE_KEYS.FIRMWARE_PATH);
+            localStorage.removeItem(STORAGE_KEYS.FIRMWARE_NAME);
+            localStorage.removeItem(STORAGE_KEYS.VERSION_PATH);
+            localStorage.removeItem(STORAGE_KEYS.VERSION_NAME);
+            uploadedFirmwarePath = null;
+            uploadedVersionPath = null;
+            uploadedFirmwareName = null;
+            uploadedVersionName = null;
+            checkUpdateButton();
+        }
+
+        function handleFileSelect(file, type) {
+            if (type === 'firmware') {
+                selectedFirmware = file;
+                displayFileInfo('firmware', file);
+            } else {
+                selectedVersion = file;
+                displayFileInfo('version', file);
+            }
+
+            // Проверяем, выбраны ли оба файла
+            if (selectedFirmware && selectedVersion && !isUploading) {
+                autoUploadFiles();
+            }
+        }
+
+        function displayFileInfo(type, file) {
+            const infoDiv = document.getElementById(`${type}Info`);
+            const zone = document.getElementById(`${type}Zone`);
+            const fileSize = (file.size / 1024).toFixed(2);
+
+            infoDiv.innerHTML = `
+                <div class="file-info">
+                    <div class="file-name">📄 ${file.name}</div>
+                    <div class="file-size">${fileSize} KB</div>
+                    <div id="${type}UploadStatus" class="upload-status"></div>
+                    <button class="remove-file-btn" onclick="removeFile('${type}')">Удалить</button>
+                </div>
+            `;
+            infoDiv.style.display = 'block';
+            zone.classList.add('has-file');
+        }
+
+        async function autoUploadFiles() {
+            if (!selectedFirmware || !selectedVersion) {
+                console.log('Не все файлы выбраны');
+                return;
+            }
+
+            isUploading = true;
+
+            // Показываем статус загрузки
+            showUploadStatus('firmware', 'uploading', '⏳ Загрузка...');
+            showUploadStatus('version', 'uploading', '⏳ Загрузка...');
+
+            document.getElementById('firmwareZone').classList.add('uploading');
+            document.getElementById('versionZone').classList.add('uploading');
+
+            try {
+                const formData = new FormData();
+                formData.append('firmware', selectedFirmware);
+                formData.append('version', selectedVersion);
+
+                showToast('📤 Автоматическая загрузка файлов на сервер...');
+
+                const response = await fetch('/api/upload-firmware', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Сохраняем пути к загруженным файлам
+                    uploadedFirmwarePath = result.firmware_absolute_path;
+                    uploadedVersionPath = result.version_absolute_path;
+                    uploadedFirmwareName = selectedFirmware.name;
+                    uploadedVersionName = selectedVersion.name;
+
+                    // Сохраняем в localStorage
+                    localStorage.setItem(STORAGE_KEYS.FIRMWARE_PATH, uploadedFirmwarePath);
+                    localStorage.setItem(STORAGE_KEYS.FIRMWARE_NAME, uploadedFirmwareName);
+                    localStorage.setItem(STORAGE_KEYS.VERSION_PATH, uploadedVersionPath);
+                    localStorage.setItem(STORAGE_KEYS.VERSION_NAME, uploadedVersionName);
+
+                    // Показываем успешный статус
+                    showUploadStatus('firmware', 'success', '✅ Загружено на сервер');
+                    showUploadStatus('version', 'success', '✅ Загружено на сервер');
+
+                    // Добавляем путь к файлу в отображение
+                    addFilePathToDisplay('firmware', uploadedFirmwarePath);
+                    addFilePathToDisplay('version', uploadedVersionPath);
+
+                    document.getElementById('firmwareZone').classList.remove('uploading');
+                    document.getElementById('versionZone').classList.add('uploaded');
+                    document.getElementById('versionZone').classList.remove('uploading');
+                    document.getElementById('firmwareZone').classList.add('uploaded');
+
+                    showToast('✅ Файлы успешно загружены на сервер');
+                    addLog('✅ Файлы автоматически загружены на сервер', 'success');
+                    addLog(`   Прошивка: ${uploadedFirmwarePath}`, 'info');
+                    addLog(`   Версия: ${uploadedVersionPath}`, 'info');
+
+                    // Вызываем метод load_files_on_ota с путями
+                    await callLoadFilesOnOTA();
+
+                } else {
+                    throw new Error(result.error || 'Ошибка загрузки файлов');
+                }
+
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+                showUploadStatus('firmware', 'error', '❌ Ошибка загрузки');
+                showUploadStatus('version', 'error', '❌ Ошибка загрузки');
+                document.getElementById('firmwareZone').classList.add('error');
+                document.getElementById('versionZone').classList.add('error');
+                showToast(`❌ Ошибка загрузки файлов: ${error.message}`);
+                addLog(`❌ Ошибка загрузки: ${error.message}`, 'error');
+            } finally {
+                isUploading = false;
+                document.getElementById('firmwareZone').classList.remove('uploading');
+                document.getElementById('versionZone').classList.remove('uploading');
+                checkUpdateButton();
+            }
+        }
+
+        function addFilePathToDisplay(type, filePath) {
+            const infoDiv = document.getElementById(`${type}Info`);
+            const existingContent = infoDiv.innerHTML;
+            if (!existingContent.includes('file-path')) {
+                const pathHtml = `<div class="file-path">📁 ${filePath}</div>`;
+                infoDiv.innerHTML = infoDiv.innerHTML.replace('</div>', pathHtml + '</div>');
+            }
+        }
+
+        async function callLoadFilesOnOTA() {
+            if (!uploadedFirmwarePath || !uploadedVersionPath) {
+                console.log('Нет путей для отправки');
+                return;
+            }
+
+            try {
+                addLog('📡 Отправка путей в сервис OTA...', 'info');
+
+                const response = await fetch('/api/load_files_on_ota', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        firmware_path: uploadedFirmwarePath,
+                        version_path: uploadedVersionPath
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addLog('✅ Пути успешно переданы в сервис OTA', 'success');
+                    showToast('✅ Файлы переданы в сервис обновления');
+                } else {
+                    addLog(`⚠️ Сервис OTA вернул ошибку: ${result.error || 'Unknown error'}`, 'error');
+                }
+
+            } catch (error) {
+                console.error('Ошибка вызова load_files_on_ota:', error);
+                addLog(`❌ Ошибка передачи в OTA сервис: ${error.message}`, 'error');
+            }
+        }
+
+        function showUploadStatus(type, status, message) {
+            const statusDiv = document.getElementById(`${type}UploadStatus`);
+            if (statusDiv) {
+                statusDiv.className = `upload-status ${status}`;
+                statusDiv.textContent = message;
+            }
+        }
+
+        async function removeFile(type) {
+            if (type === 'firmware') {
+                selectedFirmware = null;
+                uploadedFirmwarePath = null;
+                uploadedFirmwareName = null;
+                document.getElementById('firmwareInfo').style.display = 'none';
+                document.getElementById('firmwareInput').value = '';
+                document.getElementById('firmwareZone').classList.remove('has-file', 'uploaded', 'error');
+                localStorage.removeItem(STORAGE_KEYS.FIRMWARE_PATH);
+                localStorage.removeItem(STORAGE_KEYS.FIRMWARE_NAME);
+            } else {
+                selectedVersion = null;
+                uploadedVersionPath = null;
+                uploadedVersionName = null;
+                document.getElementById('versionInfo').style.display = 'none';
+                document.getElementById('versionInput').value = '';
+                document.getElementById('versionZone').classList.remove('has-file', 'uploaded', 'error');
+                localStorage.removeItem(STORAGE_KEYS.VERSION_PATH);
+                localStorage.removeItem(STORAGE_KEYS.VERSION_NAME);
+            }
+
+            // Очищаем статусы
+            showUploadStatus(type, '', '');
+
+            checkUpdateButton();
+        }
+
+        // Загрузка списка контроллеров
+        async function loadControllers() {
+            try {
+                const response = await fetch('/api/controllers');
+                controllers = await response.json();
+
+                const container = document.getElementById('controllerList');
+                if (controllers.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 20px;">📭 Нет доступных контроллеров</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                controllers.forEach(ctrl => {
+                    const div = document.createElement('div');
+                    div.className = 'controller-item';
+                    div.onclick = (e) => {
+                        if (e.target.type !== 'checkbox') {
+                            toggleController(ctrl.id);
+                        }
+                    };
+
+                    div.innerHTML = `
+                        <input type="checkbox" id="ctrl_${ctrl.id}" value="${ctrl.id}" onchange="toggleController(${ctrl.id})">
+                        <div class="controller-info">
+                            <div class="controller-name">${ctrl.name}</div>
+                            <div class="controller-mac">MAC: ${ctrl.mac}</div>
+                        </div>
+                        <div class="controller-room">${ctrl.room_name || 'Без комнаты'}</div>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки контроллеров:', error);
+                document.getElementById('controllerList').innerHTML = '<div style="text-align: center; padding: 20px; color: red;">❌ Ошибка загрузки контроллеров</div>';
+            }
+        }
+
+        function toggleController(controllerId) {
+            const checkbox = document.getElementById(`ctrl_${controllerId}`);
+            if (checkbox.checked) {
+                selectedControllers.add(controllerId);
+            } else {
+                selectedControllers.delete(controllerId);
+            }
+            updateSelectAllCheckbox();
+            checkUpdateButton();
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAllCheckbox');
+            const checkboxes = document.querySelectorAll('.controller-item input[type="checkbox"]');
+
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll.checked;
+                const id = parseInt(checkbox.value);
+                if (selectAll.checked) {
+                    selectedControllers.add(id);
+                } else {
+                    selectedControllers.delete(id);
+                }
+            });
+            checkUpdateButton();
+        }
+
+        function updateSelectAllCheckbox() {
+            const selectAll = document.getElementById('selectAllCheckbox');
+            const totalCheckboxes = document.querySelectorAll('.controller-item input[type="checkbox"]').length;
+            selectAll.checked = selectedControllers.size === totalCheckboxes && totalCheckboxes > 0;
+        }
+
+        function checkUpdateButton() {
+            const updateBtn = document.getElementById('updateBtn');
+            // Кнопка активна только если файлы загружены на сервер и выбраны контроллеры
+            const canUpdate = uploadedFirmwarePath && uploadedVersionPath && selectedControllers.size > 0 && !isUpdating;
+            updateBtn.disabled = !canUpdate;
+            console.log(`Update button state: ${canUpdate ? 'enabled' : 'disabled'}`);
+        }
+
+        // Добавление лога
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Обновление прогресса
+        function updateProgress(percent) {
+            const progressFill = document.getElementById('progressFill');
+            const progressPercent = document.getElementById('progressPercent');
+            progressFill.style.width = `${percent}%`;
+            progressFill.textContent = `${percent}%`;
+            progressPercent.textContent = `${percent}%`;
+        }
+
+        // ГЛАВНАЯ ФУНКЦИЯ: Вызов API обновления контроллеров с MAC адресами
+        async function startUpdate() {
+            // Проверяем, что файлы загружены
+            if (!uploadedFirmwarePath || !uploadedVersionPath) {
+                showToast('❌ Файлы не загружены на сервер');
+                addLog('❌ Ошибка: файлы не загружены на сервер', 'error');
+                return;
+            }
+
+            // Проверяем, что выбраны контроллеры
+            if (selectedControllers.size === 0) {
+                showToast('❌ Выберите контроллеры для обновления');
+                addLog('❌ Ошибка: не выбраны контроллеры для обновления', 'error');
+                return;
+            }
+
+            isUpdating = true;
+            document.getElementById('updateBtn').disabled = true;
+            document.getElementById('progressSection').classList.add('show');
+            addLog('🚀 Начало процесса обновления...', 'info');
+
+            try {
+                // Получаем MAC адреса выбранных контроллеров
+                const selectedControllersList = controllers.filter(c => selectedControllers.has(c.id));
+                const macAddresses = selectedControllersList.map(ctrl => ctrl.mac);
+
+                let topicsToSend = macAddresses;
+                addLog(`📡 Отправка команды обновления для ${macAddresses.length} контроллеров:`, 'info');
+                macAddresses.forEach(mac => addLog(`   - ${mac}`, 'info'));
+
+                // Вызываем API /api/update-controller с MAC адресами
+                addLog('📡 Вызов /api/update-controller...', 'info');
+
+                const response = await fetch('/api/update-controller', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        topics: topicsToSend
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addLog(`✅ OTA обновление успешно запущено!`, 'success');
+                    addLog(`   Отправлено: ${topicsToSend.length} устройств`, 'success');
+                    addLog(`   Сервер: ${result.forwarded_to || 'локальный'}`, 'info');
+                    showToast('✅ OTA обновление запущено');
+                    updateProgress(100);
+                } else {
+                    throw new Error(result.error || 'Неизвестная ошибка');
+                }
+
+                addLog('🎉 Процесс обновления инициирован!', 'success');
+
+            } catch (error) {
+                addLog(`❌ Ошибка: ${error.message}`, 'error');
+                showToast(`❌ Ошибка при обновлении: ${error.message}`);
+                updateProgress(0);
+            } finally {
+                isUpdating = false;
+                document.getElementById('updateBtn').disabled = false;
+                checkUpdateButton();
+
+                // Сбрасываем прогресс через 5 секунд
+                setTimeout(() => {
+                    if (!isUpdating) {
+                        document.getElementById('progressSection').classList.remove('show');
+                        updateProgress(0);
+                    }
+                }, 5000);
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastMsg');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Функция возврата на страницу контроллеров
+        function goBack() {
+            window.location.href = '/controllers-page';
+        }
+
+        // Инициализация
+        async function init() {
+            console.log('Initializing page...');
+            await loadControllers();
+            await loadSavedFiles();
+        }
+
+        init();
+    </script>
+</body>
+</html>

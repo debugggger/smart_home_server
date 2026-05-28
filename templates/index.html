@@ -199,7 +199,7 @@
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">🏠 Умный дом</div>
         <ul class="menu-items">
-            <li data-page="main" class="active">🏠 Главная</li>
+            <li data-page="dashboard">🏠 Панель управления</li>
             <li data-page="controllers">🎮 Контроллеры</li>
             <li data-page="rooms">🏠 Комнаты</li>
             <li data-page="triggers">⚡ Сценарии</li>
@@ -211,9 +211,10 @@
             <h2>🏠 Добро пожаловать в систему умного дома</h2>
             <p>Выберите раздел для управления</p>
             <div class="nav-buttons">
-                <button class="nav-btn" onclick="navigateTo('controllers')">🎮 Управление контроллерами</button>
-                <button class="nav-btn" onclick="navigateTo('rooms')">🏠 Управление комнатами</button>
-                <button class="nav-btn" onclick="navigateTo('triggers')">⚡ Управление сценариями</button>
+                <button class="nav-btn" onclick="navigateTo('dashboard')">🏠 Панель управления</button>
+                <button class="nav-btn" onclick="navigateTo('controllers')">🎮 Контроллеры</button>
+                <button class="nav-btn" onclick="navigateTo('rooms')">🏠 Комнаты</button>
+                <button class="nav-btn" onclick="navigateTo('triggers')">⚡ Сценарии</button>
             </div>
         </div>
     </div>
@@ -232,7 +233,9 @@
 
         // Функция навигации - ИСПРАВЛЕНА
         function navigateTo(page) {
-            if (page === 'controllers') {
+            if (page === 'dashboard') {
+                window.location.href = '/dashboard';
+            } else if (page === 'controllers') {
                 window.location.href = '/controllers-page';
             } else if (page === 'rooms') {
                 window.location.href = '/rooms-page';

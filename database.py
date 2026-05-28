@@ -1,3 +1,5 @@
+import json
+
 import psycopg2
 from psycopg2 import sql
 from typing import Optional, List, Dict, Any
@@ -51,7 +53,7 @@ class Device:
     controller_id: int = None
     type_id: int = None
     port: str = None
-    params: str = None
+    params: json = None
 
     def __repr__(self):
         return f"<Device(id={self.id}, name='{self.name}', type_id={self.type_id})>"
@@ -78,6 +80,7 @@ class DeviceType:
     """Сущность типа устройства"""
     id: Optional[int] = None
     name: str = None
+    param_name: json = None
     description: Optional[str] = None
 
     def __repr__(self):
@@ -243,46 +246,46 @@ class Database:
 
     # ============= МЕТОДЫ ДЛЯ DEVICE_TYPES =============
 
-    def add_device_type(self, device_type: DeviceType) -> Optional[int]:
-        """Добавление типа устройства"""
-        query = """
-            INSERT INTO device_types (name, description) 
-            VALUES (%s, %s) 
-            RETURNING id
-        """
-        result = self._execute_query(query, (device_type.name, device_type.description), fetch_one=True)
-        if result:
-            device_type.id = result[0]
-            return result[0]
-        return None
+    # def add_device_type(self, device_type: DeviceType) -> Optional[int]:
+    #     """Добавление типа устройства"""
+    #     query = """
+    #         INSERT INTO device_types (name, description)
+    #         VALUES (%s, %s)
+    #         RETURNING id
+    #     """
+    #     result = self._execute_query(query, (device_type.name, device_type.description), fetch_one=True)
+    #     if result:
+    #         device_type.id = result[0]
+    #         return result[0]
+    #     return None
 
     def get_device_type_by_id(self, type_id: int) -> Optional[DeviceType]:
         """Получение типа устройства по ID"""
-        query = "SELECT id, name, description FROM device_types WHERE id = %s"
+        query = "SELECT id, name, description, param_names FROM device_types WHERE id = %s"
         result = self._execute_query(query, (type_id,), fetch_one=True)
         if result:
-            return DeviceType(id=result[0], name=result[1], description=result[2])
+            return DeviceType(id=result[0], name=result[1], description=result[2], param_name=result[3])
         return None
 
     def get_device_type_by_name(self, name: str) -> Optional[DeviceType]:
         """Получение типа устройства по имени"""
-        query = "SELECT id, name, description FROM device_types WHERE name = %s"
+        query = "SELECT id, name, description, param_names FROM device_types WHERE name = %s"
         result = self._execute_query(query, (name,), fetch_one=True)
         if result:
-            return DeviceType(id=result[0], name=result[1], description=result[2])
+            return DeviceType(id=result[0], name=result[1], description=result[2], param_name=result[3])
         return None
 
     def get_all_device_types(self) -> List[DeviceType]:
         """Получение всех типов устройств"""
-        query = "SELECT id, name, description FROM device_types ORDER BY id"
+        query = "SELECT id, name, description, param_names FROM device_types ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
-        return [DeviceType(id=r[0], name=r[1], description=r[2]) for r in results] if results else []
+        return [DeviceType(id=r[0], name=r[1], description=r[2], param_name = r[3]) for r in results] if results else []
 
-    def delete_device_type(self, type_id: int) -> bool:
-        """Удаление типа устройства по ID"""
-        query = "DELETE FROM device_types WHERE id = %s"
-        self._execute_query(query, (type_id,))
-        return True
+    # def delete_device_type(self, type_id: int) -> bool:
+    #     """Удаление типа устройства по ID"""
+    #     query = "DELETE FROM device_types WHERE id = %s"
+    #     self._execute_query(query, (type_id,))
+    #     return True
 
     # ============= МЕТОДЫ ДЛЯ DEVICES =============
 

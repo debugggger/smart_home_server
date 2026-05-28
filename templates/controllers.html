@@ -36,35 +36,39 @@
             font-size: 28px;
         }
 
-        .back-btn {
-            background: #64748b;
-            border: none;
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .back-btn, .add-btn, .firmware-update-btn {
             padding: 10px 20px;
+            border: none;
             border-radius: 12px;
-            color: white;
             cursor: pointer;
             font-size: 14px;
             transition: 0.2s;
+            font-weight: 500;
         }
 
-        .back-btn:hover {
-            background: #475569;
+        .back-btn {
+            background: #64748b;
+            color: white;
         }
 
         .add-btn {
             background: #4fc3f7;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
             color: #1e2a3a;
             font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-            transition: 0.2s;
         }
 
-        .add-btn:hover {
-            background: #29b6f6;
+        .firmware-update-btn {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .back-btn:hover, .add-btn:hover, .firmware-update-btn:hover {
             transform: translateY(-2px);
         }
 
@@ -80,7 +84,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 14px;
-            min-width: 800px;
+            min-width: 700px;
         }
 
         th {
@@ -223,7 +227,6 @@
             z-index: 2000;
             opacity: 0;
             transition: 0.2s;
-            pointer-events: none;
         }
 
         .toast-msg.show {
@@ -250,8 +253,9 @@
             <div>
                 <h1>🎮 Управление контроллерами</h1>
             </div>
-            <div>
+            <div class="header-buttons">
                 <button class="back-btn" onclick="goBack()">← На главную</button>
+                <button class="firmware-update-btn" onclick="openFirmwareUpdate()">🔄 Обновление прошивки</button>
                 <button class="add-btn" onclick="showAddControllerModal()">+ Добавить контроллер</button>
             </div>
         </div>
@@ -319,6 +323,11 @@
         let currentEditControllerId = null;
         let currentEditElement = null;
 
+        // Переход на страницу обновления прошивки
+        function openFirmwareUpdate() {
+            window.location.href = '/firmware-update';
+        }
+
         // Загрузка комнат для выпадающего списка
         async function loadRoomsForSelect() {
             const response = await fetch('/api/rooms');
@@ -354,12 +363,15 @@
                 row.insertCell(4).innerText = ctrl.devices_count;
 
                 const actionCell = row.insertCell(5);
+
+                // Кнопка устройств
                 const devicesBtn = document.createElement('button');
                 devicesBtn.innerText = '📟 Устройства';
                 devicesBtn.className = 'device-btn';
                 devicesBtn.onclick = () => showDevices(ctrl.id, ctrl.name);
                 actionCell.appendChild(devicesBtn);
 
+                // Кнопка удаления
                 const delBtn = document.createElement('button');
                 delBtn.innerText = 'Удалить';
                 delBtn.className = 'delete-btn';
@@ -441,7 +453,6 @@
         }
 
         function showDevices(controllerId, controllerName) {
-            // Сохраняем в localStorage выбранный контроллер
             localStorage.setItem('selectedControllerId', controllerId);
             localStorage.setItem('selectedControllerName', controllerName);
             window.location.href = '/devices-page';
