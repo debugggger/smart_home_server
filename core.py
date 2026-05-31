@@ -97,6 +97,56 @@ class Core:
                 print(f"Error: {str(e)}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/core_api/send_mqtt_command', methods=['POST'])
+        def send_mqtt_command():
+
+            try:
+                data = request.json
+
+                if not data:
+                    return jsonify({'error': 'No JSON data provided'}), 400
+
+                # Получаем обязательные параметры
+                controller_mac = data.get('controller_mac')
+                device_id = data.get('device_id')
+                command = data.get('command')
+
+                # Валидация обязательных полей
+                if not controller_mac:
+                    return jsonify({'error': 'controller_mac is required'}), 400
+                if device_id is None:
+                    return jsonify({'error': 'device_id is required'}), 400
+                if not command:
+                    return jsonify({'error': 'command is required'}), 400
+
+                value = data.get('value')
+
+                device = self.db.get_device_by_id(device_id)
+
+                req_parts = []
+                req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
+                if device.port:
+                    req_parts.append(device.port)
+                if device.params:
+                    req_parts.append(device.params)
+                req_parts.append(command)
+                if value:
+                    req_parts.append(value)
+                req = "/".join(req_parts)
+
+
+                self.mqtt_client.publish(controller_mac, req)
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Command sended'
+                }), 200
+
+            except Exception as e:
+                print(f"Error: {str(e)}")
+                return jsonify({'error': str(e)}), 500
+
+
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
 
@@ -197,6 +247,7 @@ class Core:
         return {'queue_size': 0, 'running': self.running, 'mqtt_connected': False}
 
     def parse_init(self, controllers, parts):
+        print("init for ", parts[0])
         for controller in controllers:
             if parts[0] == controller.mac:
                 devices = self.db.get_devices_by_controller(controller.id)

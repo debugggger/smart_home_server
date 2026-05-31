@@ -36,14 +36,8 @@ if __name__ == '__main__':
 
         web_interface.start()
 
-
-        #core.parse("serv", "40:91:51:51:97:3A/init")
-
+        core.parse("serv", "FC:F5:C4:A3:26:17/init")
+        core.parse("serv", "FC:F5:C4:A3:26:17/trig")
         #core.parse("serv", "8C:AA:B5:59:AC:A0/init")
-
-
-        #core.parse("serv", "40:91:51:51:97:3A/trig")
-
         #core.parse("serv", "8C:AA:B5:59:AC:A0/trig")
-
         #core.start_update_controllers({"ALLESP"})

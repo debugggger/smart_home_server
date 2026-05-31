@@ -54,6 +54,7 @@ class Device:
     type_id: int = None
     port: str = None
     params: json = None
+    current_values: Optional[str] = None
 
     def __repr__(self):
         return f"<Device(id={self.id}, name='{self.name}', type_id={self.type_id})>"
@@ -305,39 +306,39 @@ class Database:
 
     def get_device_by_id(self, device_id: int) -> Optional[Device]:
         """Получение устройства по ID"""
-        query = "SELECT id, name, controller_id, type_id, port, params FROM devices WHERE id = %s"
+        query = "SELECT id, name, controller_id, type_id, port, params, current_values FROM devices WHERE id = %s"
         result = self._execute_query(query, (device_id,), fetch_one=True)
         if result:
             return Device(id=result[0], name=result[1], controller_id=result[2],
-                          type_id=result[3], port=result[4], params=result[5])
+                          type_id=result[3], port=result[4], params=result[5], current_values=result[6])
         return None
 
     def get_devices_by_controller(self, controller_id: int) -> List[Device]:
         """Получение всех устройств контроллера"""
-        query = "SELECT id, name, controller_id, type_id, port, params FROM devices WHERE controller_id = %s ORDER BY id"
+        query = "SELECT id, name, controller_id, type_id, port, params, current_values FROM devices WHERE controller_id = %s ORDER BY id"
         results = self._execute_query(query, (controller_id,), fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
                 for r in results] if results else []
 
     def get_devices_by_type(self, type_id: int) -> List[Device]:
         """Получение устройств по типу"""
-        query = "SELECT id, name, controller_id, type_id, port, params FROM devices WHERE type_id = %s"
+        query = "SELECT id, name, controller_id, type_id, port, params, current_values FROM devices WHERE type_id = %s"
         results = self._execute_query(query, (type_id,), fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
                 for r in results] if results else []
 
     def get_devices_by_name(self, name: str) -> List[Device]:
         """Получение устройств по имени"""
-        query = "SELECT id, name, controller_id, type_id, port, params FROM devices WHERE name = %s"
+        query = "SELECT id, name, controller_id, type_id, port, params, current_values FROM devices WHERE name = %s"
         results = self._execute_query(query, (name,), fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
                 for r in results] if results else []
 
     def get_all_devices(self) -> List[Device]:
         """Получение всех устройств"""
-        query = "SELECT id, name, controller_id, type_id, port, params FROM devices ORDER BY id"
+        query = "SELECT id, name, controller_id, type_id, port, params, current_values FROM devices ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
                 for r in results] if results else []
 
     def delete_device(self, device_id: int) -> bool:

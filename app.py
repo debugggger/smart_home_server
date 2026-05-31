@@ -94,6 +94,83 @@ class WebInterface:
 
             return jsonify(devices)
 
+        @app.route('/api/devices/<int:device_id>/command', methods=['POST'])
+        def send_device_command(device_id):
+            """
+            Отправить команду на устройство
+            Перенаправляет запрос на /core_api/send_mqtt_command
+            """
+            try:
+                data = request.json
+
+                if not data:
+                    return jsonify({'error': 'No JSON data provided'}), 400
+
+                command = data.get('command')
+                value = data.get('value')
+
+                if not command:
+                    return jsonify({'error': 'command is required'}), 400
+
+                # Получаем устройство из БД
+                device = self.db.get_device_by_id(device_id)
+                if not device:
+                    return jsonify({'success': False, 'error': 'Device not found'}), 404
+
+                # Получаем контроллер
+                controller = self.db.get_controller_by_id(device.controller_id)
+                if not controller:
+                    return jsonify({'success': False, 'error': 'Controller not found'}), 404
+
+                # Формируем payload для перенаправления на core_api
+                payload = {
+                    'controller_mac': controller.mac,
+                    'device_id': device_id,
+                    'command': command
+                }
+
+                if value is not None:
+                    payload['value'] = value
+
+                # Отправляем запрос на core_api
+                target_url = f"{self.core_addr}/core_api/send_mqtt_command"
+
+                logger.info(f"Forwarding command to {target_url}: {payload}")
+
+                response = requests.post(
+                    target_url,
+                    json=payload,
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return jsonify({
+                        'success': True,
+                        'message': f'Command {command} sent to device {device.name}',
+                        'device_id': device_id,
+                        'controller_mac': controller.mac,
+                        'command': command,
+                        'value': value,
+                        'core_response': result
+                    }), 200
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Core API returned status {response.status_code}',
+                        'core_response': response.text
+                    }), response.status_code
+
+            except requests.exceptions.ConnectionError:
+                logger.error(f"Cannot connect to core API at {self.core_addr}")
+                return jsonify({'success': False, 'error': 'Cannot connect to core service'}), 503
+            except requests.exceptions.Timeout:
+                logger.error(f"Timeout connecting to core API at {self.core_addr}")
+                return jsonify({'success': False, 'error': 'Core service timeout'}), 504
+            except Exception as e:
+                logger.error(f"Error in send_device_command: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
         @app.route('/api/update-controller', methods=['POST'])
         def start_update():
 
@@ -221,19 +298,19 @@ class WebInterface:
 
 
 
-        # Эндпоинт для отправки команд на устройство
-        @app.route('/api/devices/<int:device_id>/command', methods=['POST'])
-        def send_device_command(device_id):
-            """Отправить команду на устройство"""
-            data = request.json
-            command = data.get('command')
-            params = data.get('params', {})
-
-            # Здесь нужно реализовать отправку команды на соответствующий контроллер
-            logger.info(f"Sending command {command} to device {device_id} with params {params}")
-
-            # Имитация отправки
-            return jsonify({'success': True, 'message': f'Command {command} sent'})
+        # # Эндпоинт для отправки команд на устройство
+        # @app.route('/api/devices/<int:device_id>/command', methods=['POST'])
+        # def send_device_command(device_id):
+        #     """Отправить команду на устройство"""
+        #     data = request.json
+        #     command = data.get('command')
+        #     params = data.get('params', {})
+        #
+        #     # Здесь нужно реализовать отправку команды на соответствующий контроллер
+        #     logger.info(f"Sending command {command} to device {device_id} with params {params}")
+        #
+        #     # Имитация отправки
+        #     return jsonify({'success': True, 'message': f'Command {command} sent'})
 
         # ============= API ДЛЯ КОМНАТ =============
 
@@ -318,7 +395,7 @@ class WebInterface:
         def get_device_types():
             """Получить все типы устройств"""
             types = self.db.get_all_device_types()
-            return jsonify([{'id': t.id, 'name': t.name, 'description': t.description} for t in types])
+            return jsonify([{'id': t.id, 'name': t.name, 'description': t.description, 'param_names': t.param_name} for t in types])
 
         # ============= API ДЛЯ УСТРОЙСТВ =============
 
@@ -334,6 +411,14 @@ class WebInterface:
                 if controller:
                     room = self.db.get_room_by_id(controller.room_id)
 
+                current_values = None
+
+                if d.current_values:
+                    try:
+                        current_values = json.loads(d.current_values)
+                    except:
+                        current_values = []
+
                 result.append({
                     'id': d.id,
                     'name': d.name,
@@ -344,6 +429,7 @@ class WebInterface:
                     'type_name': device_type.name if device_type else 'Unknown',
                     'port': d.port,
                     'params': d.params,
+                    'current_values': current_values,
                     'status': 'online'
                 })
             return jsonify(result)
@@ -361,7 +447,8 @@ class WebInterface:
                     'type_id': d.type_id,
                     'type_name': device_type.name if device_type else 'Unknown',
                     'port': d.port,
-                    'params': d.params
+                    'params': d.params,
+                    'current_values': d.current_values
                 })
             return jsonify(result)
 
@@ -378,7 +465,8 @@ class WebInterface:
                     'type_id': device.type_id,
                     'type_name': device_type.name if device_type else 'Unknown',
                     'port': device.port,
-                    'params': device.params
+                    'params': device.params,
+                    'current_values': device.current_values
                 })
             return jsonify(result)
 
