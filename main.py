@@ -2,11 +2,10 @@ import time
 
 from dotenv import load_dotenv
 
-#import db_service
-from app import WebInterface
+from app.app import WebInterface
 from core import Core
 from servMqtt import servMqtt
-from database import Database, Room, Controller, DeviceType, Device
+from database import Database
 
 if __name__ == '__main__':
     load_dotenv()
@@ -26,7 +25,6 @@ if __name__ == '__main__':
         core = Core(db, smqtt)
         core.start_processing(port=port_core)
 
-
         web_interface = WebInterface(
             port=5000,
             port_core=port_core,
@@ -36,8 +34,9 @@ if __name__ == '__main__':
 
         web_interface.start()
 
-        core.parse("serv", "FC:F5:C4:A3:26:17/init")
-        core.parse("serv", "FC:F5:C4:A3:26:17/trig")
+        # core.parse("serv", "FC:F5:C4:A3:26:17/init")
+        # core.parse("serv", "FC:F5:C4:A3:26:17/trig")
+
         #core.parse("serv", "8C:AA:B5:59:AC:A0/init")
         #core.parse("serv", "8C:AA:B5:59:AC:A0/trig")
         #core.start_update_controllers({"ALLESP"})

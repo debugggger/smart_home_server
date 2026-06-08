@@ -247,18 +247,6 @@ class Database:
 
     # ============= МЕТОДЫ ДЛЯ DEVICE_TYPES =============
 
-    # def add_device_type(self, device_type: DeviceType) -> Optional[int]:
-    #     """Добавление типа устройства"""
-    #     query = """
-    #         INSERT INTO device_types (name, description)
-    #         VALUES (%s, %s)
-    #         RETURNING id
-    #     """
-    #     result = self._execute_query(query, (device_type.name, device_type.description), fetch_one=True)
-    #     if result:
-    #         device_type.id = result[0]
-    #         return result[0]
-    #     return None
 
     def get_device_type_by_id(self, type_id: int) -> Optional[DeviceType]:
         """Получение типа устройства по ID"""

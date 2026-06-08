@@ -144,7 +144,16 @@
             font-size: 12px;
         }
 
-        .add-condition-btn {
+        /* Кнопка удаления действия скрыта по умолчанию, показывается только если действий > 1 */
+        .action-block .remove-btn {
+            display: none;
+        }
+
+        .actions-container.has-multiple .action-block .remove-btn {
+            display: inline-block;
+        }
+
+        .add-condition-btn, .add-action-btn {
             background: #e2e8f0;
             border: none;
             padding: 8px 16px;
@@ -324,8 +333,8 @@
             <button class="add-condition-btn" onclick="addCondition()">+ Добавить условие</button>
 
             <h4 style="margin-top: 20px;">⚡ Действия (что нужно сделать)</h4>
-            <div id="actionsContainer"></div>
-            <button class="add-condition-btn" onclick="addAction()">+ Добавить действие</button>
+            <div id="actionsContainer" class="actions-container"></div>
+            <button class="add-action-btn" onclick="addAction()">+ Добавить действие</button>
 
             <div class="modal-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
                 <button class="add-btn" onclick="saveTrigger()" style="background: #10b981; color: white;">Сохранить</button>
@@ -339,11 +348,10 @@
     <script>
         let currentEditId = null;
         let controllersList = [];
-        let devicesCache = {};      // Кеш устройств: { controllerId: [devices] }
-        let commandsCache = {};     // Кеш команд: { deviceTypeId: [commands] }
-        let deviceTypesCache = {};  // Кеш типов устройств: { deviceId: typeId }
+        let devicesCache = {};
+        let commandsCache = {};
+        let deviceTypesCache = {};
 
-        // Переключение режимов
         function switchMode(mode) {
             if (mode === 'controller') {
                 document.querySelectorAll('.mode-btn')[0].classList.add('active');
@@ -356,9 +364,20 @@
             }
         }
 
+        // Обновление видимости кнопок удаления действий
+        function updateActionRemoveButtonsVisibility() {
+            const actionsContainer = document.getElementById('actionsContainer');
+            const actionBlocks = actionsContainer.querySelectorAll('.action-block');
+
+            if (actionBlocks.length <= 1) {
+                actionsContainer.classList.remove('has-multiple');
+            } else {
+                actionsContainer.classList.add('has-multiple');
+            }
+        }
+
         // ============= ЗАГРУЗКА ДАННЫХ С СЕРВЕРА =============
 
-        // Загрузка всех контроллеров
         async function loadControllers() {
             const response = await fetch('/api/controllers');
             controllersList = await response.json();
@@ -375,7 +394,6 @@
             });
         }
 
-        // Загрузка устройств для конкретного контроллера
         async function loadDevicesForController(controllerId) {
             if (!controllerId || controllerId === '') return [];
 
@@ -388,7 +406,6 @@
                 const devices = await response.json();
                 devicesCache[controllerId] = devices;
 
-                // Кешируем типы устройств
                 devices.forEach(device => {
                     deviceTypesCache[device.id] = device.type_id;
                 });
@@ -400,7 +417,6 @@
             }
         }
 
-        // Загрузка команд для типа устройства
         async function loadCommandsForDeviceType(deviceTypeId) {
             if (!deviceTypeId) return [];
 
@@ -419,13 +435,11 @@
             }
         }
 
-        // Получение типа устройства по его ID
         async function getDeviceTypeId(deviceId) {
             if (deviceTypesCache[deviceId]) {
                 return deviceTypesCache[deviceId];
             }
 
-            // Если не нашли в кеше, ищем во всех устройствах
             for (const controllerId in devicesCache) {
                 const device = devicesCache[controllerId].find(d => d.id == deviceId);
                 if (device) {
@@ -439,7 +453,6 @@
 
         // ============= УПРАВЛЕНИЕ УСЛОВИЯМИ =============
 
-        // Добавление условия
         async function addCondition(conditionData = null) {
             const container = document.getElementById('conditionsContainer');
             const blockId = Date.now() + Math.random();
@@ -475,7 +488,6 @@
 
             container.appendChild(div);
 
-            // Заполняем список устройств, если выбран контроллер
             const srcControllerId = document.getElementById('srcController').value;
             const deviceSelect = div.querySelector('.condition-device');
 
@@ -483,7 +495,6 @@
                 await populateDeviceSelect(deviceSelect, srcControllerId);
             }
 
-            // Если есть данные для редактирования
             if (conditionData) {
                 deviceSelect.value = conditionData.device_id;
                 await onConditionDeviceChange(deviceSelect);
@@ -499,7 +510,6 @@
             }
         }
 
-        // Обработчик изменения устройства в условии
         async function onConditionDeviceChange(selectElement) {
             const block = selectElement.closest('.condition-block');
             const deviceId = selectElement.value;
@@ -510,7 +520,6 @@
                 return;
             }
 
-            // Получаем тип устройства
             const deviceTypeId = await getDeviceTypeId(deviceId);
 
             if (!deviceTypeId) {
@@ -518,8 +527,6 @@
                 return;
             }
 
-            // Для условий показываем ТОЛЬКО стандартные действия
-            // (не зависят от типа устройства, так как условие - это always greater/less/equal/changed/timer)
             const standardCommands = [
                 { value: 'greater', label: '📈 Значение больше' },
                 { value: 'less', label: '📉 Значение меньше' },
@@ -538,13 +545,11 @@
             });
         }
 
-        // Обработчик изменения команды в условии (показ/скрытие поля значения)
         async function onConditionCommandChange(selectElement) {
             const block = selectElement.closest('.condition-block');
             const valueField = block.querySelector('.value-field');
             const command = selectElement.value;
 
-            // Команды, которые НЕ требуют ввода значения
             const commandsWithoutValue = ['changed'];
             const needsValue = command && !commandsWithoutValue.includes(command);
 
@@ -557,7 +562,6 @@
 
         // ============= УПРАВЛЕНИЕ ДЕЙСТВИЯМИ =============
 
-        // Добавление действия
         async function addAction(actionData = null) {
             const container = document.getElementById('actionsContainer');
             const blockId = Date.now() + Math.random();
@@ -569,7 +573,7 @@
             div.innerHTML = `
                 <div class="block-header">
                     <span>Действие ${container.children.length + 1}</span>
-                    <button class="remove-btn" onclick="this.closest('.action-block').remove()">Удалить</button>
+                    <button class="remove-btn" onclick="removeAction(this)">Удалить</button>
                 </div>
                 <div class="form-group">
                     <label>Устройство (исполнитель)</label>
@@ -593,7 +597,9 @@
 
             container.appendChild(div);
 
-            // Заполняем список устройств, если выбран контроллер
+            // Обновляем видимость кнопок удаления
+            updateActionRemoveButtonsVisibility();
+
             const dstControllerId = document.getElementById('dstController').value;
             const deviceSelect = div.querySelector('.action-device');
 
@@ -601,7 +607,6 @@
                 await populateDeviceSelect(deviceSelect, dstControllerId);
             }
 
-            // Если есть данные для редактирования
             if (actionData) {
                 deviceSelect.value = actionData.device_id;
                 await onActionDeviceChange(deviceSelect);
@@ -617,7 +622,22 @@
             }
         }
 
-        // Обработчик изменения устройства в действии
+        // Функция удаления действия
+        function removeAction(button) {
+            const actionBlock = button.closest('.action-block');
+            actionBlock.remove();
+            updateActionRemoveButtonsVisibility();
+
+            // Перенумеровываем действия
+            const actions = document.querySelectorAll('.action-block');
+            actions.forEach((action, index) => {
+                const header = action.querySelector('.block-header span:first-child');
+                if (header) {
+                    header.innerText = `Действие ${index + 1}`;
+                }
+            });
+        }
+
         async function onActionDeviceChange(selectElement) {
             const block = selectElement.closest('.action-block');
             const deviceId = selectElement.value;
@@ -628,7 +648,6 @@
                 return;
             }
 
-            // Получаем тип устройства
             const deviceTypeId = await getDeviceTypeId(deviceId);
 
             if (!deviceTypeId) {
@@ -636,7 +655,6 @@
                 return;
             }
 
-            // Загружаем команды для этого типа устройства
             const commands = await loadCommandsForDeviceType(deviceTypeId);
 
             commandSelect.innerHTML = '<option value="">Выберите команду</option>';
@@ -649,13 +667,11 @@
             });
         }
 
-        // Обработчик изменения команды в действии (показ/скрытие поля значения)
         async function onActionCommandChange(selectElement) {
             const block = selectElement.closest('.action-block');
             const valueField = block.querySelector('.value-field');
             const command = selectElement.value;
 
-            // Команды, которые НЕ требуют ввода значения
             const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
             const needsValue = command && !commandsWithoutValue.includes(command);
 
@@ -668,7 +684,6 @@
 
         // ============= ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =============
 
-        // Заполнение выпадающего списка устройств
         async function populateDeviceSelect(selectElement, controllerId) {
             if (!controllerId || controllerId === '') {
                 selectElement.innerHTML = '<option value="">Сначала выберите контроллер</option>';
@@ -686,7 +701,6 @@
             });
         }
 
-        // Обновление всех условий при смене контроллера-источника
         async function onSrcControllerChange() {
             const srcControllerId = document.getElementById('srcController').value;
             const conditionBlocks = document.querySelectorAll('.condition-block');
@@ -695,17 +709,14 @@
                 const deviceSelect = block.querySelector('.condition-device');
                 await populateDeviceSelect(deviceSelect, srcControllerId);
 
-                // Сбрасываем выбор команды
                 const commandSelect = block.querySelector('.condition-command');
                 commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
 
-                // Скрываем поле значения
                 const valueField = block.querySelector('.value-field');
                 valueField.classList.remove('show');
             }
         }
 
-        // Обновление всех действий при смене контроллера-приемника
         async function onDstControllerChange() {
             const dstControllerId = document.getElementById('dstController').value;
             const actionBlocks = document.querySelectorAll('.action-block');
@@ -714,11 +725,9 @@
                 const deviceSelect = block.querySelector('.action-device');
                 await populateDeviceSelect(deviceSelect, dstControllerId);
 
-                // Сбрасываем выбор команды
                 const commandSelect = block.querySelector('.action-command');
                 commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
 
-                // Скрываем поле значения
                 const valueField = block.querySelector('.value-field');
                 valueField.classList.remove('show');
             }
@@ -814,13 +823,11 @@
 
             await loadControllers();
 
-            // Устанавливаем обработчики изменения контроллеров
             document.getElementById('srcController').onchange = onSrcControllerChange;
             document.getElementById('dstController').onchange = onDstControllerChange;
 
-            // Добавляем одно пустое условие и одно действие
             await addCondition();
-            await addAction();
+            await addAction(); // Добавляем одно действие по умолчанию
 
             document.getElementById('triggerModal').classList.add('active');
         }
@@ -832,28 +839,21 @@
 
             await loadControllers();
 
-            // Устанавливаем обработчики
             document.getElementById('srcController').onchange = onSrcControllerChange;
             document.getElementById('dstController').onchange = onDstControllerChange;
 
-            // Устанавливаем выбранные контроллеры
             document.getElementById('srcController').value = trigger.src_controller_id;
             document.getElementById('dstController').value = trigger.dst_controller_id;
 
-            // Загружаем устройства для выбранных контроллеров
             await onSrcControllerChange();
             await onDstControllerChange();
 
-            // Очищаем контейнеры
             document.getElementById('conditionsContainer').innerHTML = '';
-            document.getElementById('actionsContainer').innerHTML = '';
-
-            // Добавляем условия
             for (const cond of trigger.conditions) {
                 await addCondition(cond);
             }
 
-            // Добавляем действия
+            document.getElementById('actionsContainer').innerHTML = '';
             for (const resp of trigger.responses) {
                 await addAction(resp);
             }
@@ -937,7 +937,6 @@
                     showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан');
                     closeModal();
                     loadTriggers();
-                    // Очищаем кеш для обновления данных
                     devicesCache = {};
                     commandsCache = {};
                     deviceTypesCache = {};
@@ -967,8 +966,6 @@
                 showToast('❌ Ошибка удаления сценария');
             }
         }
-
-        // ============= ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =============
 
         function goBack() {
             window.location.href = '/';
