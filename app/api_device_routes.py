@@ -1,7 +1,7 @@
 import json
 import logging
 from flask import request, jsonify
-from .api_utils import handle_api_errors, get_device_with_details, forward_to_core
+from api_utils import handle_api_errors, get_device_with_details, forward_to_core
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def register_device_routes(app, db, core_addr):
     @app.route('/api/devices', methods=['POST'])
     @handle_api_errors
     def add_device():
-        from database import Device
+        from app.database import Device
 
         data = request.json
         device = Device(

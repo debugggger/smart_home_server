@@ -1,5 +1,5 @@
 from flask import request, jsonify
-from .api_utils import handle_api_errors
+from api_utils import handle_api_errors
 
 def register_room_routes(app, db):
     @app.route('/api/rooms', methods=['GET'])
@@ -11,7 +11,7 @@ def register_room_routes(app, db):
     @app.route('/api/rooms', methods=['POST'])
     @handle_api_errors
     def add_room():
-        from database import Room
+        from app.database import Room
 
         data = request.json
         room = Room(name=data['name'])

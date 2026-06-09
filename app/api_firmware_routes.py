@@ -3,7 +3,7 @@ import tempfile
 import logging
 from flask import request, jsonify, render_template
 from werkzeug.utils import secure_filename
-from .api_utils import handle_api_errors, forward_to_core
+from api_utils import handle_api_errors, forward_to_core
 
 logger = logging.getLogger(__name__)
 

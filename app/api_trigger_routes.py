@@ -2,7 +2,7 @@ import logging
 from flask import request, jsonify
 
 from database import TrigResponse
-from .api_utils import handle_api_errors
+from api_utils import handle_api_errors
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def register_trigger_routes(app, db):
     @app.route('/api/triggers', methods=['POST'])
     @handle_api_errors
     def create_trigger():
-        from database import Trigger, TrigCondition, TrigResponse
+        from app.database import Trigger, TrigCondition, TrigResponse
 
         data = request.json
 
@@ -157,7 +157,7 @@ def register_trigger_routes(app, db):
             db.delete_trig_response(resp.id)
 
         for condition in data['conditions']:
-            from database import TrigCondition
+            from app.database import TrigCondition
             cond_obj = TrigCondition(
                 device_id=condition['device_id'],
                 condition=f"{condition['command']}/{condition.get('value', '')}",

@@ -5,15 +5,15 @@ import time
 import logging
 
 from flask import Flask
-from utils import get_local_ip
+from core.utils import get_local_ip
 from database import Database
 
-from .api_base_routes import register_base_routes
-from .api_device_routes import register_device_routes
-from .api_controller_routes import register_controller_routes
-from .api_room_routes import register_room_routes
-from .api_trigger_routes import register_trigger_routes
-from .api_firmware_routes import register_firmware_routes
+from api_base_routes import register_base_routes
+from api_device_routes import register_device_routes
+from api_controller_routes import register_controller_routes
+from api_room_routes import register_room_routes
+from api_trigger_routes import register_trigger_routes
+from api_firmware_routes import register_firmware_routes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

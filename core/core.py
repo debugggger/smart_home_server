@@ -8,10 +8,8 @@ import requests
 from flask import Flask, jsonify, request
 
 from otaServer import OTAServer
-from database import Database, Room, Controller, Device, DeviceType, Trigger, TrigCondition, TrigResponse
 from utils import get_local_ip
 from api_core import register_core_api_routes
-
 
 class Core:
     def __init__(self, db, mqtt_client=None, host='0.0.0.0'):
@@ -44,15 +42,15 @@ class Core:
     def parse(self, topic, payload):
         print(f"[PARSE] Обработка сообщения: топик={topic}, данные={payload}")
         parts = payload.split('/')
-        controllers = self.db.get_all_controllers()
+
 
         if len(parts) >= 2:
             if parts[1] == "init":
-                self.parse_init(controllers, parts)
+                self.parse_init(parts)
             if parts[1] == "trig":
-                self.parse_triggers(controllers, parts)
+                self.parse_triggers(parts)
             if parts[1] == "states":
-                self.parse_states(controllers, parts)
+                self.parse_states(parts)
 
     def process_messages(self):
         while not self.stop_event.is_set():
@@ -125,60 +123,79 @@ class Core:
             }
         return {'queue_size': 0, 'running': self.running, 'mqtt_connected': False}
 
-    def parse_init(self, controllers, parts):
+    def parse_init(self, parts):
+
         print("init for ", parts[0])
-        for controller in controllers:
-            if parts[0] == controller.mac:
-                devices = self.db.get_devices_by_controller(controller.id)
-                req_parts = ["connections"]
-                for device in devices:
-                    req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
-                    if device.port:
-                        req_parts.append(device.port)
-                    if device.params:
-                        req_parts.append(device.params)
-                req = "/".join(req_parts)
-                self.mqtt_client.publish(controller.mac, req)
 
-    def parse_triggers(self, controllers, parts):
-        for controller in controllers:
-            if parts[0] == controller.mac:
-                triggers = self.db.get_triggers_by_controller(controller.id)
-                if len(triggers) > 0:
-                    req_parts = ["triggers"]
-                    condCount = 0
-                    for trig in triggers:
-                        trigConditions = self.db.get_trig_conditions_by_trigger(trig.id)
-                        for cond in trigConditions:
-                            if condCount > 0:
-                                req_parts.append("and")
-                            device = self.db.get_device_by_id(cond.device_id)
-                            req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
-                            if device.port:
-                                req_parts.append(device.port)
-                            req_parts.append(cond.condition)
-                            condCount += 1
+        devices = self.db.get_all_devices()
+        req_parts = ["connections"]
+        for device in devices:
+            if parts[0] == device.controller_mac:
 
-                        req_parts.append("do")
-                        req_parts.append(self.db.get_controller_by_id(trig.controller_resp_id).mac)
-                        trigResps = self.db.get_trig_responses_by_trigger(trig.id)
+                req_parts.append(device.type)
+                if device.port:
+                    req_parts.append(device.port)
+                if device.params:
+                    req_parts.append(device.params)
 
-                        for resp in trigResps:
-                            device = self.db.get_device_by_id(resp.device_id)
-                            req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
-                            if device.port:
-                                req_parts.append(device.port)
-                            req_parts.append(resp.resp)
-                        req_parts.append("next")
+                    #TO DO как для триггеров добавить разделитель next
 
-                    req = "/".join(req_parts)
-                    self.mqtt_client.publish(controller.mac, req)
+        req = "/".join(req_parts)
+        self.mqtt_client.publish(parts[0], req)
 
-    def parse_states(self, controllers, parts):
-        for controller in controllers:
-            if parts[0] == controller.mac:
-                devices = self.db.get_devices_by_controller(controller.id)
-                for device in devices:
-                    for i in range(len(parts)):
-                        if parts[i] == self.db.get_device_type_by_id(device.type_id).name:
-                            print(parts[i + 1])
+    def parse_triggers(self, parts):
+
+        req_parts = ["triggers"]
+
+        triggers = self.db.get_all_triggers()
+        for trigger in triggers:
+            if parts[0] == trigger.controller_mac:
+                req_parts.append(trigger.trig)
+                req_parts.append("next")
+
+        req = "/".join(req_parts)
+        self.mqtt_client.publish(parts[0], req)
+
+
+        # сохранение триггера для ядра в нужном формате
+        # for controller in controllers:
+        #     if parts[0] == controller.mac:
+        #         triggers = self.db.get_triggers_by_controller(controller.id)
+        #         if len(triggers) > 0:
+        #             req_parts = []
+        #             condCount = 0
+        #             for trig in triggers:
+        #                 trigConditions = self.db.get_trig_conditions_by_trigger(trig.id)
+        #                 for cond in trigConditions:
+        #                     if condCount > 0:
+        #                         req_parts.append("and")
+        #                     device = self.db.get_device_by_id(cond.device_id)
+        #                     req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
+        #                     if device.port:
+        #                         req_parts.append(device.port)
+        #                     req_parts.append(cond.condition)
+        #                     condCount += 1
+        #
+        #                 req_parts.append("do")
+        #                 req_parts.append(self.db.get_controller_by_id(trig.controller_resp_id).mac)
+        #                 trigResps = self.db.get_trig_responses_by_trigger(trig.id)
+        #
+        #                 for resp in trigResps:
+        #                     device = self.db.get_device_by_id(resp.device_id)
+        #                     req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
+        #                     if device.port:
+        #                         req_parts.append(device.port)
+        #                     req_parts.append(resp.resp)
+        #       req = "/".join(req_parts)
+        #
+
+
+
+    def parse_states(self, parts):
+
+        devices = self.db.get_all_devices()
+        for device in devices:
+            if parts[0] == device.controller_mac:
+                for i in range(len(parts)):
+                    if parts[i] == self.db.get_device_type_by_id(device.type_id).name:
+                        print(parts[i + 1])
