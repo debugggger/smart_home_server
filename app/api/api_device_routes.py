@@ -1,11 +1,12 @@
 import json
 import logging
 from flask import request, jsonify
-from api_utils import handle_api_errors, get_device_with_details, forward_to_core
+
+from .api_utils import handle_api_errors, get_device_with_details
 
 logger = logging.getLogger(__name__)
 
-def register_device_routes(app, db, core_addr):
+def register_device_routes(app, db, kafkaHandler):
 
     @app.route('/api/devices/all', methods=['GET'])
     @handle_api_errors
@@ -102,8 +103,18 @@ def register_device_routes(app, db, core_addr):
             params=data.get('params', '{}')
         )
         device_id = db.add_device(device)
+
         if device_id:
-            return jsonify({'success': True, 'id': device_id})
+            device.id = device_id
+            data_for_core = get_device_data_for_core(device)
+
+            if data_for_core is not None:
+                success, offset = kafkaHandler.update_device_table(data_for_core)
+                if success:
+                    return jsonify({'success': True, 'id': device_id})
+            else:
+                return jsonify({'success': False}), 400
+
         return jsonify({'success': False}), 400
 
     @app.route('/api/devices/<int:device_id>', methods=['DELETE'])
@@ -133,34 +144,16 @@ def register_device_routes(app, db, core_addr):
         if not controller:
             return jsonify({'success': False, 'error': 'Controller not found'}), 404
 
-        payload = {
-            'controller_mac': controller.mac,
-            'device_id': device_id,
-            'command': command
-        }
+        success, offset = kafkaHandler.send_command(controller.mac, device_id, command, value)
 
-        if value is not None:
-            payload['value'] = value
-
-        response = forward_to_core(core_addr, '/core_api/send_mqtt_command', payload)
-
-        if response.status_code == 200:
-            result = response.json()
+        if success:
             return jsonify({
                 'success': True,
-                'message': f'Command {command} sent to device {device.name}',
-                'device_id': device_id,
-                'controller_mac': controller.mac,
-                'command': command,
-                'value': value,
-                'core_response': result
+                'message': 'Command sent via Kafka',
+                'kafka_offset': offset
             }), 200
         else:
-            return jsonify({
-                'success': False,
-                'error': f'Core API returned status {response.status_code}',
-                'core_response': response.text
-            }), response.status_code
+            return jsonify({'error': 'Failed to send command'}), 500
 
     @app.route('/api/device-commands/<int:device_type_id>', methods=['GET'])
     @handle_api_errors
@@ -182,3 +175,20 @@ def register_device_routes(app, db, core_addr):
                 return jsonify(commands[key])
 
         return jsonify([])
+
+
+    def get_device_data_for_core(device):
+
+        controller_mac = db.get_controller_by_id(device.controller_id).mac
+        device_type = db.get_device_type_by_id(device.type_id).name
+
+        device_data_for_core = {
+            'id': device.id,
+            'controller_mac': controller_mac,
+            'port': device.port,
+            'params': device.params,
+            'current_values': device.current_values,
+            'type': device_type
+        }
+        return device_data_for_core
+

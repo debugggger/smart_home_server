@@ -1,13 +1,13 @@
 import logging
 from flask import request, jsonify
 
-from database import TrigResponse
-from api_utils import handle_api_errors
+from .api_utils import handle_api_errors
+from app.database import TrigResponse
 
 logger = logging.getLogger(__name__)
 
 
-def register_trigger_routes(app, db):
+def register_trigger_routes(app, db, kafkaHandler):
     @app.route('/api/triggers', methods=['GET'])
     @handle_api_errors
     def get_all_triggers():
@@ -89,9 +89,11 @@ def register_trigger_routes(app, db):
             name=data['name']
         )
         trigger_id = db.add_trigger(trigger)
+        trigger.id = trigger_id
 
         if not trigger_id:
             return jsonify({'success': False, 'error': 'Failed to create trigger'}), 400
+
 
         for condition in data['conditions']:
             cond_obj = TrigCondition(
@@ -113,6 +115,18 @@ def register_trigger_routes(app, db):
                 trigger_id=trigger_id
             )
             db.add_trig_response(resp_obj)
+
+
+        data_for_trig = get_trig_data_for_core(trigger)
+
+        if data_for_trig is not None:
+            success, offset = kafkaHandler.update_device_table(data_for_trig)
+            if success:
+                return jsonify({'success': True, 'id': trigger_id})
+        else:
+            return jsonify({'success': False}), 400
+
+
 
         # for response in data['responses']:
         #     resp_obj = TrigResponse(
@@ -178,6 +192,17 @@ def register_trigger_routes(app, db):
             )
             db.add_trig_response(resp_obj)
 
+        trigger = db.get_trigger_by_id(trigger_id)
+
+        data_for_trig = get_trig_data_for_core(trigger)
+
+        if data_for_trig is not None:
+            success, offset = kafkaHandler.update_device_table(data_for_trig)
+            if success:
+                return jsonify({'success': True, 'id': trigger_id})
+        else:
+            return jsonify({'success': False}), 400
+
         # for response in data['responses']:
         #     from database import TrigResponse
         #     resp_obj = TrigResponse(
@@ -188,3 +213,41 @@ def register_trigger_routes(app, db):
         #     db.add_trig_response(resp_obj)
 
         return jsonify({'success': True})
+
+
+    def get_trig_data_for_core(trigger):
+
+        req_parts = []
+        condCount = 0
+
+        trigConditions = db.get_trig_conditions_by_trigger(trigger.id)
+        for cond in trigConditions:
+            if condCount > 0:
+                req_parts.append("and")
+            device = db.get_device_by_id(cond.device_id)
+            req_parts.append(db.get_device_type_by_id(device.type_id).name)
+            if device.port:
+                req_parts.append(device.port)
+            req_parts.append(cond.condition)
+            condCount += 1
+
+        req_parts.append("do")
+        req_parts.append(db.get_controller_by_id(trigger.controller_resp_id).mac)
+        trigResps = db.get_trig_responses_by_trigger(trigger.id)
+
+        for resp in trigResps:
+            device = db.get_device_by_id(resp.device_id)
+            req_parts.append(db.get_device_type_by_id(device.type_id).name)
+            if device.port:
+                req_parts.append(device.port)
+            req_parts.append(resp.resp)
+
+        req = "/".join(req_parts)
+
+
+        trig_data_for_core = {
+            'id': trigger.id,
+            'controller_mac': "",
+            'trig': req
+        }
+        return trig_data_for_core

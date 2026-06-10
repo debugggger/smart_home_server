@@ -5,40 +5,40 @@ import time
 import logging
 
 from flask import Flask
-from core.utils import get_local_ip
+from utils import get_local_ip
 from database import Database
 
-from api_base_routes import register_base_routes
-from api_device_routes import register_device_routes
-from api_controller_routes import register_controller_routes
-from api_room_routes import register_room_routes
-from api_trigger_routes import register_trigger_routes
-from api_firmware_routes import register_firmware_routes
+from api.api_base_routes import register_base_routes
+from api.api_device_routes import register_device_routes
+from api.api_controller_routes import register_controller_routes
+from api.api_room_routes import register_room_routes
+from api.api_trigger_routes import register_trigger_routes
+from api.api_firmware_routes import register_firmware_routes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class WebInterface:
-    def __init__(self, host='0.0.0.0', port=5000, port_core=5001, auto_open_browser=True, db_instance=None):
+    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=True, db_instance=None):
         if host == '0.0.0.0':
             host = get_local_ip()
         self.host = host
         self.port = port
-        self.core_addr = "http://" + str(host) + ":" + str(port_core)
         self.auto_open_browser = auto_open_browser
         self.db = db_instance if db_instance else Database()
         self.app = None
         self.server_thread = None
         self.is_running = False
+        self.kafkaHandler = kafka_handler
 
     def _create_app(self):
         app = Flask(__name__)
         register_base_routes(app, self.db)
-        register_device_routes(app, self.db, self.core_addr)
+        register_device_routes(app, self.db, self.kafkaHandler)
         register_controller_routes(app, self.db)
         register_room_routes(app, self.db)
-        register_trigger_routes(app, self.db)
-        register_firmware_routes(app, self.db, self.core_addr)
+        register_trigger_routes(app, self.db, self.kafkaHandler)
+        register_firmware_routes(app, self.db, self.kafkaHandler)
 
         return app
 

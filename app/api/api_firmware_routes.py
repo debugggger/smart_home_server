@@ -3,12 +3,12 @@ import tempfile
 import logging
 from flask import request, jsonify, render_template
 from werkzeug.utils import secure_filename
-from api_utils import handle_api_errors, forward_to_core
+from .api_utils import handle_api_errors, forward_to_core
 
 logger = logging.getLogger(__name__)
 
 
-def register_firmware_routes(app, db, core_addr):
+def register_firmware_routes(app, db, kafkaHandler):
     @app.route('/firmware-update')
     def firmware_update_page():
         return render_template('firmware_update.html')
@@ -36,23 +36,16 @@ def register_firmware_routes(app, db, core_addr):
         else:
             return jsonify({'error': 'topics must be list or string'}), 400
 
-        payload = {'topics': topics_for_mqtt}
-        response = forward_to_core(core_addr, '/core_api/ota_start_update', payload, timeout=30)
+        success, offset = kafkaHandler.start_ota_update(topics_for_mqtt)
 
-        if response.status_code == 200:
-            result = response.json()
+        if success:
             return jsonify({
                 'success': True,
-                'message': f'OTA update started successfully',
-                'forwarded_to': core_addr,
-                'topics_sent': topics_for_mqtt,
-                'response': result
+                'message': 'OTA update request sent via Kafka',
+                'kafka_offset': offset
             }), 200
         else:
-            return jsonify({
-                'error': f'OTA service returned error: {response.status_code}',
-                'details': response.text
-            }), response.status_code
+            return jsonify({'error': 'Failed to send OTA update request'}), 500
 
     @app.route('/api/verify-files', methods=['POST'])
     @handle_api_errors
@@ -90,18 +83,13 @@ def register_firmware_routes(app, db, core_addr):
         firmware.save(firmware_path)
         version.save(version_path)
 
-        firmware_abs_path = os.path.abspath(firmware_path)
-        version_abs_path = os.path.abspath(version_path)
+        success, offset = kafkaHandler.load_files(firmware_path, version_path)
 
-        response = forward_to_core(
-            core_addr,
-            '/core_api/load_files_on_ota',
-            {'firmware_path': firmware_path, 'version_path': version_path},
-            timeout=30
-        )
-
-        return jsonify({
-            'success': True,
-            'firmware_absolute_path': firmware_abs_path,
-            'version_absolute_path': version_abs_path
-        })
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Files load request sent via Kafka',
+                'kafka_offset': offset
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to send load files request'}), 500

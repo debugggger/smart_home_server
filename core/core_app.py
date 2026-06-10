@@ -1,7 +1,5 @@
-import os
 import threading
 import time
-import queue
 from datetime import datetime
 
 import requests
@@ -9,32 +7,19 @@ from flask import Flask, jsonify, request
 
 from otaServer import OTAServer
 from utils import get_local_ip
-from api_core import register_core_api_routes
 
 class Core:
-    def __init__(self, db, mqtt_client=None, host='0.0.0.0'):
+    def __init__(self, db, mqtt_client=None, host='0.0.0.0', ota_serv=None):
         self.db = db
         self.mqtt_client = mqtt_client
         self.running = False
         self.processing_thread = None
         self.stop_event = threading.Event()
-        self.otaServ = OTAServer()
+        self.otaServ = ota_serv
 
         if host == '0.0.0.0':
             host = get_local_ip()
         self.host = host
-
-        self._create_app()
-
-    def _create_app(self):
-        self.app = Flask(__name__)
-
-        register_core_api_routes(
-            app=self.app,
-            db=self.db,
-            mqtt_client=self.mqtt_client,
-            ota_server=self.otaServ
-        )
 
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
@@ -78,16 +63,10 @@ class Core:
                 print(f"[Core] Ошибка при обработке сообщения: {e}")
                 time.sleep(0.1)
 
-    def start_processing(self, port):
+    def start_processing(self):
         if self.running:
             print("[Core] Обработчик уже запущен")
             return False
-
-        def run_flask():
-            self.app.run(host=self.host, port=port, debug=False, use_reloader=False)
-
-        flask_thread = threading.Thread(target=run_flask, daemon=True)
-        flask_thread.start()
 
         self.running = True
         self.stop_event.clear()
@@ -131,14 +110,13 @@ class Core:
         req_parts = ["connections"]
         for device in devices:
             if parts[0] == device.controller_mac:
-
                 req_parts.append(device.type)
                 if device.port:
                     req_parts.append(device.port)
                 if device.params:
                     req_parts.append(device.params)
-
-                    #TO DO как для триггеров добавить разделитель next
+                    #req_parts.append("next")
+                    #TODO как для триггеров добавить разделитель next
 
         req = "/".join(req_parts)
         self.mqtt_client.publish(parts[0], req)
@@ -146,7 +124,6 @@ class Core:
     def parse_triggers(self, parts):
 
         req_parts = ["triggers"]
-
         triggers = self.db.get_all_triggers()
         for trigger in triggers:
             if parts[0] == trigger.controller_mac:
@@ -155,41 +132,6 @@ class Core:
 
         req = "/".join(req_parts)
         self.mqtt_client.publish(parts[0], req)
-
-
-        # сохранение триггера для ядра в нужном формате
-        # for controller in controllers:
-        #     if parts[0] == controller.mac:
-        #         triggers = self.db.get_triggers_by_controller(controller.id)
-        #         if len(triggers) > 0:
-        #             req_parts = []
-        #             condCount = 0
-        #             for trig in triggers:
-        #                 trigConditions = self.db.get_trig_conditions_by_trigger(trig.id)
-        #                 for cond in trigConditions:
-        #                     if condCount > 0:
-        #                         req_parts.append("and")
-        #                     device = self.db.get_device_by_id(cond.device_id)
-        #                     req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
-        #                     if device.port:
-        #                         req_parts.append(device.port)
-        #                     req_parts.append(cond.condition)
-        #                     condCount += 1
-        #
-        #                 req_parts.append("do")
-        #                 req_parts.append(self.db.get_controller_by_id(trig.controller_resp_id).mac)
-        #                 trigResps = self.db.get_trig_responses_by_trigger(trig.id)
-        #
-        #                 for resp in trigResps:
-        #                     device = self.db.get_device_by_id(resp.device_id)
-        #                     req_parts.append(self.db.get_device_type_by_id(device.type_id).name)
-        #                     if device.port:
-        #                         req_parts.append(device.port)
-        #                     req_parts.append(resp.resp)
-        #       req = "/".join(req_parts)
-        #
-
-
 
     def parse_states(self, parts):
 

@@ -1,0 +1,168 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # PostgreSQL для Core сервиса
+  postgres_core:
+    image: postgres:15-alpine
+    container_name: iot_postgres_core
+    environment:
+      POSTGRES_DB: ${CORE_POSTGRES_DB:-iot_core_db}
+      POSTGRES_USER: ${CORE_POSTGRES_USER:-core_user}
+      POSTGRES_PASSWORD: ${CORE_POSTGRES_PASSWORD:-core_password}
+    ports:
+      - "${CORE_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_core_data:/var/lib/postgresql/data
+    networks:
+      - iot_network
+    restart: unless-stopped
+
+  # PostgreSQL для App сервиса
+  postgres_app:
+    image: postgres:15-alpine
+    container_name: iot_postgres_app
+    environment:
+      POSTGRES_DB: ${APP_POSTGRES_DB:-iot_app_db}
+      POSTGRES_USER: ${APP_POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-app_password}
+    ports:
+      - "${APP_POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - postgres_app_data:/var/lib/postgresql/data
+    networks:
+      - iot_network
+    restart: unless-stopped
+
+  # Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: iot_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - iot_network
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    restart: unless-stopped
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: iot_kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_HOST:-kafka}:${KAFKA_PORT:-9092}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    networks:
+      - iot_network
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    restart: unless-stopped
+
+  # MQTT Брокер (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: iot_mosquitto
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - iot_network
+    restart: unless-stopped
+
+  # Core сервис
+  core_service:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    container_name: iot_core_service
+    depends_on:
+      - kafka
+      - postgres_core
+      - mosquitto
+    environment:
+      # Переменные для вашего main.py (те же имена, что в .env)
+      ota_host: ${OTA_HOST:-0.0.0.0:8001}
+      # Kafka настройки (будут использованы в kafkaHandler)
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST:-kafka}:${KAFKA_PORT:-9092}
+      # MQTT настройки (для servMqtt)
+      MQTT_BROKER: ${MQTT_BROKER:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      # PostgreSQL для Core (ваш Database класс должен их использовать)
+      CORE_DB_HOST: postgres_core
+      CORE_DB_PORT: 5432
+      CORE_DB_NAME: ${CORE_POSTGRES_DB:-iot_core_db}
+      CORE_DB_USER: ${CORE_POSTGRES_USER:-core_user}
+      CORE_DB_PASSWORD: ${CORE_POSTGRES_PASSWORD:-core_password}
+    ports:
+      - "${OTA_PORT:-8001}:8001"  # OTA сервер
+    volumes:
+      - ./core:/app
+      - core_uploads:/app/uploads
+    networks:
+      - iot_network
+    restart: unless-stopped
+    # Не меняем команду - используем вашу
+
+  # App сервис (веб интерфейс)
+  app_service:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: iot_app_service
+    depends_on:
+      - kafka
+      - postgres_app
+      - core_service
+    environment:
+      # Переменные для вашего main.py (те же имена, что в .env)
+      app_host: ${APP_HOST:-0.0.0.0:5000}
+      # Kafka настройки
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST:-kafka}:${KAFKA_PORT:-9092}
+      # PostgreSQL для App
+      APP_DB_HOST: postgres_app
+      APP_DB_PORT: 5432
+      APP_DB_NAME: ${APP_POSTGRES_DB:-iot_app_db}
+      APP_DB_USER: ${APP_POSTGRES_USER:-app_user}
+      APP_DB_PASSWORD: ${APP_POSTGRES_PASSWORD:-app_password}
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    volumes:
+      - ./app:/app
+      - app_uploads:/app/uploads
+    networks:
+      - iot_network
+    restart: unless-stopped
+    # Не меняем команду - используем вашу
+
+networks:
+  iot_network:
+    driver: bridge
+    name: iot_network
+
+volumes:
+  postgres_core_data:
+  postgres_app_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
+  core_uploads:
+  app_uploads:

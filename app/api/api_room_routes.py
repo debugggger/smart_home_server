@@ -1,5 +1,5 @@
 from flask import request, jsonify
-from api_utils import handle_api_errors
+from .api_utils import handle_api_errors
 
 def register_room_routes(app, db):
     @app.route('/api/rooms', methods=['GET'])

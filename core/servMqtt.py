@@ -1,4 +1,3 @@
-import subprocess
 import paho.mqtt.client as mqtt
 import os
 import queue
@@ -37,16 +36,11 @@ class servMqtt:
 
     def on_message(self, client, userdata, message):
         try:
-            print("=" * 50)
-            print(f"🔔 ПОЛУЧЕНО СООБЩЕНИЕ!")
-            print(f"   Топик: {message.topic}")
-            print(f"   QoS: {message.qos}")
-            print(f"   Retain: {message.retain}")
-            print(f"   Длина payload: {len(message.payload)}")
+            print(f"New message")
+            print(f"on topic: {message.topic}")
 
             payload = message.payload.decode()
-            print(f"   Сообщение: {payload}")
-            print("=" * 50)
+            print(f"value: {payload}")
 
             self.message_queue.put({
                 'topic': message.topic,
@@ -63,7 +57,6 @@ class servMqtt:
             traceback.print_exc()
 
     def publish(self, topic, message, qos=0, retain=False):
-        """Отправка сообщения в MQTT"""
         if self.connected:
             try:
                 result = self.client.publish(topic, message, qos=qos, retain=retain)
@@ -88,7 +81,6 @@ class servMqtt:
             return None
 
     def set_message_callback(self, callback):
-        """Установить callback функцию для обработки сообщений"""
         self.message_callback = callback
 
     def startBroker(self):
@@ -110,7 +102,6 @@ class servMqtt:
             print(f"Ошибка при запуске клиента: {e}")
 
     def disconnect(self):
-        """Отключение от брокера"""
         if self.client:
             self.client.disconnect()
             self.connected = False
