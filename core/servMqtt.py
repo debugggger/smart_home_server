@@ -4,14 +4,15 @@ import queue
 import time
 import threading
 
-from utils import get_local_ip
+from sh_utils import get_local_ip, get_parsed_addr
 
 
 class servMqtt:
     def __init__(self):
         self.client = mqtt.Client()
-        self.broker_address = "localhost"
-        self.port = 1883
+        self.broker_address, self.port = get_parsed_addr('ADDR_MQTT')
+        # self.broker_address = "127"
+        # self.port = 1883
         self.message_queue = queue.Queue()
         self.message_callback = None
         self.connected = False
@@ -37,6 +38,7 @@ class servMqtt:
     def on_message(self, client, userdata, message):
         try:
             print(f"New message")
+            print(f"from {client}")
             print(f"on topic: {message.topic}")
 
             payload = message.payload.decode()
@@ -89,7 +91,7 @@ class servMqtt:
         os.chdir(mosquitto_directory)
         os.system('cmd /k "mosquitto -v -c conf.conf"')
         os.chdir(current_directory)
-        self.broker_address = get_local_ip()
+        #self.broker_address = get_local_ip()
 
     def startClient(self):
         try:

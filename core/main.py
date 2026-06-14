@@ -5,13 +5,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from core_app import Core
-from core.kafkaHandler import CoreKafkaHandler
+from kafkaHandler import CoreKafkaHandler
 
-from core.otaServer import OTAServer
+from otaServer import OTAServer
 from servMqtt import servMqtt
 from database import Database, Device
 
 if __name__ == '__main__':
+
+    #TODO добавить в бд таблицу триггеров колонку controller_mac
 
     db = Database()
     smqtt = servMqtt()
@@ -27,7 +29,7 @@ if __name__ == '__main__':
         env_path = Path(__file__).parent.parent / '.env'
         load_dotenv(env_path)
 
-        otaServ = OTAServer(os.getenv('ota_host'))
+        otaServ = OTAServer()
 
         core = Core(db, smqtt, otaServ)
 

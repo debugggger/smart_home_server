@@ -1,8 +1,10 @@
-import json
+import os
 import threading
-import time
 from datetime import datetime
 import uuid
+from pathlib import Path
+
+from dotenv import load_dotenv
 from kafka.errors import KafkaError
 
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
@@ -10,11 +12,14 @@ from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 class CoreKafkaHandler:
 
-    def __init__(self, db, mqtt_client, ota_server, bootstrap_servers='localhost:9092'):
+    def __init__(self, db, mqtt_client, ota_server):
         self.db = db
         self.mqtt_client = mqtt_client
         self.ota_server = ota_server
-        self.bootstrap_servers = bootstrap_servers
+        env_path = Path(__file__).parent.parent / '.env'
+        load_dotenv(env_path)
+
+        self.bootstrap_servers = os.getenv('ADDR_KAFKA')
 
         self.producer = None
         self.consumer = None
@@ -165,8 +170,7 @@ class CoreKafkaHandler:
         try:
             devices = data.get('devices', [])
             for device_data in devices:
-                # Обновляем или создаем устройство в БД
-                # self.db.update_or_create_device(device_data)
+                self.db.add_device(device_data)
                 pass
 
             print(f"[Core Kafka] Device table updated successfully")
@@ -174,16 +178,13 @@ class CoreKafkaHandler:
             print(f"[Core Kafka] Error updating device table: {e}")
 
     def _handle_update_trig_table(self, message):
-        """Обработка обновления таблицы триггеров"""
         data = message.get('data', {})
         print(f"[Core Kafka] Updating trigger table with data: {data}")
 
-        # TODO: Реализовать логику обновления БД триггеров
         try:
             triggers = data.get('triggers', [])
             for trigger_data in triggers:
-                # Обновляем или создаем триггер в БД
-                # self.db.update_or_create_trigger(trigger_data)
+                self.db.add_trigger(trigger_data)
                 pass
 
             print(f"[Core Kafka] Trigger table updated successfully")

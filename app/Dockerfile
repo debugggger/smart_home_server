@@ -1,17 +1,22 @@
-# app/Dockerfile
-FROM python:3.10-slim
+# Используем стандартный образ Ubuntu вместо slim версии
+FROM python:3.11
 
 WORKDIR /app
 
+# Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
+    postgresql-client \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Копирование зависимостей
+COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Копирование кода
+COPY app/ .
+COPY kafka_config.py .
+COPY sh_utils.py .
 
-# Не меняем CMD - используем ваш main.py как есть
 CMD ["python", "main.py"]

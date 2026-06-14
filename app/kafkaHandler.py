@@ -1,7 +1,10 @@
+import os
 import threading
 import uuid
 from datetime import datetime
+from pathlib import Path
 
+from dotenv import load_dotenv
 from kafka.errors import KafkaError
 
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
@@ -9,9 +12,13 @@ from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 class AppKafkaHandler:
 
-    def __init__(self, db, bootstrap_servers='localhost:9092'):
+    def __init__(self, db):
         self.db = db
-        self.bootstrap_servers = bootstrap_servers
+
+        env_path = Path(__file__).parent.parent / '.env'
+        load_dotenv(env_path)
+
+        self.bootstrap_servers = os.getenv('ADDR_KAFKA')
 
         self.producer = None
         self.consumer = None

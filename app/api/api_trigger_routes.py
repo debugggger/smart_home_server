@@ -2,7 +2,7 @@ import logging
 from flask import request, jsonify
 
 from .api_utils import handle_api_errors
-from app.database import TrigResponse
+from database import TrigResponse
 
 logger = logging.getLogger(__name__)
 

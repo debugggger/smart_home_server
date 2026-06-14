@@ -3,7 +3,7 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
 
-from utils import get_local_ip
+from sh_utils import get_local_ip, get_parsed_addr
 
 
 class CustomHandler(BaseHTTPRequestHandler):
@@ -40,9 +40,10 @@ class CustomHandler(BaseHTTPRequestHandler):
 
 
 class OTAServer:
-    def __init__(self, port=8001, host=None, file_mapping=None):
-        self.port = port
-        self.host = host if host else get_local_ip()
+    def __init__(self, port=8001, host='127.0.0.1', file_mapping=None):
+        # self.port = port
+        # self.host = host if host else get_local_ip()
+        self.host, self.port = get_parsed_addr('ADDR_OTA')
         self.server = None
         self.server_thread = None
         self.is_running = False

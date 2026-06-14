@@ -27,11 +27,11 @@ class Database:
         env_path = Path(__file__).parent.parent / '.env'
         load_dotenv(env_path)
         self.connection = psycopg2.connect(
-            host=os.getenv('core_db_host'),
-            user=os.getenv('core_db_user'),
-            password=os.getenv('core_db_password'),
-            database=os.getenv('core_db_name'),
-            port=os.getenv('core_db_port')
+            host=os.getenv('CORE_DB_HOST'),
+            user=os.getenv('CORE_DB_USER'),
+            password=os.getenv('CORE_DB_PASSWORD'),
+            database=os.getenv('CORE_DB_NAME'),
+            port=os.getenv('CORE_DB_PORT')
         )
         self.connection.autocommit = True
         with self.connection.cursor() as cur:
@@ -101,6 +101,10 @@ class Database:
         return True
 
     def add_trigger(self, trigger: Trigger) -> Optional[int]:
+
+        if self.get_trigger_by_id(trigger.id):
+            self.delete_trigger(trigger.id)
+
         query = """
             INSERT INTO triggers (id, controller_mac, trig) 
             VALUES ( %s, %s) 

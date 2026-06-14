@@ -56,7 +56,6 @@ class DeviceType:
     param_name: json = None
     description: Optional[str] = None
 
-
 @dataclass
 class TrigCondition:
     id: Optional[int] = None
@@ -85,11 +84,11 @@ class Database:
         env_path = Path(__file__).parent.parent / '.env'
         load_dotenv(env_path)
         self.connection = psycopg2.connect(
-            host=os.getenv('app_db_host'),
-            user=os.getenv('app_db_user'),
-            password=os.getenv('app_db_password'),
-            database=os.getenv('app_db_name'),
-            port=os.getenv('app_db_port')
+            host=os.getenv('APP_DB_HOST'),
+            user=os.getenv('APP_DB_USER'),
+            password=os.getenv('APP_DB_PASSWORD'),
+            database=os.getenv('APP_DB_NAME'),
+            port=os.getenv('APP_DB_PORT')
         )
         self.connection.autocommit = True
         with self.connection.cursor() as cur:

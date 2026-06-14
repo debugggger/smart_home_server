@@ -6,10 +6,10 @@ import requests
 from flask import Flask, jsonify, request
 
 from otaServer import OTAServer
-from utils import get_local_ip
+from sh_utils import get_local_ip
 
 class Core:
-    def __init__(self, db, mqtt_client=None, host='0.0.0.0', ota_serv=None):
+    def __init__(self, db, mqtt_client=None, host='127.0.0.1', ota_serv=None):
         self.db = db
         self.mqtt_client = mqtt_client
         self.running = False
@@ -17,9 +17,9 @@ class Core:
         self.stop_event = threading.Event()
         self.otaServ = ota_serv
 
-        if host == '0.0.0.0':
-            host = get_local_ip()
-        self.host = host
+        # if host == '0.0.0.0':
+        #     host = get_local_ip()
+        # self.host = host
 
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
@@ -106,17 +106,16 @@ class Core:
 
         print("init for ", parts[0])
 
-        devices = self.db.get_all_devices()
+        devices = self.db.get_devices_by_controller(parts[0])
         req_parts = ["connections"]
         for device in devices:
-            if parts[0] == device.controller_mac:
-                req_parts.append(device.type)
-                if device.port:
-                    req_parts.append(device.port)
-                if device.params:
-                    req_parts.append(device.params)
-                    #req_parts.append("next")
-                    #TODO как для триггеров добавить разделитель next
+            req_parts.append(device.type)
+            if device.port:
+                req_parts.append(device.port)
+            if device.params:
+                req_parts.append(device.params)
+                #req_parts.append("next")
+                #TODO как для триггеров добавить разделитель next
 
         req = "/".join(req_parts)
         self.mqtt_client.publish(parts[0], req)
@@ -124,20 +123,19 @@ class Core:
     def parse_triggers(self, parts):
 
         req_parts = ["triggers"]
-        triggers = self.db.get_all_triggers()
+        triggers = self.db.get_triggers_by_controller(parts[0])
         for trigger in triggers:
-            if parts[0] == trigger.controller_mac:
-                req_parts.append(trigger.trig)
-                req_parts.append("next")
+            req_parts.append(trigger.trig)
+            req_parts.append("next")
 
         req = "/".join(req_parts)
         self.mqtt_client.publish(parts[0], req)
 
     def parse_states(self, parts):
-
-        devices = self.db.get_all_devices()
+        #mac/type1/val_type1/val/next/type1/val_type2/val/next
+        devices = self.db.get_devices_by_controller(parts[0])
         for device in devices:
-            if parts[0] == device.controller_mac:
-                for i in range(len(parts)):
-                    if parts[i] == self.db.get_device_type_by_id(device.type_id).name:
-                        print(parts[i + 1])
+            for i in range(len(parts)):
+                if parts[i] == "next":
+                    print(parts[i - 1])
+                    #device.current_values.append
