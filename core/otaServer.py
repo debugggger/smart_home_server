@@ -41,9 +41,9 @@ class CustomHandler(BaseHTTPRequestHandler):
 
 class OTAServer:
     def __init__(self, port=8001, host='127.0.0.1', file_mapping=None):
-        # self.port = port
-        # self.host = host if host else get_local_ip()
-        self.host, self.port = get_parsed_addr('ADDR_OTA')
+        self.port = port
+        self.host = host
+        #self.host, self.port = get_parsed_addr('ADDR_OTA')
         self.server = None
         self.server_thread = None
         self.is_running = False

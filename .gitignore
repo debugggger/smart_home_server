@@ -3,4 +3,5 @@
 __pycache__
 core/mosquitto
 .env
-.env2
+.envDocker
+/mosquitto

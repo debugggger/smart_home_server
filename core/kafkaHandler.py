@@ -12,14 +12,12 @@ from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 class CoreKafkaHandler:
 
-    def __init__(self, db, mqtt_client, ota_server):
+    def __init__(self, db, mqtt_client, ota_server, bootstrap_servers='localhost:9092'):
         self.db = db
         self.mqtt_client = mqtt_client
         self.ota_server = ota_server
-        env_path = Path(__file__).parent.parent / '.env'
-        load_dotenv(env_path)
 
-        self.bootstrap_servers = os.getenv('ADDR_KAFKA')
+        self.bootstrap_servers = bootstrap_servers
 
         self.producer = None
         self.consumer = None

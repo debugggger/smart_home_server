@@ -1,10 +1,7 @@
 import json
-from pathlib import Path
 
 import psycopg2
 from typing import Optional, List
-from dotenv import load_dotenv
-import os
 from dataclasses import dataclass
 
 @dataclass
@@ -23,15 +20,22 @@ class Trigger:
     trig: str = None
 
 class Database:
-    def __init__(self):
-        env_path = Path(__file__).parent.parent / '.env'
-        load_dotenv(env_path)
+    def __init__(self, host = '127.0.0.1', port=443, name='sh_core', user='postgres', password=''):
+        # env_path = Path(__file__).parent.parent / '.env'
+        # load_dotenv(env_path)
+        # self.connection = psycopg2.connect(
+        #     host=os.getenv('CORE_DB_HOST'),
+        #     user=os.getenv('CORE_DB_USER'),
+        #     password=os.getenv('CORE_DB_PASSWORD'),
+        #     database=os.getenv('CORE_DB_NAME'),
+        #     port=os.getenv('CORE_DB_PORT')
+        # )
         self.connection = psycopg2.connect(
-            host=os.getenv('CORE_DB_HOST'),
-            user=os.getenv('CORE_DB_USER'),
-            password=os.getenv('CORE_DB_PASSWORD'),
-            database=os.getenv('CORE_DB_NAME'),
-            port=os.getenv('CORE_DB_PORT')
+            host=host,
+            user=user,
+            password=password,
+            database=name,
+            port=port
         )
         self.connection.autocommit = True
         with self.connection.cursor() as cur:

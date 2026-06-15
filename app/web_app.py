@@ -19,11 +19,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class WebInterface:
-    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=True, db_instance=None):
+    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=False, db_instance=None):
         # if host == '0.0.0.0':
         #     host = get_local_ip()
 
-        self.host, self.port = get_parsed_addr('ADDR_WEB')
+        self.host, self.port = host, port
         self.auto_open_browser = auto_open_browser
         self.db = db_instance if db_instance else Database()
         self.app = None

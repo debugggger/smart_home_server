@@ -9,17 +9,13 @@ from otaServer import OTAServer
 from sh_utils import get_local_ip
 
 class Core:
-    def __init__(self, db, mqtt_client=None, host='127.0.0.1', ota_serv=None):
+    def __init__(self, db, mqtt_client=None, ota_serv=None):
         self.db = db
         self.mqtt_client = mqtt_client
         self.running = False
         self.processing_thread = None
         self.stop_event = threading.Event()
         self.otaServ = ota_serv
-
-        # if host == '0.0.0.0':
-        #     host = get_local_ip()
-        # self.host = host
 
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
@@ -114,8 +110,7 @@ class Core:
                 req_parts.append(device.port)
             if device.params:
                 req_parts.append(device.params)
-                #req_parts.append("next")
-                #TODO как для триггеров добавить разделитель next
+                req_parts.append("next")
 
         req = "/".join(req_parts)
         self.mqtt_client.publish(parts[0], req)
