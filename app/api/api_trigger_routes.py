@@ -6,7 +6,6 @@ from database import TrigResponse
 
 logger = logging.getLogger(__name__)
 
-
 def register_trigger_routes(app, db, kafkaHandler):
     @app.route('/api/triggers', methods=['GET'])
     @handle_api_errors
@@ -75,7 +74,6 @@ def register_trigger_routes(app, db, kafkaHandler):
 
         return jsonify(result)
 
-
     @app.route('/api/triggers', methods=['POST'])
     @handle_api_errors
     def create_trigger():
@@ -125,8 +123,6 @@ def register_trigger_routes(app, db, kafkaHandler):
                 return jsonify({'success': True, 'id': trigger_id})
         else:
             return jsonify({'success': False}), 400
-
-
 
         # for response in data['responses']:
         #     resp_obj = TrigResponse(

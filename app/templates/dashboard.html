@@ -4,56 +4,408 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Умный дом - Панель управления</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fb; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
-        h1 { color: #1e2a3a; font-size: 28px; }
-        .header-buttons { display: flex; gap: 10px; }
-        .refresh-btn, .menu-btn { padding: 10px 20px; border: none; border-radius: 12px; cursor: pointer; font-size: 14px; transition: 0.2s; font-weight: 500; }
-        .refresh-btn { background: #4fc3f7; color: #1e2a3a; }
-        .menu-btn { background: #64748b; color: white; }
-        .refresh-btn:hover, .menu-btn:hover { transform: translateY(-2px); }
-        .room-section { margin-bottom: 30px; }
-        .room-header { background: white; border-radius: 16px; padding: 15px 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 10px; }
-        .room-header h2 { color: #1e2a3a; font-size: 22px; }
-        .room-header .room-icon { font-size: 28px; }
-        .room-header .devices-count { background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 14px; color: #475569; margin-left: auto; }
-        .devices-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; }
-        .device-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; }
-        .device-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
-        .device-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
-        .device-name { font-size: 18px; font-weight: 600; color: #1e2a3a; }
-        .device-type { font-size: 12px; padding: 4px 10px; border-radius: 20px; background: #f1f5f9; color: #475569; }
-        .device-info { margin-bottom: 15px; }
-        .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; font-size: 14px; }
-        .info-label { color: #64748b; font-weight: 500; }
-        .info-value { color: #1e293b; font-weight: 600; }
-        .readings-section { background: #f8fafc; border-radius: 12px; padding: 12px; margin-bottom: 15px; }
-        .readings-title { font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 10px; text-transform: uppercase; }
-        .reading-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid #e2e8f0; }
-        .reading-item:last-child { border-bottom: none; }
-        .reading-name { color: #475569; }
-        .reading-value { font-weight: 600; color: #1e293b; }
-        .controls-section { margin-top: 15px; }
-        .controls-title { font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 10px; text-transform: uppercase; }
-        .device-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .control-btn { background: #f1f5f9; border: none; padding: 8px 14px; border-radius: 12px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s; color: #334155; }
-        .control-btn:hover { background: #e2e8f0; transform: scale(1.02); }
-        .control-btn.primary { background: #4fc3f7; color: white; }
-        .numeric-input-group { display: flex; gap: 8px; align-items: center; }
-        .numeric-input-group input { width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
-        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 24px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: 0.3s; border-radius: 24px; }
-        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%; }
-        input:checked + .toggle-slider { background-color: #4fc3f7; }
-        input:checked + .toggle-slider:before { transform: translateX(26px); }
-        .toast-msg { position: fixed; bottom: 25px; right: 25px; background: #1e2a3a; color: white; padding: 12px 20px; border-radius: 40px; font-size: 14px; z-index: 2000; opacity: 0; transition: 0.2s; }
-        .toast-msg.show { opacity: 1; }
-        .loading { text-align: center; padding: 50px; color: #64748b; }
-        @media (max-width: 768px) { body { padding: 10px; } .devices-grid { grid-template-columns: 1fr; } }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        h1 {
+            color: #1e2a3a;
+            font-size: 28px;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .refresh-btn, .menu-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+            font-weight: 500;
+        }
+
+        .refresh-btn {
+            background: #4fc3f7;
+            color: #1e2a3a;
+        }
+
+        .menu-btn {
+            background: #64748b;
+            color: white;
+        }
+
+        .refresh-btn:hover, .menu-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .status-dot.online {
+            background-color: #10b981;
+        }
+
+        .status-dot.offline {
+            background-color: #ef4444;
+        }
+
+        .status-dot.error {
+            background-color: #f59e0b;
+        }
+
+        .status-text {
+            color: #475569;
+            font-weight: 500;
+        }
+
+        .room-section {
+            margin-bottom: 30px;
+        }
+
+        .room-header {
+            background: white;
+            border-radius: 16px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .room-header h2 {
+            color: #1e2a3a;
+            font-size: 22px;
+        }
+
+        .room-header .room-icon {
+            font-size: 28px;
+        }
+
+        .room-header .devices-count {
+            background: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #475569;
+            margin-left: auto;
+        }
+
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+        }
+
+        .device-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .device-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e2a3a;
+        }
+
+        .device-type {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .device-info {
+            margin-bottom: 15px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e2e8f0;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        .readings-section {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .readings-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .reading-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #e2e8f0;
+            transition: background-color 0.3s;
+        }
+
+        .reading-item:last-child {
+            border-bottom: none;
+        }
+
+        .reading-item.updating {
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { background-color: #f0fdf4; }
+            50% { background-color: #bbf7d0; }
+            100% { background-color: #f0fdf4; }
+        }
+
+        .reading-name {
+            color: #475569;
+        }
+
+        .reading-value {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .controls-section {
+            margin-top: 15px;
+        }
+
+        .controls-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .device-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .control-btn {
+            background: #f1f5f9;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: 0.2s;
+            color: #334155;
+        }
+
+        .control-btn:hover {
+            background: #e2e8f0;
+            transform: scale(1.02);
+        }
+
+        .control-btn.primary {
+            background: #4fc3f7;
+            color: white;
+        }
+
+        .control-btn.primary:hover {
+            background: #29b6f6;
+        }
+
+        .numeric-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .numeric-input-group input {
+            width: 80px;
+            padding: 6px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #4fc3f7;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: #1e2a3a;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .toast-msg.show {
+            opacity: 1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #64748b;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #64748b;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .devices-grid {
+                grid-template-columns: 1fr;
+            }
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .header-buttons {
+                justify-content: flex-end;
+            }
+            .connection-status {
+                order: -1;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -61,76 +413,281 @@
         <div class="header">
             <h1>🏠 Умный дом - панель управления</h1>
             <div class="header-buttons">
-                <button class="refresh-btn" onclick="location.reload()">🔄 Обновить</button>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot offline" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Отключено</span>
+                </div>
+                <button class="refresh-btn" onclick="forceRefresh()">🔄 Обновить</button>
                 <button class="menu-btn" onclick="window.location.href='/'">☰ Главное меню</button>
             </div>
         </div>
-        <div id="dashboardContent"><div class="loading">Загрузка устройств...</div></div>
+        <div id="dashboardContent">
+            <div class="loading">⏳ Загрузка устройств...</div>
+        </div>
     </div>
     <div id="toastMsg" class="toast-msg"></div>
 
     <script>
+        // ============= ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =============
+
+        let socket = null;
         let deviceTypesConfig = {};
+        let deviceDataCache = {};
+        let isConnected = false;
+
+        // ============= WEB SOCKET =============
+
+        function connectWebSocket() {
+            try {
+                // Получаем текущий хост и порт
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = window.location.hostname;
+                const port = window.location.port;
+                const socketUrl = `${protocol}//${host}:${port}`;
+
+                console.log('Подключение к WebSocket:', socketUrl);
+
+                socket = io(socketUrl, {
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000
+                });
+
+                socket.on('connect', function() {
+                    console.log('✅ WebSocket подключен');
+                    isConnected = true;
+                    updateConnectionStatus('online', 'Подключено');
+                    showToast('🔄 Подключение к серверу установлено');
+
+                    // Подписываемся на обновления
+                    socket.emit('subscribe_updates', {});
+                });
+
+                socket.on('disconnect', function() {
+                    console.log('❌ WebSocket отключен');
+                    isConnected = false;
+                    updateConnectionStatus('offline', 'Отключено');
+                    showToast('⚠️ Соединение с сервером потеряно');
+                });
+
+                socket.on('connect_error', function(error) {
+                    console.error('WebSocket ошибка:', error);
+                    updateConnectionStatus('error', 'Ошибка');
+                });
+
+                socket.on('reconnecting', function(attemptNumber) {
+                    console.log(`🔄 Переподключение... попытка ${attemptNumber}`);
+                    updateConnectionStatus('error', `Переподключение... ${attemptNumber}`);
+                });
+
+                socket.on('device_updated', function(data) {
+                    console.log('📡 Обновление устройства:', data);
+                    handleDeviceUpdate(data);
+                });
+
+                socket.on('devices_bulk_updated', function(data) {
+                    console.log('📡 Массовое обновление:', data);
+                    handleBulkUpdate(data);
+                });
+
+                socket.on('subscription_confirmed', function(data) {
+                    console.log('✅ Подписка подтверждена:', data);
+                });
+
+                socket.on('connection_response', function(data) {
+                    console.log('📡 Ответ сервера:', data);
+                });
+
+            } catch (error) {
+                console.error('❌ Ошибка подключения WebSocket:', error);
+                updateConnectionStatus('error', 'Ошибка');
+            }
+        }
+
+        function updateConnectionStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+
+            dot.className = 'status-dot';
+            if (status === 'online') {
+                dot.classList.add('online');
+            } else if (status === 'offline') {
+                dot.classList.add('offline');
+            } else {
+                dot.classList.add('error');
+            }
+
+            statusText.textContent = text;
+        }
+
+        // ============= ОБРАБОТКА ОБНОВЛЕНИЙ =============
+
+        function handleDeviceUpdate(data) {
+            const deviceId = data.device_id;
+            const currentValues = data.current_values;
+
+            // Обновляем кеш
+            if (deviceDataCache[deviceId]) {
+                deviceDataCache[deviceId].current_values = currentValues;
+            }
+
+            // Находим карточку устройства
+            const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
+            if (!card) return;
+
+            // Находим секцию показаний
+            const readingsSection = card.querySelector('.readings-section');
+            if (!readingsSection) return;
+
+            // Находим элементы показаний
+            const readingItems = readingsSection.querySelectorAll('.reading-item');
+            if (readingItems.length === 0) return;
+
+            // Получаем конфиг устройства
+            const device = deviceDataCache[deviceId];
+            if (!device) return;
+
+            const config = deviceTypesConfig[device.type_id];
+            if (!config || !config.reading_commands) return;
+
+            // Обновляем значения
+            readingItems.forEach((item, index) => {
+                if (index < config.reading_commands.length) {
+                    const reading = config.reading_commands[index];
+                    const valueElement = item.querySelector('.reading-value');
+                    if (valueElement) {
+                        const displayValue = getDisplayValue(reading, currentValues, config.returning_values);
+                        const oldValue = valueElement.textContent;
+                        const newValue = String(displayValue);
+
+                        if (oldValue !== newValue) {
+                            valueElement.textContent = newValue;
+                            // Анимация обновления
+                            item.classList.add('updating');
+                            setTimeout(() => item.classList.remove('updating'), 500);
+                        }
+                    }
+                }
+            });
+        }
+
+        function handleBulkUpdate(data) {
+            const updates = data.updates || [];
+            updates.forEach(update => {
+                handleDeviceUpdate(update);
+            });
+            if (updates.length > 0) {
+                showToast(`🔄 Обновлены данные ${updates.length} устройств`);
+            }
+        }
+
+        // ============= ЗАГРУЗКА ДАННЫХ =============
 
         async function loadDeviceTypes() {
-            const response = await fetch('/api/device-types');
-            const types = await response.json();
-            console.log('=== ЗАГРУЖЕННЫЕ ТИПЫ УСТРОЙСТВ ===');
-            console.log(types);
-
-            for (const type of types) {
-                try {
-                    // Используем поле param_names вместо params
-                    let config = {};
-                    if (type.param_names && typeof type.param_names === 'string') {
-                        config = JSON.parse(type.param_names);
-                    } else if (type.param_names && typeof type.param_names === 'object') {
-                        config = type.param_names;
-                    } else {
-                        config = { reading_commands: [], sending_commands: { binary: [], numeric: [] }, returning_values: [] };
-                    }
-
-                    // Нормализуем структуру
-                    if (!config.reading_commands) config.reading_commands = [];
-                    if (!config.sending_commands) config.sending_commands = { binary: [], numeric: [] };
-                    if (!config.sending_commands.binary) config.sending_commands.binary = [];
-                    if (!config.sending_commands.numeric) config.sending_commands.numeric = [];
-                    if (!config.returning_values) config.returning_values = [];
-
-                    console.log(`Тип ${type.id} (${type.name}): reading=${config.reading_commands.length}, binary=${config.sending_commands.binary.length}, numeric=${config.sending_commands.numeric.length}`);
-                    deviceTypesConfig[type.id] = config;
-                } catch (e) {
-                    console.error(`Ошибка парсинга типа ${type.id}:`, e);
-                    deviceTypesConfig[type.id] = { reading_commands: [], sending_commands: { binary: [], numeric: [] }, returning_values: [] };
+            try {
+                const response = await fetch('/api/device-types');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const types = await response.json();
+
+                console.log('Загружено типов устройств:', types.length);
+
+                types.forEach(type => {
+                    try {
+                        let config = {};
+                        if (type.param_names && typeof type.param_names === 'string') {
+                            config = JSON.parse(type.param_names);
+                        } else if (type.param_names && typeof type.param_names === 'object') {
+                            config = type.param_names;
+                        }
+
+                        if (!config.reading_commands) config.reading_commands = [];
+                        if (!config.sending_commands) config.sending_commands = { binary: [], numeric: [] };
+                        if (!config.returning_values) config.returning_values = [];
+
+                        deviceTypesConfig[type.id] = config;
+                    } catch (e) {
+                        console.error('Ошибка парсинга для типа', type.id, e);
+                        deviceTypesConfig[type.id] = {
+                            reading_commands: [],
+                            sending_commands: { binary: [], numeric: [] },
+                            returning_values: []
+                        };
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки типов устройств:', error);
+                showToast('❌ Ошибка загрузки типов устройств');
             }
         }
 
         async function loadDevices() {
-            const response = await fetch('/api/devices');
-            const devices = await response.json();
-            console.log('=== ЗАГРУЖЕННЫЕ УСТРОЙСТВА ===');
-            console.log(devices);
+            try {
+                const response = await fetch('/api/devices');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const devices = await response.json();
 
-            // Группировка по комнатам
-            const rooms = {};
-            for (const device of devices) {
-                const roomName = device.room_name || 'Без комнаты';
-                if (!rooms[roomName]) rooms[roomName] = [];
-                rooms[roomName].push(device);
+                console.log('Загружено устройств:', devices.length);
+
+                // Сохраняем в кеш
+                devices.forEach(device => {
+                    deviceDataCache[device.id] = device;
+                });
+
+                // Группировка по комнатам
+                const rooms = {};
+                devices.forEach(device => {
+                    const roomName = device.room_name || 'Без комнаты';
+                    if (!rooms[roomName]) {
+                        rooms[roomName] = [];
+                    }
+                    rooms[roomName].push(device);
+                });
+
+                renderDashboard(rooms);
+            } catch (error) {
+                console.error('Ошибка загрузки устройств:', error);
+                showToast('❌ Ошибка загрузки устройств');
             }
-
-            renderDashboard(rooms);
         }
 
-        function getDisplayValue(readingCommand, currentValues, returningValues) {
-            if (!currentValues || !Array.isArray(currentValues)) return '—';
-            const paramNumber = readingCommand.parameter_number;
-            if (paramNumber === undefined || paramNumber >= currentValues.length) return '—';
-            const value = currentValues[paramNumber];
-            if (value === null || value === undefined) return '—';
+        async function loadAllData() {
+            await loadDeviceTypes();
+            await loadDevices();
+        }
 
-            // Проверяем returning_values
+        function forceRefresh() {
+            showToast('🔄 Принудительное обновление...');
+            loadAllData();
+        }
+
+        // ============= ПОЛУЧЕНИЕ ЗНАЧЕНИЙ =============
+
+        function getDisplayValue(readingCommand, currentValues, returningValues) {
+            if (!currentValues || !Array.isArray(currentValues)) {
+                return '—';
+            }
+
+            const paramNumber = readingCommand.parameter_number;
+            if (paramNumber === undefined || paramNumber === null) {
+                return '—';
+            }
+
+            if (paramNumber >= currentValues.length) {
+                return '—';
+            }
+
+            const value = currentValues[paramNumber];
+            if (value === null || value === undefined) {
+                return '—';
+            }
+
+            // Проверяем returning_values для преобразования
             if (returningValues && Array.isArray(returningValues) && returningValues.length > 0) {
                 const returnMap = returningValues[0];
                 if (returnMap && returnMap[value] && returnMap[value].description) {
@@ -140,13 +697,22 @@
                     return returnMap[value];
                 }
             }
+
             return value;
         }
 
+        // ============= ОТПРАВКА КОМАНД =============
+
         async function sendCommand(device, command, value = null) {
             try {
-                const sendingName = command.sending_name || command.system_name;
-                const payload = { command: sendingName, params: value !== null ? { value: value } : {} };
+                const payload = {
+                    command: command.sending_name || command.system_name
+                };
+
+                if (value !== null && value !== undefined) {
+                    payload.value = value;
+                }
+
                 console.log('Отправка команды:', payload, 'на устройство:', device.name);
 
                 const response = await fetch(`/api/devices/${device.id}/command`, {
@@ -156,8 +722,9 @@
                 });
 
                 if (response.ok) {
-                    showToast(`✅ Команда "${command.display_name}" отправлена`);
-                    setTimeout(() => location.reload(), 1000);
+                    const result = await response.json();
+                    showToast(`✅ Команда "${command.display_name}" отправлена на ${device.name}`);
+                    return result;
                 } else {
                     const error = await response.json();
                     showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
@@ -170,7 +737,7 @@
 
         function sendNumericValue(device, command, inputElement) {
             const value = inputElement.value;
-            if (value !== '' && value !== null) {
+            if (value !== '' && value !== null && value !== undefined) {
                 sendCommand(device, command, value);
                 inputElement.value = '';
             } else {
@@ -179,66 +746,113 @@
         }
 
         function onToggleChange(checkbox, device, command) {
-            sendCommand(device, command, checkbox.checked ? 1 : 0);
+            const value = checkbox.checked ? 1 : 0;
+            sendCommand(device, command, value);
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toastMsg');
-            toast.innerText = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
-        }
+        // ============= ОТОБРАЖЕНИЕ =============
 
         function escapeHtml(str) {
             if (!str) return '';
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         function renderDashboard(rooms) {
             const container = document.getElementById('dashboardContent');
+
             if (Object.keys(rooms).length === 0) {
-                container.innerHTML = '<div class="loading">📭 Нет устройств в системе</div>';
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📭</div>
+                        <p>Нет устройств в системе</p>
+                    </div>
+                `;
                 return;
             }
 
             let html = '';
+
             for (const [roomName, devices] of Object.entries(rooms)) {
-                html += `<div class="room-section"><div class="room-header"><span class="room-icon">🏠</span><h2>${escapeHtml(roomName)}</h2><span class="devices-count">${devices.length} устройств</span></div><div class="devices-grid">`;
+                html += `
+                    <div class="room-section">
+                        <div class="room-header">
+                            <span class="room-icon">🏠</span>
+                            <h2>${escapeHtml(roomName)}</h2>
+                            <span class="devices-count">${devices.length} устройств</span>
+                        </div>
+                        <div class="devices-grid">
+                `;
 
                 for (const device of devices) {
-                    const config = deviceTypesConfig[device.type_id] || { reading_commands: [], sending_commands: { binary: [], numeric: [] }, returning_values: [] };
+                    const config = deviceTypesConfig[device.type_id] || {
+                        reading_commands: [],
+                        sending_commands: { binary: [], numeric: [] },
+                        returning_values: []
+                    };
 
-                    html += `<div class="device-card">
-                        <div class="device-header">
-                            <span class="device-name">${escapeHtml(device.name)}</span>
-                            <span class="device-type">${escapeHtml(device.type_name || 'Unknown')}</span>
-                        </div>
-                        <div class="device-info">
-                            <div class="info-row"><span class="info-label">Контроллер:</span><span class="info-value">${escapeHtml(device.controller_name || '—')}</span></div>
-                            <div class="info-row"><span class="info-label">Порт:</span><span class="info-value">${escapeHtml(device.port || '—')}</span></div>
-                        </div>`;
+                    const hasReadings = config.reading_commands && config.reading_commands.length > 0;
+                    const hasBinary = config.sending_commands?.binary?.length > 0;
+                    const hasNumeric = config.sending_commands?.numeric?.length > 0;
 
-                    // Показания (reading_commands)
-                    if (config.reading_commands && config.reading_commands.length > 0) {
-                        html += `<div class="readings-section"><div class="readings-title">📊 Показания</div>`;
+                    html += `
+                        <div class="device-card" data-device-id="${device.id}">
+                            <div class="device-header">
+                                <span class="device-name">${escapeHtml(device.name)}</span>
+                                <span class="device-type">${escapeHtml(device.type_name || 'Unknown')}</span>
+                            </div>
+                            <div class="device-info">
+                                <div class="info-row">
+                                    <span class="info-label">Контроллер:</span>
+                                    <span class="info-value">${escapeHtml(device.controller_name || '—')}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Порт:</span>
+                                    <span class="info-value">${escapeHtml(device.port || '—')}</span>
+                                </div>
+                            </div>
+                    `;
+
+                    // Показания
+                    if (hasReadings) {
+                        html += `
+                            <div class="readings-section">
+                                <div class="readings-title">📊 Показания</div>
+                        `;
                         for (const reading of config.reading_commands) {
                             const displayValue = getDisplayValue(reading, device.current_values, config.returning_values);
-                            html += `<div class="reading-item"><span class="reading-name">${escapeHtml(reading.display_name)}:</span><span class="reading-value">${escapeHtml(String(displayValue))}</span></div>`;
+                            html += `
+                                <div class="reading-item">
+                                    <span class="reading-name">${escapeHtml(reading.display_name)}:</span>
+                                    <span class="reading-value">${escapeHtml(String(displayValue))}</span>
+                                </div>
+                            `;
                         }
                         html += `</div>`;
                     }
 
-                    // Управление (sending_commands)
-                    const hasBinary = config.sending_commands?.binary?.length > 0;
-                    const hasNumeric = config.sending_commands?.numeric?.length > 0;
-
+                    // Управление
                     if (hasBinary || hasNumeric) {
-                        html += `<div class="controls-section"><div class="controls-title">🎮 Управление</div><div class="device-controls">`;
+                        html += `
+                            <div class="controls-section">
+                                <div class="controls-title">🎮 Управление</div>
+                                <div class="device-controls">
+                        `;
 
                         // Binary команды (кнопки)
                         if (hasBinary) {
                             for (const cmd of config.sending_commands.binary) {
-                                html += `<button class="control-btn" onclick='sendCommand(${JSON.stringify(device).replace(/"/g, '&quot;')}, ${JSON.stringify(cmd).replace(/"/g, '&quot;')})'>${escapeHtml(cmd.display_name)}</button>`;
+                                const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
+                                const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+                                html += `
+                                    <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})'>
+                                        ${escapeHtml(cmd.display_name)}
+                                    </button>
+                                `;
                             }
                         }
 
@@ -246,16 +860,28 @@
                         if (hasNumeric) {
                             for (const cmd of config.sending_commands.numeric) {
                                 const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`.replace(/[^a-zA-Z0-9_]/g, '_');
+                                const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
+                                const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+
                                 if (cmd.dataType === 'boolT') {
-                                    html += `<div style="display: flex; align-items: center; gap: 8px;">
-                                        <label class="toggle-switch"><input type="checkbox" onchange='onToggleChange(this, ${JSON.stringify(device).replace(/"/g, '&quot;')}, ${JSON.stringify(cmd).replace(/"/g, '&quot;')})'><span class="toggle-slider"></span></label>
-                                        <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
-                                    </div>`;
+                                    html += `
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})'>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
+                                        </div>
+                                    `;
                                 } else {
-                                    html += `<div class="numeric-input-group">
-                                        <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any">
-                                        <button class="control-btn primary" onclick='sendNumericValue(${JSON.stringify(device).replace(/"/g, '&quot;')}, ${JSON.stringify(cmd).replace(/"/g, '&quot;')}, document.getElementById("${inputId}"))'>${escapeHtml(cmd.display_name)}</button>
-                                    </div>`;
+                                    html += `
+                                        <div class="numeric-input-group">
+                                            <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any">
+                                            <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))'>
+                                                ${escapeHtml(cmd.display_name)}
+                                            </button>
+                                        </div>
+                                    `;
                                 }
                             }
                         }
@@ -265,22 +891,52 @@
 
                     html += `</div>`;
                 }
+
                 html += `</div></div>`;
             }
+
             container.innerHTML = html;
         }
 
-        // Делаем функции глобальными
+        // ============= TOAST УВЕДОМЛЕНИЯ =============
+
+        let toastTimeout = null;
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastMsg');
+            toast.textContent = msg;
+            toast.classList.add('show');
+
+            if (toastTimeout) {
+                clearTimeout(toastTimeout);
+            }
+
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+                toastTimeout = null;
+            }, 2500);
+        }
+
+        // ============= ИНИЦИАЛИЗАЦИЯ =============
+
+        // Делаем функции глобальными для HTML
         window.sendCommand = sendCommand;
         window.sendNumericValue = sendNumericValue;
         window.onToggleChange = onToggleChange;
+        window.forceRefresh = forceRefresh;
 
         // Запуск
-        async function init() {
-            await loadDeviceTypes();
-            await loadDevices();
-        }
-        init();
+        connectWebSocket();
+        loadAllData();
+
+        // Автообновление через HTTP каждые 30 секунд как резервный вариант
+        setInterval(() => {
+            if (!isConnected) {
+                // Если WebSocket отключен, обновляем через HTTP
+                console.log('🔄 Резервное обновление через HTTP');
+                loadAllData();
+            }
+        }, 30000);
     </script>
 </body>
 </html>

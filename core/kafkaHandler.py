@@ -150,11 +150,19 @@ class CoreKafkaHandler:
         try:
             if isinstance(topics, str) and topics == "AllESP":
                 self.mqtt_client.publish("AllESP", "update")
+                devices = self.db.get_all_devices()
+                uniqueMac = []
+                for device in devices:
+                    if device.controller_mac not in uniqueMac:
+                        uniqueMac.append(device.controller_mac)
+                        self.ota_server.add_running_update_controller(device.controller_mac)
+
             elif isinstance(topics, list):
                 for topic in topics:
                     self.mqtt_client.publish(topic, "update")
-            else:
-                self.mqtt_client.publish(topics, "update")
+                    self.ota_server.add_running_update_controller(topic)
+            # else:
+            #     self.mqtt_client.publish(topics, "update")
 
             print(f"[Core Kafka] OTA update started")
 

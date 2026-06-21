@@ -10,7 +10,7 @@ class Device:
     controller_mac: str = None
     port: str = None
     params: json = None
-    current_values: Optional[str] = None
+    current_values: Optional[List[str]] = None #TODO сделать массив значений в бд
     type: str = None
 
 @dataclass
@@ -103,6 +103,15 @@ class Database:
         query = "DELETE FROM devices WHERE id = %s"
         self._execute_query(query, (device_id,))
         return True
+
+    def update_device_current_values(self, device_id: int, current_values: str):
+        query = """
+            UPDATE devices 
+            SET current_values = %s 
+            WHERE id = %s
+        """
+        result = self._execute_query(query, (current_values, device_id))
+        return result is not None
 
     def add_trigger(self, trigger: Trigger) -> Optional[int]:
 

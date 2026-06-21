@@ -3,6 +3,7 @@ import logging
 from flask import request, jsonify
 
 from .api_utils import handle_api_errors, get_device_with_details
+from database import Device
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,6 @@ def register_device_routes(app, db, kafkaHandler):
     @app.route('/api/devices', methods=['POST'])
     @handle_api_errors
     def add_device():
-        from app.database import Device
 
         data = request.json
         device = Device(

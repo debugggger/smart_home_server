@@ -20,7 +20,7 @@ class AppKafkaHandler:
         self.consumer = None
         self.running = False
         self.consumer_thread = None
-
+        self.app_api_device_value_update_callback = None
         self.value_update_callback = None
 
     def start(self):
@@ -50,8 +50,22 @@ class AppKafkaHandler:
             self.producer.close()
         print("[Interface Kafka] Stopped")
 
-    def _handle_upd_value(self, callback):
-        print("обновление данных текущего значения устройства")
+    def _handle_upd_value(self, message):
+        data = message.get('data', {})
+        print(f"[App Kafka] Updating device table with data: {data}")
+
+        try:
+            id = data.get('device.id', [])
+            value = data.get('device.value', [])
+            self.db.update_device_current_values(id, value)
+
+            if self.app_api_device_value_update_callback:
+                self.app_api_device_value_update_callback(id, value)
+
+
+            print(f"[App Kafka] Device table updated successfully")
+        except Exception as e:
+            print(f"[App Kafka] Error updating device table: {e}")
 
     def _consume_messages(self):
         for message in self.consumer:
@@ -65,7 +79,7 @@ class AppKafkaHandler:
             event_type = event_data.get('event_type')
 
             if event_type == 'UPD_VAL_DEVICE' and self.value_update_callback:
-                self._handle_upd_value(event_data.get('data', {}))
+                self._handle_upd_value(event_data)
             else:
                 print(f"[Interface Kafka] Unknown or unhandled event: {event_type}")
 

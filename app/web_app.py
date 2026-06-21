@@ -5,7 +5,9 @@ import time
 import logging
 
 from flask import Flask
-from sh_utils import get_local_ip, get_parsed_addr
+from flask_socketio import SocketIO
+
+from api.api_websocket_routes import register_websocket_routes
 from database import Database
 
 from api.api_base_routes import register_base_routes
@@ -19,9 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class WebInterface:
-    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=False, db_instance=None):
-        # if host == '0.0.0.0':
-        #     host = get_local_ip()
+    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=False, db_instance=None, secret_key = '123321'):
 
         self.host, self.port = host, port
         self.auto_open_browser = auto_open_browser
@@ -29,16 +29,24 @@ class WebInterface:
         self.app = None
         self.server_thread = None
         self.is_running = False
+        self.socketio = None
         self.kafkaHandler = kafka_handler
+        self.secret_key = secret_key
+        if self.kafkaHandler:
+            self.kafkaHandler.app_api_device_value_update_callback = self._on_device_value_update
 
     def _create_app(self):
         app = Flask(__name__)
+        app.config['SECRET_KEY'] = self.secret_key
+        self.socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
         register_base_routes(app, self.db)
         register_device_routes(app, self.db, self.kafkaHandler)
         register_controller_routes(app, self.db)
         register_room_routes(app, self.db)
         register_trigger_routes(app, self.db, self.kafkaHandler)
         register_firmware_routes(app, self.db, self.kafkaHandler)
+        register_websocket_routes(self.socketio, self.db, self.kafkaHandler)
 
         return app
 
@@ -111,3 +119,11 @@ class WebInterface:
         self.stop()
         time.sleep(1)
         return self.start()
+
+    def _on_device_value_update(self, device_id, current_values):
+        """Callback из Kafka при обновлении значений устройства"""
+        logger.info(f"Device update from Kafka: device_id={device_id}, values={current_values}")
+
+        # Отправляем обновление через WebSocket
+        if self.socketio and hasattr(self.socketio, 'broadcast_device_update'):
+            self.socketio.broadcast_device_update(device_id, current_values)

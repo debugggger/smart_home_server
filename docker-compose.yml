@@ -7,7 +7,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/config:/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
     restart: unless-stopped
@@ -21,7 +21,7 @@ services:
       start_period: 10s
 
   core-db:
-    image: postgres:15
+    image: postgres:16
     container_name: smart_home_core_db
     environment:
       POSTGRES_DB: ${CORE_DB_NAME}
@@ -42,7 +42,7 @@ services:
       retries: 5
 
   app-db:
-    image: postgres:15
+    image: postgres:16
     container_name: smart_home_app_db
     environment:
       POSTGRES_DB: ${APP_DB_NAME}
@@ -53,7 +53,7 @@ services:
 #      - "${APP_DB_PORT}:5432"
     volumes:
       - app_db_data:/var/lib/postgresql/data
-      - ./init/init_app.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./init/init_app.sql:/docker-entrypoint-initdb.d/init_app.sql:ro
     networks:
       - smart_home_network
     healthcheck:
@@ -72,7 +72,7 @@ services:
       - KAFKA_PROCESS_ROLES=broker,controller
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093
       - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
@@ -109,9 +109,8 @@ services:
       - CORE_DB_PORT=5432  # Внутри контейнера всегда 5432
       - ADDR_MQTT=${ADDR_MQTT}
       - ADDR_OTA=${ADDR_OTA}
-      - ADDR_KAFKA=kafka:9092  # Внутри Docker сети используем имя сервиса
+      - ADDR_KAFKA=kafka:9092
     ports:
-      - "1883:1883"
       - "8001:8001"
     volumes:
       - ./core/logs:/app/logs
@@ -137,7 +136,10 @@ services:
       - APP_DB_NAME=${APP_DB_NAME}
       - APP_DB_PORT=5432  # Внутри контейнера всегда 5432
       - ADDR_WEB=0.0.0.0:5000
-      - ADDR_KAFKA=kafka:9092  # Внутри Docker сети используем имя сервиса
+      - ADDR_KAFKA=kafka:9092
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
     ports:
       - "5000:5000"
     volumes:

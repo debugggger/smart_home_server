@@ -2,6 +2,8 @@ import logging
 from flask import request, jsonify
 from .api_utils import handle_api_errors
 
+from database import Controller
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,7 +29,6 @@ def register_controller_routes(app, db):
     @app.route('/api/controllers', methods=['POST'])
     @handle_api_errors
     def add_controller():
-        from app.database import Controller
 
         data = request.json
         controller = Controller(

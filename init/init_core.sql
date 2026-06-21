@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.3
--- Dumped by pg_dump version 15.3
+-- Dumped from database version 16.0
+-- Dumped by pg_dump version 16.0
 
--- Started on 2026-06-11 11:06:06
+-- Started on 2026-06-19 17:48:58
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -23,24 +23,24 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- TOC entry 215 (class 1259 OID 16617)
+-- TOC entry 215 (class 1259 OID 35845)
 -- Name: devices; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.devices (
-    id integer NOT NULL,
+    id bigint NOT NULL,
     controller_mac text,
     port text,
     params json,
-    current_values text,
-    type text
+    type text,
+    current_values text[]
 );
 
 
 ALTER TABLE public.devices OWNER TO postgres;
 
 --
--- TOC entry 214 (class 1259 OID 16616)
+-- TOC entry 216 (class 1259 OID 35850)
 -- Name: devices_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -53,11 +53,11 @@ CREATE SEQUENCE public.devices_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.devices_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.devices_id_seq OWNER TO postgres;
 
 --
--- TOC entry 3331 (class 0 OID 0)
--- Dependencies: 214
+-- TOC entry 4793 (class 0 OID 0)
+-- Dependencies: 216
 -- Name: devices_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -65,12 +65,12 @@ ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 
 
 --
--- TOC entry 217 (class 1259 OID 16626)
+-- TOC entry 217 (class 1259 OID 35851)
 -- Name: triggers; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.triggers (
-    id integer NOT NULL,
+    id bigint NOT NULL,
     trig text,
     controller_mac text
 );
@@ -79,7 +79,7 @@ CREATE TABLE public.triggers (
 ALTER TABLE public.triggers OWNER TO postgres;
 
 --
--- TOC entry 216 (class 1259 OID 16625)
+-- TOC entry 218 (class 1259 OID 35856)
 -- Name: triggers_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -92,11 +92,11 @@ CREATE SEQUENCE public.triggers_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.triggers_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.triggers_id_seq OWNER TO postgres;
 
 --
--- TOC entry 3332 (class 0 OID 0)
--- Dependencies: 216
+-- TOC entry 4794 (class 0 OID 0)
+-- Dependencies: 218
 -- Name: triggers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -104,7 +104,7 @@ ALTER SEQUENCE public.triggers_id_seq OWNED BY public.triggers.id;
 
 
 --
--- TOC entry 3178 (class 2604 OID 16620)
+-- TOC entry 4639 (class 2604 OID 35863)
 -- Name: devices id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -112,7 +112,7 @@ ALTER TABLE ONLY public.devices ALTER COLUMN id SET DEFAULT nextval('public.devi
 
 
 --
--- TOC entry 3179 (class 2604 OID 16629)
+-- TOC entry 4640 (class 2604 OID 35872)
 -- Name: triggers id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -120,7 +120,7 @@ ALTER TABLE ONLY public.triggers ALTER COLUMN id SET DEFAULT nextval('public.tri
 
 
 --
--- TOC entry 3181 (class 2606 OID 16624)
+-- TOC entry 4642 (class 2606 OID 35865)
 -- Name: devices devices_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -129,7 +129,7 @@ ALTER TABLE ONLY public.devices
 
 
 --
--- TOC entry 3183 (class 2606 OID 16633)
+-- TOC entry 4644 (class 2606 OID 35874)
 -- Name: triggers triggers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -137,7 +137,7 @@ ALTER TABLE ONLY public.triggers
     ADD CONSTRAINT triggers_pkey PRIMARY KEY (id);
 
 
--- Completed on 2026-06-11 11:06:06
+-- Completed on 2026-06-19 17:48:59
 
 --
 -- PostgreSQL database dump complete

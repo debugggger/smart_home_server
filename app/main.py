@@ -16,9 +16,9 @@ if __name__ == '__main__':
     if '--docker' in sys.argv:
         env_file = Path(__file__).parent.parent / '.envDocker'
 
-    db = Database(host=get_env_value('CORE_DB_HOST', env_file), port=get_env_value('CORE_DB_PORT', env_file),
-                  name=get_env_value('CORE_DB_NAME', env_file), user=get_env_value('CORE_DB_USER', env_file),
-                  password=get_env_value('CORE_DB_PASSWORD', env_file))
+    db = Database(host=get_env_value('APP_DB_HOST', env_file), port=get_env_value('APP_DB_PORT', env_file),
+                  name=get_env_value('APP_DB_NAME', env_file), user=get_env_value('APP_DB_USER', env_file),
+                  password=get_env_value('APP_DB_PASSWORD', env_file))
 
     kafka_handler = AppKafkaHandler(db=db, bootstrap_servers=get_env_value('ADDR_KAFKA', env_file))
 
@@ -28,9 +28,9 @@ if __name__ == '__main__':
                 auto_open_browser=False,
                 db_instance=db,
                 host=host,
-                port=port
+                port=port,
+                secret_key=get_env_value('APP_SOCKET_KEY', env_file)
             )
-
 
     web_interface.start()
     kafka_handler.start()

@@ -43,6 +43,7 @@ class OTAServer:
     def __init__(self, port=8001, host='127.0.0.1', file_mapping=None):
         self.port = port
         self.host = host
+        self.onRunningUpdate = []
         #self.host, self.port = get_parsed_addr('ADDR_OTA')
         self.server = None
         self.server_thread = None
@@ -115,4 +116,16 @@ class OTAServer:
     def add_text_file(self, url_path, filename):
         self.add_file(url_path, filename, 'text/plain')
 
+    def is_running(self):
+        return self.is_running
 
+    def add_running_update_controller(self, mac):
+        self.onRunningUpdate.append(mac)
+
+    def delete_running_update_controller(self, mac):
+        if mac in self.onRunningUpdate:
+            self.onRunningUpdate.remove(mac)
+
+        if len(self.onRunningUpdate) == 0:
+            self.stop()
+            print("Все контроллеры обновлены")

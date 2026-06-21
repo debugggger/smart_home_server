@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 from pathlib import Path
@@ -8,7 +7,7 @@ from kafkaHandler import CoreKafkaHandler
 
 from otaServer import OTAServer
 from servMqtt import servMqtt
-from database import Database, Device
+from database import Database
 from sh_utils import get_parsed_addr, get_env_value
 
 if __name__ == '__main__':
@@ -36,8 +35,6 @@ if __name__ == '__main__':
         host, port = get_parsed_addr('ADDR_OTA', env_file)
         otaServ = OTAServer(host=host, port=port)
 
-        core = Core(db, smqtt, otaServ)
-
         kafka_handler = CoreKafkaHandler(
             db=db,
             mqtt_client=smqtt,
@@ -45,8 +42,11 @@ if __name__ == '__main__':
             bootstrap_servers=get_env_value('ADDR_KAFKA', env_file)
         )
 
-        core.start_processing()
+        core = Core(db, smqtt, otaServ, kafka_handler)
+
+
         kafka_handler.start()
+        core.start_processing()
 
         #core.parse("serv", "40:91:51:51:97:3A/init")
 
