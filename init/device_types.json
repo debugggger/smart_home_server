@@ -1,0 +1,71 @@
+[
+  {
+    "name": "btn",
+    "description": "button",
+    "param_names": {"reading_commands":[{"display_name":"Состояние кнопки","system_name":"btnGetState","parameter_number":0}],"sending_commands":{"numeric":[],"binary":[]},"returning_values":[{"0":{"description":"Удержание"},"1":{"description":"Одиночное нажатие"},"2":{"description":"Двойное нажатие"},"3":{"description":"Длинное нажатие"},"4":{"description":"Отпущена"}}]}
+  },
+  {
+    "name": "binOut",
+    "description": "any binary out",
+    "param_names": {"reading_commands":[],"sending_commands":{"numeric":[],"binary":[{"display_name":"Переключить","system_name":"toggleBinOut","sending_name":"toggle"},{"display_name":"Включить","system_name":"setHighBinOut","sending_name":"setHigh"},{"display_name":"Выключить","system_name":"setLowBinOut","sending_name":"setLow"}]},"returning_values":[{}]}
+  },
+  {
+    "name": "aht",
+    "description": "aht20 sensor",
+    "param_names": {"reading_commands":[
+      {"display_name":"Температура","system_name":"ahtGetTemp","parameter_number":0},{"display_name":"Влажность","system_name":"ahtGetHum","parameter_number":1}],"sending_commands":{"numeric":[],"binary":[]},"returning_values":[{}]}
+  },
+  {
+    "name": "led",
+    "description": "smart led sensor",
+    "param_names": {}
+  },
+  {
+    "name": "stepper",
+    "description": "stepper motor",
+    "param_names": {
+      "reading_commands": [],
+      "sending_commands":
+      {
+        "numeric": [
+              {
+                 "display_name": "Скорость",
+               "system_name": "speedStepper",
+                "sending_name": "setSpeed",
+                "dataType": "intT"
+               },
+               {
+                 "display_name": "Направление",
+               "system_name": "dirStepper",
+                "sending_name": "setDir",
+                "dataType": "boolT"
+               }
+              ],
+            "binary": [
+
+              ]
+        },
+        "returning_values": [{}]
+    }
+  },
+  {
+    "name": "analog",
+    "description": "smart led sensor",
+    "param_names": {}
+  },
+  {
+    "name": "micro",
+    "description": "smart led sensor",
+    "param_names": {}
+  },
+  {
+    "name": "led",
+    "description": "smart led sensor",
+    "param_names": {}
+  },
+  {
+    "name": "bin",
+    "description": "any binary input",
+    "param_names": {}
+  }
+]

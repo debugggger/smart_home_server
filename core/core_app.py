@@ -49,8 +49,20 @@ class Core:
                 if parts[2] == "init":
                     for i, request in enumerate(self.mac_wait_request_init):
                         if request["mac"] == parts[0]:
+                            devices = self.db.get_devices_by_controller(request["mac"])
+                            matched_indices = []
+                            for j in range(len(parts)):
+                                for k, device in enumerate(devices):
+                                    if device.port == parts[j] and device.type == parts[j - 1] if j > 0 else False:
+                                        matched_indices.append(k)
+                                        break
+                            for k in sorted(matched_indices, reverse=True):
+                                del devices[k]
+                            if len(devices) != 0:
+                                for device in devices:
+                                    print(f"[Core Error] Ошибка инициализации в контроллере: {device.controller_mac}, устройство {device.type}, порт {device.port}")
+
                             self.mac_wait_request_init.pop(i)
-                            #TODO распарсить ответ и проверить что все устройства проинициализированы
 
     def process_messages(self):
         while not self.stop_event.is_set():

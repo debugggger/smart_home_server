@@ -52,8 +52,12 @@ services:
 #    ports:
 #      - "${APP_DB_PORT}:5432"
     volumes:
+#      - app_db_data:/var/lib/postgresql/data
+#      - ./init/init_app.sql:/docker-entrypoint-initdb.d/init_app.sql:ro
       - app_db_data:/var/lib/postgresql/data
-      - ./init/init_app.sql:/docker-entrypoint-initdb.d/init_app.sql:ro
+      - ./init/init_app.sql:/docker-entrypoint-initdb.d/01-init_app.sql:ro
+      - ./init/load_device_types.sql:/docker-entrypoint-initdb.d/02-load_device_types.sql:ro
+      - ./init/device_types.json:/docker-entrypoint-initdb.d/device_types_data.json:ro
     networks:
       - smart_home_network
     healthcheck:

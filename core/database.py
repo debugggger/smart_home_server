@@ -10,7 +10,7 @@ class Device:
     controller_mac: str = None
     port: str = None
     params: json = None
-    current_values: Optional[List[str]] = None #TODO сделать массив значений в бд
+    current_values: Optional[List[str]] = None
     type: str = None
 
 @dataclass
