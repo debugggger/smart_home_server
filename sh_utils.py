@@ -26,4 +26,5 @@ def get_parsed_addr(name: str, file):
 
 def get_env_value(name: str, file):
     load_dotenv(file)
+    #print(os.getenv(name))
     return os.getenv(name)

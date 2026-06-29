@@ -32,8 +32,10 @@ class WebInterface:
         self.socketio = None
         self.kafkaHandler = kafka_handler
         self.secret_key = secret_key
+
         if self.kafkaHandler:
             self.kafkaHandler.app_api_device_value_update_callback = self._on_device_value_update
+            self.kafkaHandler.notification_callback = self._on_notification
 
     def _create_app(self):
         app = Flask(__name__)
@@ -42,7 +44,7 @@ class WebInterface:
 
         register_base_routes(app, self.db)
         register_device_routes(app, self.db, self.kafkaHandler)
-        register_controller_routes(app, self.db)
+        register_controller_routes(app, self.db, self.kafkaHandler)
         register_room_routes(app, self.db)
         register_trigger_routes(app, self.db, self.kafkaHandler)
         register_firmware_routes(app, self.db, self.kafkaHandler)
@@ -124,6 +126,12 @@ class WebInterface:
         """Callback из Kafka при обновлении значений устройства"""
         logger.info(f"Device update from Kafka: device_id={device_id}, values={current_values}")
 
-        # Отправляем обновление через WebSocket
         if self.socketio and hasattr(self.socketio, 'broadcast_device_update'):
             self.socketio.broadcast_device_update(device_id, current_values)
+
+    def _on_notification(self, notification):
+        """Callback для уведомлений из Kafka"""
+        print(f"[WebInterface] Got notification: {notification.get('type')}")
+
+        if self.socketio and hasattr(self.socketio, 'broadcast_notification'):
+            self.socketio.broadcast_notification(notification)

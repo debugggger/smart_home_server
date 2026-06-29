@@ -23,6 +23,10 @@ class AppKafkaHandler:
         self.app_api_device_value_update_callback = None
         self.value_update_callback = None
 
+        self.notification_callback = None
+        self.notifications = []
+        self.max_notifications = 10
+
     def start(self):
         self.producer = create_kafka_producer(self.bootstrap_servers)
 
@@ -95,6 +99,15 @@ class AppKafkaHandler:
 
         return self._send_message(TOPICS['SEND_COMMAND'], controller_mac, message)
 
+    def init_controller(self, controller_mac):
+        command_data = {
+            'controller_mac': controller_mac,
+            'command': 'init'
+        }
+        message = self._create_message('INIT_CONTROLLER', command_data)
+
+        return self._send_message(TOPICS['INIT_CONTROLLER'], controller_mac, message)
+
     def load_files(self, firmware_path, version_path):
         message = self._create_message('LOAD_FILE', {
             'firmware_path': firmware_path,
@@ -139,3 +152,49 @@ class AppKafkaHandler:
         except KafkaError as e:
             print(f"[Interface Kafka] Failed to send message: {e}")
             return False, None
+
+    def _handle_notification(self, message):
+        data = message.get('data', {})
+        notification_type = data.get('notification_type')
+        toast_message = data.get('toast_message')
+        error_data = data.get('error_data', {})
+        device_id = data.get('device_id')
+        controller_id = data.get('controller_id')
+
+        print(f"[Interface Kafka] Notification: {notification_type} - {toast_message}")
+
+        notification = {
+            'id': len(self.notifications) + 1,
+            'type': notification_type,
+            'message': toast_message,
+            'data': error_data,
+            'device_id': device_id,
+            'controller_id': controller_id,
+            'timestamp': datetime.now().isoformat(),
+            'is_read': False
+        }
+
+        self.notifications.insert(0, notification)
+
+        if len(self.notifications) > self.max_notifications:
+            self.notifications.pop()
+
+        if self.notification_callback:
+            self.notification_callback(notification)
+
+    def get_notifications(self, limit=10):
+        """Получить последние уведомления"""
+        return self.notifications[:limit]
+
+    def mark_notification_read(self, notification_id):
+        """Отметить уведомление как прочитанное"""
+        for notification in self.notifications:
+            if notification['id'] == notification_id:
+                notification['is_read'] = True
+                return True
+        return False
+
+    def clear_notifications(self):
+        """Очистить все уведомления"""
+        self.notifications = []
+        print("[Interface Kafka] All notifications cleared")

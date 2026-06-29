@@ -139,3 +139,52 @@ def register_websocket_routes(socketio, db, kafka_handler=None):
     socketio.broadcast_bulk_update = broadcast_bulk_update
 
     logger.info("✅ WebSocket routes registered")
+
+
+
+    def broadcast_notification(notification):
+        try:
+            socketio.emit('notification', {
+                'id': notification.get('id'),
+                'type': notification.get('type'),
+                'message': notification.get('message'),
+                'data': notification.get('data', {}),
+                'device_id': notification.get('device_id'),
+                'controller_id': notification.get('controller_id'),
+                'timestamp': notification.get('timestamp'),
+                'is_read': notification.get('is_read', False)
+            })
+            print(f"[WebSocket] Broadcasted notification: {notification.get('type')}")
+        except Exception as e:
+            print(f"[WebSocket] Error broadcasting notification: {e}")
+
+    socketio.broadcast_notification = broadcast_notification
+
+    @socketio.on('get_notifications')
+    def handle_get_notifications(data):
+        """Клиент запрашивает историю уведомлений"""
+        if kafka_handler:
+            limit = data.get('limit', 10)
+            notifications = kafka_handler.get_notifications(limit)
+            emit('notifications_history', {
+                'notifications': notifications,
+                'count': len(notifications)
+            })
+        else:
+            emit('notifications_history', {'notifications': [], 'count': 0})
+
+    @socketio.on('mark_notification_read')
+    def handle_mark_read(data):
+        """Отметить уведомление как прочитанное"""
+        notification_id = data.get('notification_id')
+        if kafka_handler and notification_id:
+            success = kafka_handler.mark_notification_read(notification_id)
+            if success:
+                emit('notification_marked_read', {'id': notification_id})
+
+    @socketio.on('clear_notifications')
+    def handle_clear_notifications(data):
+        """Очистить все уведомления"""
+        if kafka_handler:
+            kafka_handler.clear_notifications()
+            emit('notifications_cleared', {})

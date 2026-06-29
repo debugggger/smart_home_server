@@ -7,7 +7,7 @@ from database import Controller
 logger = logging.getLogger(__name__)
 
 
-def register_controller_routes(app, db):
+def register_controller_routes(app, db, kafkaHandler):
     @app.route('/api/controllers', methods=['GET'])
     @handle_api_errors
     def get_controllers():
@@ -56,3 +56,24 @@ def register_controller_routes(app, db):
     def delete_controller(controller_id):
         db.delete_controller(controller_id)
         return jsonify({'success': True})
+
+    @app.route('/api/controllers/init', methods=['POST'])
+    def init_controller():
+        """Отправить команду инициализации на контроллер"""
+        data = request.json
+        mac = data.get('mac')
+
+        if not mac:
+            return jsonify({'error': 'MAC address required'}), 400
+
+        if kafkaHandler:
+            success, offset = kafkaHandler.init_controller(
+                controller_mac=mac
+            )
+
+            if success:
+                return jsonify({'success': True, 'message': f'Init command sent to {mac}'})
+            else:
+                return jsonify({'success': False, 'error': 'Failed to send command'}), 500
+
+        return jsonify({'success': False, 'error': 'Kafka handler not available'}), 503

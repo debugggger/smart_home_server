@@ -24,11 +24,14 @@ class CoreKafkaHandler:
         self.running = False
         self.consumer_thread = None
 
+        self.init_callback = None
+
     def start(self):
         self.producer = create_kafka_producer(self.bootstrap_servers)
 
         topics_to_listen = [
             TOPICS['SEND_COMMAND'],
+            TOPICS['INIT_CONTROLLER'],
             TOPICS['LOAD_FILE'],
             TOPICS['START_UPD_CONTROLLER'],
             TOPICS['UPD_DEVICE_TABLE'],
@@ -59,6 +62,9 @@ class CoreKafkaHandler:
             self.producer.close()
         print("[Core Kafka] Stopped")
 
+    def set_init_callback(self, callback):
+        self.init_callback = callback
+
     def _consume_messages(self):
         for message in self.consumer:
             if not self.running:
@@ -77,6 +83,8 @@ class CoreKafkaHandler:
                 self._handle_send_command(event_data)
             elif topic == TOPICS['LOAD_FILE']:
                 self._handle_load_file(event_data)
+            elif topic == TOPICS['INIT_CONTROLLER']:
+                self._handle_init_controller(event_data)
             elif topic == TOPICS['START_UPD_CONTROLLER']:
                 self._handle_start_ota_update(event_data)
             elif topic == TOPICS['UPD_DEVICE_TABLE']:
@@ -116,6 +124,20 @@ class CoreKafkaHandler:
 
         except Exception as e:
             print(f"[Core Kafka] Error processing command: {e}")
+
+    def _handle_init_controller(self, message):
+        data = message.get('data', {})
+        controller_mac = data.get('controller_mac')
+        command = data.get('command')
+        try:
+            if self.init_callback:
+                self.init_callback([controller_mac])
+                print(f"[Core Kafka] Start init controller")
+
+
+        except Exception as e:
+            print(f"[Core Kafka] Error start init: {e}")
+
 
     def _handle_load_file(self, message):
         data = message.get('data', {})

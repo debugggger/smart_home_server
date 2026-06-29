@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Управление контроллерами - Умный дом</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -72,6 +73,42 @@
             transform: translateY(-2px);
         }
 
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .status-dot.online {
+            background-color: #10b981;
+        }
+
+        .status-dot.offline {
+            background-color: #ef4444;
+        }
+
+        .status-dot.error {
+            background-color: #f59e0b;
+        }
+
+        .status-text {
+            color: #475569;
+            font-weight: 500;
+        }
+
         .card {
             background: white;
             border-radius: 24px;
@@ -137,6 +174,57 @@
 
         .delete-btn:hover {
             background: #fecaca;
+        }
+
+        .init-btn {
+            background: #f59e0b;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+            margin-right: 8px;
+        }
+
+        .init-btn:hover {
+            background: #d97706;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.success {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .status-badge.error {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .status-badge .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-badge.success .dot {
+            background-color: #10b981;
+        }
+
+        .status-badge.error .dot {
+            background-color: #ef4444;
         }
 
         /* Модальные окна */
@@ -244,6 +332,9 @@
                 padding: 10px 8px;
                 font-size: 12px;
             }
+            .header-buttons {
+                justify-content: flex-end;
+            }
         }
     </style>
 </head>
@@ -254,6 +345,10 @@
                 <h1>🎮 Управление контроллерами</h1>
             </div>
             <div class="header-buttons">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot offline" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Отключено</span>
+                </div>
                 <button class="back-btn" onclick="goBack()">← На главную</button>
                 <button class="firmware-update-btn" onclick="openFirmwareUpdate()">🔄 Обновление прошивки</button>
                 <button class="add-btn" onclick="showAddControllerModal()">+ Добавить контроллер</button>
@@ -270,6 +365,7 @@
                             <th>MAC адрес</th>
                             <th>Комната</th>
                             <th>Устройств</th>
+                            <th>Статус</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -322,13 +418,148 @@
     <script>
         let currentEditControllerId = null;
         let currentEditElement = null;
+        let socket = null;
 
-        // Переход на страницу обновления прошивки
-        function openFirmwareUpdate() {
-            window.location.href = '/firmware-update';
+        // ===== WEB SOCKET =====
+
+        function connectWebSocket() {
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = window.location.hostname;
+                const port = window.location.port;
+                const socketUrl = `${protocol}//${host}:${port}`;
+
+                socket = io(socketUrl, {
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000
+                });
+
+                socket.on('connect', function() {
+                    document.getElementById('statusDot').className = 'status-dot online';
+                    document.getElementById('statusText').textContent = 'Подключено';
+                    socket.emit('subscribe_updates', {});
+                });
+
+                socket.on('disconnect', function() {
+                    document.getElementById('statusDot').className = 'status-dot offline';
+                    document.getElementById('statusText').textContent = 'Отключено';
+                });
+
+                socket.on('connect_error', function() {
+                    document.getElementById('statusDot').className = 'status-dot error';
+                    document.getElementById('statusText').textContent = 'Ошибка';
+                });
+
+                socket.on('notification', function(data) {
+                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS' ||
+                        data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE') {
+                        loadControllers();
+                    }
+                });
+
+            } catch (error) {
+                console.error('WebSocket ошибка:', error);
+            }
         }
 
-        // Загрузка комнат для выпадающего списка
+        // ===== ЗАГРУЗКА КОНТРОЛЛЕРОВ =====
+
+        async function loadControllers() {
+            try {
+                const response = await fetch('/api/controllers');
+                const controllers = await response.json();
+                const tbody = document.getElementById('controllersTableBody');
+                tbody.innerHTML = '';
+
+                for (const ctrl of controllers) {
+                    // Получаем устройства контроллера для проверки статуса
+                    const devicesResponse = await fetch(`/api/devices/by-controller/${ctrl.id}`);
+                    const devices = await devicesResponse.json();
+
+                    const hasOffline = devices.some(d => d.is_online === false);
+                    const totalDevices = devices.length;
+
+                    const row = tbody.insertRow();
+                    row.insertCell(0).innerText = ctrl.id;
+
+                    const nameCell = row.insertCell(1);
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'editable-cell';
+                    nameSpan.innerText = ctrl.name;
+                    nameSpan.onclick = () => showEditNameModal(ctrl.id, ctrl.name, nameSpan);
+                    nameCell.appendChild(nameSpan);
+
+                    row.insertCell(2).innerText = ctrl.mac;
+                    row.insertCell(3).innerText = ctrl.room_name;
+                    row.insertCell(4).innerText = totalDevices;
+
+                    // Статус
+                    const statusCell = row.insertCell(5);
+                    if (totalDevices === 0) {
+                        statusCell.innerHTML = `<span class="status-badge success"><span class="dot"></span>Нет устройств</span>`;
+                    } else if (hasOffline) {
+                        statusCell.innerHTML = `<span class="status-badge error"><span class="dot"></span>${devices.filter(d => !d.is_online).length} ошибок</span>`;
+                    } else {
+                        statusCell.innerHTML = `<span class="status-badge success"><span class="dot"></span>OK</span>`;
+                    }
+
+                    const actionCell = row.insertCell(6);
+
+                    // Кнопка инициализации (только если есть офлайн устройства)
+                    if (hasOffline) {
+                        const initBtn = document.createElement('button');
+                        initBtn.innerText = '🔄 Инициализировать';
+                        initBtn.className = 'init-btn';
+                        initBtn.onclick = () => initController(ctrl.mac);
+                        actionCell.appendChild(initBtn);
+                    }
+
+                    const devicesBtn = document.createElement('button');
+                    devicesBtn.innerText = '📟 Устройства';
+                    devicesBtn.className = 'device-btn';
+                    devicesBtn.onclick = () => showDevices(ctrl.id, ctrl.name);
+                    actionCell.appendChild(devicesBtn);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.innerText = 'Удалить';
+                    delBtn.className = 'delete-btn';
+                    delBtn.onclick = () => deleteController(ctrl.id);
+                    actionCell.appendChild(delBtn);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки контроллеров:', error);
+                showToast('❌ Ошибка загрузки контроллеров');
+            }
+        }
+
+        // ===== ИНИЦИАЛИЗАЦИЯ КОНТРОЛЛЕРА =====
+
+        async function initController(mac) {
+            if (!confirm('Отправить команду инициализации на контроллер ' + mac + '?')) return;
+
+            try {
+                const response = await fetch('/api/controllers/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mac: mac })
+                });
+
+                if (response.ok) {
+                    showToast('📡 Команда инициализации отправлена на ' + mac);
+                    setTimeout(loadControllers, 2000);
+                } else {
+                    const error = await response.json();
+                    showToast('❌ Ошибка: ' + (error.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message);
+            }
+        }
+
+        // ===== ОСТАЛЬНЫЕ ФУНКЦИИ =====
+
         async function loadRoomsForSelect() {
             const response = await fetch('/api/rooms');
             const rooms = await response.json();
@@ -336,47 +567,6 @@
             select.innerHTML = '<option value="">Выберите комнату</option>';
             rooms.forEach(room => {
                 select.innerHTML += `<option value="${room.id}">${room.name}</option>`;
-            });
-        }
-
-        // Загрузка контроллеров
-        async function loadControllers() {
-            const response = await fetch('/api/controllers');
-            const controllers = await response.json();
-            const tbody = document.getElementById('controllersTableBody');
-            tbody.innerHTML = '';
-
-            controllers.forEach(ctrl => {
-                const row = tbody.insertRow();
-                row.insertCell(0).innerText = ctrl.id;
-
-                // Редактируемая ячейка имени
-                const nameCell = row.insertCell(1);
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'editable-cell';
-                nameSpan.innerText = ctrl.name;
-                nameSpan.onclick = () => showEditNameModal(ctrl.id, ctrl.name, nameSpan);
-                nameCell.appendChild(nameSpan);
-
-                row.insertCell(2).innerText = ctrl.mac;
-                row.insertCell(3).innerText = ctrl.room_name;
-                row.insertCell(4).innerText = ctrl.devices_count;
-
-                const actionCell = row.insertCell(5);
-
-                // Кнопка устройств
-                const devicesBtn = document.createElement('button');
-                devicesBtn.innerText = '📟 Устройства';
-                devicesBtn.className = 'device-btn';
-                devicesBtn.onclick = () => showDevices(ctrl.id, ctrl.name);
-                actionCell.appendChild(devicesBtn);
-
-                // Кнопка удаления
-                const delBtn = document.createElement('button');
-                delBtn.innerText = 'Удалить';
-                delBtn.className = 'delete-btn';
-                delBtn.onclick = () => deleteController(ctrl.id);
-                actionCell.appendChild(delBtn);
             });
         }
 
@@ -462,6 +652,10 @@
             window.location.href = '/';
         }
 
+        function openFirmwareUpdate() {
+            window.location.href = '/firmware-update';
+        }
+
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
         }
@@ -473,8 +667,16 @@
             setTimeout(() => toast.classList.remove('show'), 2500);
         }
 
-        // Инициализация
+        // ===== ИНИЦИАЛИЗАЦИЯ =====
+
+        connectWebSocket();
         loadControllers();
+
+        setInterval(() => {
+            if (!socket || !socket.connected) {
+                loadControllers();
+            }
+        }, 30000);
     </script>
 </body>
 </html>

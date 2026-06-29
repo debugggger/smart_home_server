@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mqtt_broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+    networks:
+      - smart_home_network
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -an | grep 1883 | grep LISTEN || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+#  core-db:
+#    image: postgres:16
+#    container_name: smart_home_core_db
+#    environment:
+#      POSTGRES_DB: ${CORE_DB_NAME}
+#      POSTGRES_USER: ${CORE_DB_USER}
+#      POSTGRES_HOST_AUTH_METHOD: trust
+#      #POSTGRES_PASSWORD: ${CORE_DB_PASSWORD}  # Закомментировано, т.к. используем trust
+##    ports:
+##      - "${CORE_DB_PORT}:5432"
+#    volumes:
+#      - core_db_data:/var/lib/postgresql/data
+#      - ./init/init_core.sql:/docker-entrypoint-initdb.d/init.sql:ro
+#    networks:
+#      - smart_home_network
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U ${CORE_DB_USER} -d ${CORE_DB_NAME}"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#
+#  app-db:
+#    image: postgres:16
+#    container_name: smart_home_app_db
+#    environment:
+#      POSTGRES_DB: ${APP_DB_NAME}
+#      POSTGRES_USER: ${APP_DB_USER}
+#      POSTGRES_HOST_AUTH_METHOD: trust
+#      #POSTGRES_PASSWORD: ${APP_DB_PASSWORD}  # Закомментировано, т.к. используем trust
+##    ports:
+##      - "${APP_DB_PORT}:5432"
+#    volumes:
+##      - app_db_data:/var/lib/postgresql/data
+##      - ./init/init_app.sql:/docker-entrypoint-initdb.d/init_app.sql:ro
+#      - app_db_data:/var/lib/postgresql/data
+#      - ./init/init_app.sql:/docker-entrypoint-initdb.d/01-init_app.sql:ro
+#      - ./init/load_device_types.sql:/docker-entrypoint-initdb.d/02-load_device_types.sql:ro
+#      - ./init/device_types.json:/docker-entrypoint-initdb.d/device_types_data.json:ro
+#    networks:
+#      - smart_home_network
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME}"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+
+  kafka:
+    image: apache/kafka
+    container_name: smart_home_kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_LOG_DIRS=/tmp/kraft-combined-logs
+    networks:
+      - smart_home_network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+
+networks:
+  smart_home_network:
+    driver: bridge
+
+#volumes:
+#  core_db_data:
+#  app_db_data:

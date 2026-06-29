@@ -95,6 +95,7 @@ class Core:
             print("[Core] Обработчик уже запущен")
             return False
 
+
         self.running = True
         self.stop_event.clear()
         self.processing_thread = threading.Thread(target=self.process_messages, daemon=True)
@@ -102,6 +103,8 @@ class Core:
 
         self.thread_request = threading.Thread(target=self.request_states, daemon=True)
         self.thread_request.start()
+
+        self.kafka_handler.set_init_callback(self.parse_init)
 
         self.init_devices()
 

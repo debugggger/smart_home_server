@@ -9,6 +9,7 @@ TOPICS = {
     'START_UPD_CONTROLLER': 'start_upd_controller',
     'UPD_DEVICE_TABLE': 'upd_device_table',
     'UPD_TRIG_TABLE': 'upd_trig_table',
+    'INIT_CONTROLLER': 'init_controller',
 
     #core -> app
     'UPD_VAL_DEVICE': 'upd_val_device',

@@ -36,35 +36,28 @@
             font-size: 28px;
         }
 
-        .back-btn {
-            background: #64748b;
-            border: none;
+        .back-btn, .add-btn {
             padding: 10px 20px;
+            border: none;
             border-radius: 12px;
-            color: white;
             cursor: pointer;
             font-size: 14px;
             transition: 0.2s;
+            font-weight: 500;
         }
 
-        .back-btn:hover {
-            background: #475569;
+        .back-btn {
+            background: #64748b;
+            color: white;
         }
 
         .add-btn {
             background: #4fc3f7;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
             color: #1e2a3a;
             font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-            transition: 0.2s;
         }
 
-        .add-btn:hover {
-            background: #29b6f6;
+        .back-btn:hover, .add-btn:hover {
             transform: translateY(-2px);
         }
 
@@ -112,13 +105,37 @@
             background: #fecaca;
         }
 
+        .device-status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .device-status-indicator.online {
+            background-color: #10b981;
+        }
+
+        .device-status-indicator.offline {
+            background-color: #ef4444;
+        }
+
+        .device-row.offline {
+            opacity: 0.6;
+        }
+
+        .device-row.offline td:first-child::before {
+            content: "🔴 ";
+            font-size: 12px;
+        }
+
         .empty-state {
             text-align: center;
             padding: 40px;
             color: #94a3b8;
         }
 
-        /* Модальные окна */
         .modal {
             display: none;
             position: fixed;
@@ -206,7 +223,6 @@
             z-index: 2000;
             opacity: 0;
             transition: 0.2s;
-            pointer-events: none;
         }
 
         .toast-msg.show {
@@ -219,6 +235,10 @@
             }
             .card {
                 padding: 16px;
+            }
+            th, td {
+                padding: 10px 8px;
+                font-size: 12px;
             }
         }
     </style>
@@ -244,6 +264,7 @@
                             <th>Имя устройства</th>
                             <th>Тип</th>
                             <th>Порт</th>
+                            <th>Статус</th>
                             <th>Параметры</th>
                             <th>Действие</th>
                         </tr>
@@ -254,7 +275,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно добавления устройства -->
     <div id="addDeviceModal" class="modal">
         <div class="modal-content">
             <h3>➕ Добавить устройство</h3>
@@ -289,25 +309,35 @@
 
         // Загрузка устройств
         async function loadDevices() {
-            const response = await fetch(`/api/devices/controller/${currentControllerId}`);
+            const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
             const devices = await response.json();
             const tbody = document.getElementById('devicesTableBody');
             tbody.innerHTML = '';
 
             if (devices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
                 return;
             }
 
             devices.forEach(device => {
+                const isOnline = device.is_online !== undefined ? device.is_online : true;
                 const row = tbody.insertRow();
+                row.className = isOnline ? '' : 'device-row offline';
+
                 row.insertCell(0).innerText = device.id;
                 row.insertCell(1).innerText = device.name;
-                row.insertCell(2).innerText = device.type_name;
-                row.insertCell(3).innerText = device.port;
-                row.insertCell(4).innerText = device.params;
+                row.insertCell(2).innerText = device.type_name || 'Unknown';
+                row.insertCell(3).innerText = device.port || '—';
 
-                const actionCell = row.insertCell(5);
+                const statusCell = row.insertCell(4);
+                statusCell.innerHTML = `
+                    <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
+                    ${isOnline ? 'Онлайн' : 'Офлайн'}
+                `;
+
+                row.insertCell(5).innerText = device.params || '{}';
+
+                const actionCell = row.insertCell(6);
                 const delBtn = document.createElement('button');
                 delBtn.innerText = 'Удалить';
                 delBtn.className = 'delete-btn';
@@ -401,7 +431,7 @@
             document.getElementById('pageTitle').innerHTML = `📟 Устройства контроллера: ${currentControllerName}`;
             loadDevices();
         } else {
-            document.getElementById('devicesTableBody').innerHTML = '<tr><td colspan="6" class="empty-state">❌ Ошибка: контроллер не выбран</td></tr>';
+            document.getElementById('devicesTableBody').innerHTML = '<tr><td colspan="7" class="empty-state">❌ Ошибка: контроллер не выбран</td></tr>';
         }
     </script>
 </body>

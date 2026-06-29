@@ -24,6 +24,7 @@ class Controller:
     mac: str = None
     room_id: int = None
     name: str = None
+    is_online: bool = False
 
 
 @dataclass
@@ -35,6 +36,7 @@ class Device:
     port: str = None
     params: json = None
     current_values: Optional[List[str]] = None
+    is_online: bool = False
 
 
 # @dataclass
@@ -165,29 +167,37 @@ class Database:
         query = "SELECT * FROM controllers WHERE id = %s"
         result = self._execute_query(query, (controller_id,), fetch_one=True)
         if result:
-            return Controller(id=result[0], mac=result[1], room_id=result[2], name=result[3])
+            return Controller(id=result[0], mac=result[1], room_id=result[2], name=result[3], is_online=result[4])
         return None
 
     def get_controllers_by_room(self, room_id: int) -> List[Controller]:
         query = "SELECT * FROM controllers WHERE room_id = %s ORDER BY id"
         results = self._execute_query(query, (room_id,), fetch_all=True)
-        return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3]) for r in results] if results else []
+        return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3], is_online=r[4]) for r in results] if results else []
 
     def get_controllers_by_mac(self, mac: str) -> List[Controller]:
         query = "SELECT * FROM controllers WHERE mac = %s"
         results = self._execute_query(query, (mac,), fetch_all=True)
-        return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3]) for r in results] if results else []
+        return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3], is_online=r[4]) for r in results] if results else []
 
     def get_all_controllers(self) -> List[Controller]:
         query = "SELECT * FROM controllers ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
-        return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3]) for r in results] if results else []
+        return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3], is_online=r[4]) for r in results] if results else []
 
     def delete_controller(self, controller_id: int) -> bool:
         query = "DELETE FROM controllers WHERE id = %s"
         self._execute_query(query, (controller_id,))
         return True
 
+    def update_controller_status(self, mac: str, status: bool):
+        query = """
+            UPDATE controllers 
+            SET is_online = %s 
+            WHERE mac = %s
+        """
+        result = self._execute_query(query, (status, mac))
+        return result is not None
 
 
     def get_device_type_by_id(self, type_id: int) -> Optional[DeviceType]:
@@ -228,37 +238,46 @@ class Database:
         result = self._execute_query(query, (device_id,), fetch_one=True)
         if result:
             return Device(id=result[0], name=result[1], controller_id=result[2],
-                          type_id=result[3], port=result[4], params=result[5], current_values=result[6])
+                          type_id=result[3], port=result[4], params=result[5], current_values=result[6], is_online=result[7])
         return None
 
     def get_devices_by_controller(self, controller_id: int) -> List[Device]:
         query = "SELECT * FROM devices WHERE controller_id = %s ORDER BY id"
         results = self._execute_query(query, (controller_id,), fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6], is_online=r[7])
                 for r in results] if results else []
 
     def get_devices_by_type(self, type_id: int) -> List[Device]:
         query = "SELECT * FROM devices WHERE type_id = %s"
         results = self._execute_query(query, (type_id,), fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6], is_online=r[7])
                 for r in results] if results else []
 
     def get_devices_by_name(self, name: str) -> List[Device]:
         query = "SELECT * FROM devices WHERE name = %s"
         results = self._execute_query(query, (name,), fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6], is_online=r[7])
                 for r in results] if results else []
 
     def get_all_devices(self) -> List[Device]:
         query = "SELECT * FROM devices ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
-        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6])
+        return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6], is_online=r[7])
                 for r in results] if results else []
 
     def delete_device(self, device_id: int) -> bool:
         query = "DELETE FROM devices WHERE id = %s"
         self._execute_query(query, (device_id,))
         return True
+
+    def update_device_status(self, device_id: int, status: bool):
+        query = """
+            UPDATE devices 
+            SET is_online = %s 
+            WHERE id = %s
+        """
+        result = self._execute_query(query, (status, device_id))
+        return result is not None
 
     def update_device_current_values(self, device_id: int, current_values: str):
         query = """
