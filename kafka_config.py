@@ -4,17 +4,18 @@ import os
 
 TOPICS = {
     #app -> core
-    'SEND_COMMAND': 'send_command',
-    'LOAD_FILE': 'load_file',
-    'START_UPD_CONTROLLER': 'start_upd_controller',
-    'UPD_DEVICE_TABLE': 'upd_device_table',
-    'UPD_TRIG_TABLE': 'upd_trig_table',
-    'INIT_CONTROLLER': 'init_controller',
+    'SEND_COMMAND': 'send_command_mqtt',
+    'LOAD_FILE': 'load_file_ota',
+    'START_UPD_CONTROLLER': 'start_upd_controller_ota',
+    'UPD_DEVICE_TABLE': 'upd_device_table_db',
+    'UPD_TRIG_TABLE': 'upd_trig_table_db',
+    'INIT_CONTROLLER': 'init_controller_app',
 
     #core -> app
-    'UPD_VAL_DEVICE': 'upd_val_device',
+    'NOTIFICATION': 'notifications_app',
+    'UPD_VAL_DEVICE': 'upd_val_device_db',
+    'UPD_DEVICE_STATUS': 'device_status_update_app',
 }
-
 
 def create_kafka_producer(bootstrap_servers='localhost:9092'):
     return KafkaProducer(

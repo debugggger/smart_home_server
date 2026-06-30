@@ -124,22 +124,39 @@ def register_websocket_routes(socketio, db, kafka_handler=None):
         except Exception as e:
             logger.error(f"Error broadcasting device update: {e}")
 
-    def broadcast_bulk_update(updates):
+    # def broadcast_bulk_update(updates):
+    #     try:
+    #         socketio.emit('devices_bulk_updated', {
+    #             'updates': updates,
+    #             'count': len(updates),
+    #             'timestamp': time.time()
+    #         })
+    #         logger.info(f"Broadcasted bulk update: {len(updates)} devices")
+    #     except Exception as e:
+    #         logger.error(f"Error broadcasting bulk update: {e}")
+
+
+    def broadcast_device_update_status(device_id, is_online):
         try:
-            socketio.emit('devices_bulk_updated', {
-                'updates': updates,
-                'count': len(updates),
+            socketio.emit('device_status_update', {
+                'device_id': device_id,
+                'is_online': is_online,
                 'timestamp': time.time()
             })
-            logger.info(f"Broadcasted bulk update: {len(updates)} devices")
+            logger.info(f"[WebSocket] Broadcasted device status update: device_id={device_id}, is_online={is_online}")
         except Exception as e:
-            logger.error(f"Error broadcasting bulk update: {e}")
+            logger.error(f"[WebSocket] Error broadcasting device status: {e}")
 
-    socketio.broadcast_device_update = broadcast_device_update
-    socketio.broadcast_bulk_update = broadcast_bulk_update
-
-    logger.info("✅ WebSocket routes registered")
-
+    # def broadcast_device_status_bulk(updates):
+    #     try:
+    #         socketio.emit('devices_status_bulk_update', {
+    #             'updates': updates,
+    #             'count': len(updates),
+    #             'timestamp': time.time()
+    #         })
+    #         logger.info(f"[WebSocket] Broadcasted bulk device status update: {len(updates)} devices")
+    #     except Exception as e:
+    #         logger.error(f"[WebSocket] Error broadcasting bulk device status: {e}")
 
 
     def broadcast_notification(notification):
@@ -148,17 +165,12 @@ def register_websocket_routes(socketio, db, kafka_handler=None):
                 'id': notification.get('id'),
                 'type': notification.get('type'),
                 'message': notification.get('message'),
-                'data': notification.get('data', {}),
-                'device_id': notification.get('device_id'),
-                'controller_id': notification.get('controller_id'),
                 'timestamp': notification.get('timestamp'),
                 'is_read': notification.get('is_read', False)
             })
             print(f"[WebSocket] Broadcasted notification: {notification.get('type')}")
         except Exception as e:
             print(f"[WebSocket] Error broadcasting notification: {e}")
-
-    socketio.broadcast_notification = broadcast_notification
 
     @socketio.on('get_notifications')
     def handle_get_notifications(data):
@@ -188,3 +200,11 @@ def register_websocket_routes(socketio, db, kafka_handler=None):
         if kafka_handler:
             kafka_handler.clear_notifications()
             emit('notifications_cleared', {})
+
+    socketio.broadcast_device_update = broadcast_device_update
+    #socketio.broadcast_bulk_update = broadcast_bulk_update
+    socketio.broadcast_device_update_status = broadcast_device_update_status
+    socketio.broadcast_notification = broadcast_notification
+    #socketio.broadcast_device_status_bulk = broadcast_device_status_bulk
+
+    logger.info("✅ WebSocket routes registered")

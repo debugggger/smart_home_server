@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Управление контроллерами - Умный дом</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Удален script src="https://cdn.socket.io/4.7.2/socket.io.min.js" -->
     <style>
         * {
             margin: 0;
@@ -418,58 +418,22 @@
     <script>
         let currentEditControllerId = null;
         let currentEditElement = null;
-        let socket = null;
 
-        // ===== WEB SOCKET =====
-
-        function connectWebSocket() {
-            try {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const host = window.location.hostname;
-                const port = window.location.port;
-                const socketUrl = `${protocol}//${host}:${port}`;
-
-                socket = io(socketUrl, {
-                    transports: ['websocket', 'polling'],
-                    reconnection: true,
-                    reconnectionAttempts: 10,
-                    reconnectionDelay: 1000
-                });
-
-                socket.on('connect', function() {
-                    document.getElementById('statusDot').className = 'status-dot online';
-                    document.getElementById('statusText').textContent = 'Подключено';
-                    socket.emit('subscribe_updates', {});
-                });
-
-                socket.on('disconnect', function() {
-                    document.getElementById('statusDot').className = 'status-dot offline';
-                    document.getElementById('statusText').textContent = 'Отключено';
-                });
-
-                socket.on('connect_error', function() {
-                    document.getElementById('statusDot').className = 'status-dot error';
-                    document.getElementById('statusText').textContent = 'Ошибка';
-                });
-
-                socket.on('notification', function(data) {
-                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS' ||
-                        data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE') {
-                        loadControllers();
-                    }
-                });
-
-            } catch (error) {
-                console.error('WebSocket ошибка:', error);
-            }
-        }
+        // ===== ВЕСЬ КОД WEBSOCKET УДАЛЕН =====
 
         // ===== ЗАГРУЗКА КОНТРОЛЛЕРОВ =====
 
         async function loadControllers() {
             try {
+                console.log('🔄 Загрузка контроллеров...');
+                const startTime = Date.now();
+
                 const response = await fetch('/api/controllers');
                 const controllers = await response.json();
+
+                const elapsed = Date.now() - startTime;
+                console.log(`✅ Контроллеры загружены за ${elapsed}мс (${controllers.length} шт.)`);
+
                 const tbody = document.getElementById('controllersTableBody');
                 tbody.innerHTML = '';
 
@@ -669,14 +633,16 @@
 
         // ===== ИНИЦИАЛИЗАЦИЯ =====
 
-        connectWebSocket();
+        // Удален connectWebSocket()
+        console.log('🚀 Загрузка страницы без WebSocket...');
         loadControllers();
 
+        // Автообновление каждые 30 секунд
         setInterval(() => {
-            if (!socket || !socket.connected) {
-                loadControllers();
-            }
+            console.log('🔄 Периодическое обновление...');
+            loadControllers();
         }, 30000);
+
     </script>
 </body>
 </html>

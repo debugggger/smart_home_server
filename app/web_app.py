@@ -35,7 +35,8 @@ class WebInterface:
 
         if self.kafkaHandler:
             self.kafkaHandler.app_api_device_value_update_callback = self._on_device_value_update
-            self.kafkaHandler.notification_callback = self._on_notification
+            self.kafkaHandler.app_api_notification_callback = self._on_notification
+            self.kafkaHandler.app_api_device_status_update_callback = self._on_device_status_update
 
     def _create_app(self):
         app = Flask(__name__)
@@ -65,6 +66,8 @@ class WebInterface:
 
             logger.info(f"Starting web interface on http://{self.host}:{self.port}")
             self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False)
+
+            self.socketio.run(self.app, host=self.host, port=self.port)
 
         except Exception as e:
             logger.error(f"Error starting web server: {e}")
@@ -123,14 +126,18 @@ class WebInterface:
         return self.start()
 
     def _on_device_value_update(self, device_id, current_values):
-        """Callback из Kafka при обновлении значений устройства"""
         logger.info(f"Device update from Kafka: device_id={device_id}, values={current_values}")
 
         if self.socketio and hasattr(self.socketio, 'broadcast_device_update'):
             self.socketio.broadcast_device_update(device_id, current_values)
 
+    def _on_device_status_update(self, device_id, status):
+        logger.info(f"Device update from Kafka: device_id={device_id}, status={status}")
+
+        if self.socketio and hasattr(self.socketio, 'broadcast_device_update_status'):
+            self.socketio.broadcast_device_update(device_id, status)
+
     def _on_notification(self, notification):
-        """Callback для уведомлений из Kafka"""
         print(f"[WebInterface] Got notification: {notification.get('type')}")
 
         if self.socketio and hasattr(self.socketio, 'broadcast_notification'):

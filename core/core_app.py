@@ -18,9 +18,12 @@ class Core:
         self.stop_event = threading.Event()
         self.otaServ = ota_serv
         self.kafka_handler = kafka_handler
-        self.get_controller_values_delay = 30
+
         self.mac_wait_request_update = []
         self.mac_wait_request_init = []
+
+        self.device_failure_counters = {}
+        self.device_offline_status = {}
 
     def set_mqtt_client(self, mqtt_client):
         self.mqtt_client = mqtt_client
@@ -187,6 +190,20 @@ class Core:
             self.db.update_device_current_values(device.id, device.current_values)
             self.kafka_handler.send_device_value_update(device.id, device.current_values)
 
+            if device.id in self.device_failure_counters:
+                self.device_failure_counters[device.id] = 0
+                print(f"[CORE] Устройство {device.id} ответило, счетчик ошибок сброшен")
+
+            if self.device_offline_status.get(device.id, False):
+                self.device_offline_status[device.id] = False
+                self.kafka_handler.send_device_status(device.id, True)
+
+
+                # self._send_single_device_status_update(device.id, mac, True)
+                #
+                # # Отправляем уведомление о восстановлении
+                # self._send_device_online_notification(device.id, mac)
+
     def parse_changes(self, parts):
         devices = self.db.get_devices_by_controller(parts[0])
         for device in devices:
@@ -197,30 +214,41 @@ class Core:
             self.db.update_device_current_values(device.id, device.current_values)
             self.kafka_handler.send_device_value_update(device.id, device.current_values)
 
-    def request_states(self):
 
-        timeout_seconds = 60
+    def request_states(self):
+        timeout_seconds = 1 #время ожидания ответа от контроллера
+        get_controller_values_delay = 2 #частота отпарвки запроса
+        MAX_FAILURES = 5
+
         while self.running:
             start_time = time.time()
 
             try:
-
                 devices = self.db.get_all_devices()
+
                 for device in devices:
-                    if device.controller_mac not in self.mac_wait_request_update:
+                    mac = device.controller_mac
+                    device_id = device.id
+
+                    if not self._is_device_waiting(device_id):
                         request_data = {
-                            "mac": device.controller_mac,
+                            "device_id": device_id,
+                            "mac": mac,
                             "sending_time": datetime.now().isoformat(),
                             "timestamp": time.time()
                         }
                         self.mac_wait_request_update.append(request_data)
-                        self.mqtt_client.publish(device.controller_mac, 'getAllValues')
+                        self.mqtt_client.publish(mac, f'{device.type}/{device.port}/getValue')
+
+                        if device_id not in self.device_failure_counters:
+                            self.device_failure_counters[device_id] = 0
+                            self.device_offline_status[device_id] = False
 
             except Exception as e:
-                print(f"Ошибка при отправке MQTT: {e}")
+                print(f"[CORE] Ошибка при отправке MQTT: {e}")
 
             elapsed = time.time() - start_time
-            sleep_time = max(0, self.get_controller_values_delay - elapsed)
+            sleep_time = max(0, get_controller_values_delay - elapsed)
 
             for _ in range(int(sleep_time)):
                 if not self.running:
@@ -230,10 +258,33 @@ class Core:
 
                 for request in self.mac_wait_request_update[:]:
                     if current_time - request["timestamp"] > timeout_seconds:
+                        device_id = request["device_id"]
+                        mac = request["mac"]
                         self.mac_wait_request_update.remove(request)
-                        print(f"[CORE] {request['mac']} нет ответа состояния устройства")
+
+                        if device_id not in self.device_failure_counters:
+                            self.device_failure_counters[device_id] = 0
+
+                        self.device_failure_counters[device_id] += 1
+
+                        print(
+                            f"[CORE] Устройство {device_id} на {mac} нет ответа (попытка {self.device_failure_counters[device_id]}/{MAX_FAILURES})")
+
+                        if self.device_failure_counters[device_id] >= MAX_FAILURES:
+                            if not self.device_offline_status.get(device_id, False):
+                                self.device_offline_status[device_id] = True
+
+                                self.kafka_handler.send_device_status(device_id, False)
+
+                                self.kafka_handler.send_notification(f"Устройство {device_id} на {mac} нет ответа", 'error')
 
                 time.sleep(1)
+
+    def _is_device_waiting(self, device_id):
+        for request in self.mac_wait_request_update:
+            if request["device_id"] == device_id:
+                return True
+        return False
 
     def init_devices(self):
         unique_mac = []
@@ -242,4 +293,4 @@ class Core:
             if device.controller_mac not in unique_mac:
                 unique_mac.append(device.controller_mac)
                 self.parse_init([device.controller_mac])
-                self.parse_triggers([device.controller_mac])
+                #self.parse_triggers([device.controller_mac])

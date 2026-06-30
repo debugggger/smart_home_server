@@ -96,7 +96,3 @@ services:
 networks:
   smart_home_network:
     driver: bridge
-
-#volumes:
-#  core_db_data:
-#  app_db_data:

@@ -44,11 +44,8 @@ if __name__ == '__main__':
 
         core = Core(db, smqtt, otaServ, kafka_handler)
 
-
         kafka_handler.start()
         core.start_processing()
-
-        #core.parse("serv", "40:91:51:51:97:3A/init")
 
         try:
             while True:

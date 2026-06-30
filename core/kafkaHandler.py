@@ -220,27 +220,47 @@ class CoreKafkaHandler:
             print(f"[Core Kafka] Error updating trigger table: {e}")
 
     def send_device_value_update(self, device_id, value, metadata=None):
-        message = {
+        data = {
+            'device_id': device_id,
+            'value': value,
+            'source': 'core_service'
+        }
+        message = self._kafka_handler_create_message('UPD_VAL_DEVICE', data)
+        return self._kafka_handler_send_message(TOPICS['UPD_VAL_DEVICE'], 'upd_device_value', message)
+
+    def send_device_status(self, device_id, status):
+        data = {
+            'device_id': device_id,
+            'status': status,
+            'source': 'core_service'
+        }
+        message = self._kafka_handler_create_message('UPD_DEVICE_STATUS', data)
+        return self._kafka_handler_send_message(TOPICS['UPD_DEVICE_STATUS'], 'upd_device_status', message)
+
+    def send_notification(self, message, type):
+        data = {
+            'message': message,
+            'type': type,
+            'source': 'core_service'
+        }
+        message = self._kafka_handler_create_message('NOTIFICATION', data)
+        return self._kafka_handler_send_message(TOPICS['NOTIFICATION'], 'send_notification', message)
+
+    def _kafka_handler_create_message(self, event_type, data):
+        return {
             'event_id': str(uuid.uuid4()),
-            'event_type': 'UPD_VAL_DEVICE',
+            'event_type': event_type,
             'timestamp': datetime.now().isoformat(),
-            'data': {
-                'device_id': device_id,
-                'value': value,
-                'metadata': metadata or {},
-                'source': 'core_service'
-            }
+            'data': data,
+            'source': 'core_service'
         }
 
+    def _kafka_handler_send_message(self, topic, key, message):
         try:
-            future = self.producer.send(
-                TOPICS['UPD_VAL_DEVICE'],
-                key=device_id,
-                value=message
-            )
+            future = self.producer.send(topic, key=key, value=message)
             record_metadata = future.get(timeout=10)
-            print(f"[Core Kafka] Sent device value update for {device_id}, offset: {record_metadata.offset}")
-            return True
+            print(f"[Interface Kafka] Sent {message['event_type']} to {topic}, offset: {record_metadata.offset}")
+            return True, record_metadata.offset
         except KafkaError as e:
-            print(f"[Core Kafka] Failed to send device value update: {e}")
-            return False
+            print(f"[Interface Kafka] Failed to send message: {e}")
+            return False, None

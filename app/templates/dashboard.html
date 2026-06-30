@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Умный дом - Панель управления</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -159,6 +159,7 @@
         .device-card.offline {
             opacity: 0.7;
             border: 2px solid #ef4444;
+            background: #fef2f2;
         }
 
         .device-card .offline-badge {
@@ -169,6 +170,12 @@
             font-size: 10px;
             font-weight: 600;
             margin-left: 8px;
+            animation: pulse-badge 2s infinite;
+        }
+
+        @keyframes pulse-badge {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
         }
 
         .device-header {
@@ -234,10 +241,16 @@
 
         .device-status-indicator.online {
             background-color: #10b981;
+            animation: pulse-online 2s infinite;
         }
 
         .device-status-indicator.offline {
             background-color: #ef4444;
+        }
+
+        @keyframes pulse-online {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .readings-section {
@@ -276,6 +289,17 @@
             0% { background-color: #f0fdf4; }
             50% { background-color: #bbf7d0; }
             100% { background-color: #f0fdf4; }
+        }
+
+        .readings-offline-indicator {
+            text-align: center;
+            padding: 8px;
+            background: #fee2e2;
+            border-radius: 8px;
+            color: #b91c1c;
+            font-size: 13px;
+            margin-top: 8px;
+            border: 1px solid #fecaca;
         }
 
         .reading-name {
@@ -318,9 +342,14 @@
             color: #334155;
         }
 
-        .control-btn:hover {
+        .control-btn:hover:not(:disabled) {
             background: #e2e8f0;
             transform: scale(1.02);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .control-btn.primary {
@@ -328,7 +357,7 @@
             color: white;
         }
 
-        .control-btn.primary:hover {
+        .control-btn.primary:hover:not(:disabled) {
             background: #29b6f6;
         }
 
@@ -391,6 +420,23 @@
             transform: translateX(26px);
         }
 
+        .debug-info {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #475569;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .debug-info .time {
+            color: #94a3b8;
+            margin-right: 8px;
+        }
+
         .loading {
             text-align: center;
             padding: 50px;
@@ -431,7 +477,6 @@
             border-radius: 12px;
             padding: 14px 16px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            border-left: 4px solid #ef4444;
             animation: slideIn 0.3s ease;
             display: flex;
             align-items: flex-start;
@@ -439,16 +484,16 @@
             transition: opacity 0.3s, transform 0.3s;
         }
 
-        .toast-container .toast.success {
-            border-left-color: #10b981;
+        .toast-container .toast.type-ok {
+            border-left: 4px solid #10b981;
         }
 
-        .toast-container .toast.warning {
-            border-left-color: #f59e0b;
+        .toast-container .toast.type-error {
+            border-left: 4px solid #ef4444;
         }
 
-        .toast-container .toast.info {
-            border-left-color: #4fc3f7;
+        .toast-container .toast.type-warning {
+            border-left: 4px solid #f59e0b;
         }
 
         .toast-container .toast .toast-icon {
@@ -457,21 +502,26 @@
             margin-top: 2px;
         }
 
+        .toast-container .toast .toast-icon.ok {
+            color: #10b981;
+        }
+
+        .toast-container .toast .toast-icon.error {
+            color: #ef4444;
+        }
+
+        .toast-container .toast .toast-icon.warning {
+            color: #f59e0b;
+        }
+
         .toast-container .toast .toast-content {
             flex: 1;
             min-width: 0;
         }
 
-        .toast-container .toast .toast-title {
-            font-weight: 600;
+        .toast-container .toast .toast-message {
             font-size: 14px;
             color: #1e2a3a;
-        }
-
-        .toast-container .toast .toast-message {
-            font-size: 13px;
-            color: #475569;
-            margin-top: 4px;
             word-wrap: break-word;
         }
 
@@ -480,24 +530,6 @@
             color: #64748b;
             margin-top: 4px;
             padding-left: 4px;
-        }
-
-        .toast-container .toast .toast-details .device-error {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 2px 0;
-            font-size: 12px;
-            color: #dc2626;
-        }
-
-        .toast-container .toast .toast-details .device-error .dot {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: #dc2626;
-            flex-shrink: 0;
         }
 
         .toast-container .toast .toast-close {
@@ -578,6 +610,10 @@
                 padding: 12px 14px;
                 font-size: 13px;
             }
+            .debug-info {
+                font-size: 10px;
+                max-height: 60px;
+            }
         }
     </style>
 </head>
@@ -594,6 +630,12 @@
                 <button class="menu-btn" onclick="window.location.href='/'">☰ Главное меню</button>
             </div>
         </div>
+
+        <!-- Отладочная панель -->
+        <div class="debug-info" id="debugInfo">
+            <div><span class="time">⏱️</span> Инициализация страницы...</div>
+        </div>
+
         <div id="dashboardContent">
             <div class="loading">⏳ Загрузка устройств...</div>
         </div>
@@ -610,14 +652,27 @@
         let deviceTypesConfig = {};
         let deviceDataCache = {};
         let unreadNotifications = 0;
+        const MAX_TOASTS = 10;
+        let isWebSocketConnected = false;
+        let webSocketAttempts = 0;
+        const MAX_WS_ATTEMPTS = 5;
+
+        // ===== ОТЛАДКА =====
+        function debugLog(msg) {
+            const debug = document.getElementById('debugInfo');
+            if (debug) {
+                const time = new Date().toLocaleTimeString();
+                debug.innerHTML += `<div><span class="time">${time}</span> ${msg}</div>`;
+                debug.scrollTop = debug.scrollHeight;
+            }
+            console.log(`[DEBUG] ${msg}`);
+        }
 
         // ===== TOAST УВЕДОМЛЕНИЯ =====
-        const MAX_TOASTS = 10;
 
         function showToast(notification) {
             const container = document.getElementById('toastContainer');
 
-            // Удаляем самый старый тост если их больше 10
             if (container.children.length >= MAX_TOASTS) {
                 const lastToast = container.lastElementChild;
                 if (lastToast) {
@@ -625,58 +680,41 @@
                 }
             }
 
-            const toast = document.createElement('div');
-            const type = notification.type || 'INFO';
+            const type = notification.type || 'info';
+            const message = notification.message || 'Уведомление';
+            const details = notification.data || {};
 
-            let toastClass = 'info';
-            if (type === 'INIT_ERROR' || type === 'DEVICE_OFFLINE' || type === 'ERROR') {
-                toastClass = 'error';
-            } else if (type === 'INIT_SUCCESS' || type === 'DEVICE_ONLINE') {
-                toastClass = 'success';
-            } else if (type === 'WARNING') {
-                toastClass = 'warning';
-            }
-            toast.className = `toast ${toastClass}`;
+            const toast = document.createElement('div');
+            toast.className = `toast type-${type}`;
 
             const iconMap = {
-                'INIT_ERROR': '⚠️',
-                'INIT_SUCCESS': '✅',
-                'DEVICE_OFFLINE': '🔴',
-                'DEVICE_ONLINE': '🟢',
-                'ERROR': '❌',
-                'WARNING': '⚡',
-                'INFO': 'ℹ️'
+                'ok': '✅',
+                'error': '❌',
+                'warning': '⚠️'
             };
 
-            const titleMap = {
-                'INIT_ERROR': 'Ошибка инициализации',
-                'INIT_SUCCESS': 'Инициализация успешна',
-                'DEVICE_OFFLINE': 'Устройство офлайн',
-                'DEVICE_ONLINE': 'Устройство онлайн',
-                'ERROR': 'Ошибка',
-                'WARNING': 'Предупреждение',
-                'INFO': 'Информация'
+            const iconClassMap = {
+                'ok': 'ok',
+                'error': 'error',
+                'warning': 'warning'
             };
 
             let detailsHtml = '';
-            if (notification.data && notification.data.devices) {
+            if (details.devices && details.devices.length > 0) {
                 detailsHtml = '<div class="toast-details">';
-                notification.data.devices.forEach(d => {
-                    detailsHtml += `
-                        <div class="device-error">
-                            <span class="dot"></span>
-                            ${d.device_name} (${d.device_type}, порт: ${d.port})
-                        </div>
-                    `;
+                details.devices.forEach(d => {
+                    const name = d.device_name || d.name || 'Устройство';
+                    const typeInfo = d.device_type || d.type || '';
+                    const port = d.port || '';
+                    detailsHtml += `• ${name}${typeInfo ? ` (${typeInfo})` : ''}${port ? `, порт: ${port}` : ''}<br>`;
                 });
                 detailsHtml += '</div>';
             }
 
             toast.innerHTML = `
-                <span class="toast-icon">${iconMap[type] || '📢'}</span>
+                <span class="toast-icon ${iconClassMap[type] || 'info'}">${iconMap[type] || 'ℹ️'}</span>
                 <div class="toast-content">
-                    <div class="toast-title">${titleMap[type] || type}</div>
-                    <div class="toast-message">${notification.message}</div>
+                    <div class="toast-message">${escapeHtml(message)}</div>
                     ${detailsHtml}
                 </div>
                 <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
@@ -684,14 +722,12 @@
 
             container.prepend(toast);
 
-            // Увеличиваем счетчик непрочитанных
-            if (type === 'INIT_ERROR' || type === 'DEVICE_OFFLINE' || type === 'ERROR') {
+            if (type === 'error' || type === 'warning') {
                 unreadNotifications++;
                 updateToastCounter();
             }
 
-            // Автоматически удаляем успешные уведомления через 5 секунд
-            if (type === 'INIT_SUCCESS' || type === 'DEVICE_ONLINE') {
+            if (type === 'ok') {
                 setTimeout(() => {
                     if (toast.parentNode) {
                         toast.remove();
@@ -717,67 +753,243 @@
             updateToastCounter();
         }
 
-        // ===== WEB SOCKET =====
+        // ===== WEB SOCKET (АСИНХРОННО) =====
 
         function connectWebSocket() {
+            debugLog('🔌 Подключение к WebSocket... (попытка ' + (webSocketAttempts + 1) + '/' + MAX_WS_ATTEMPTS + ')');
+
             try {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const host = window.location.hostname;
                 const port = window.location.port;
                 const socketUrl = `${protocol}//${host}:${port}`;
 
-                console.log('Подключение к WebSocket:', socketUrl);
-
                 socket = io(socketUrl, {
                     transports: ['websocket', 'polling'],
                     reconnection: true,
-                    reconnectionAttempts: 10,
+                    reconnectionAttempts: 5,
                     reconnectionDelay: 1000,
-                    reconnectionDelayMax: 5000
+                    reconnectionDelayMax: 5000,
+                    timeout: 5000,
+                    autoConnect: true
                 });
 
+                const connectTimeout = setTimeout(() => {
+                    if (!socket.connected) {
+                        debugLog('⏰ Таймаут подключения WebSocket (5с)');
+                        document.getElementById('statusDot').className = 'status-dot error';
+                        document.getElementById('statusText').textContent = 'Таймаут';
+                        webSocketAttempts++;
+                        if (webSocketAttempts < MAX_WS_ATTEMPTS) {
+                            setTimeout(connectWebSocket, 3000);
+                        }
+                    }
+                }, 5000);
+
                 socket.on('connect', function() {
-                    console.log('✅ WebSocket подключен');
+                    clearTimeout(connectTimeout);
+                    webSocketAttempts = 0;
+                    isWebSocketConnected = true;
+                    debugLog('✅ WebSocket подключен');
                     document.getElementById('statusDot').className = 'status-dot online';
                     document.getElementById('statusText').textContent = 'Подключено';
-
                     socket.emit('subscribe_updates', {});
                     socket.emit('get_notifications', { limit: 10 });
                 });
 
                 socket.on('disconnect', function() {
-                    console.log('❌ WebSocket отключен');
+                    isWebSocketConnected = false;
+                    debugLog('❌ WebSocket отключен');
                     document.getElementById('statusDot').className = 'status-dot offline';
                     document.getElementById('statusText').textContent = 'Отключено';
                 });
 
-                socket.on('connect_error', function() {
+                socket.on('connect_error', function(error) {
+                    clearTimeout(connectTimeout);
+                    isWebSocketConnected = false;
+                    debugLog('❌ Ошибка WebSocket: ' + error.message);
                     document.getElementById('statusDot').className = 'status-dot error';
                     document.getElementById('statusText').textContent = 'Ошибка';
-                });
-
-                socket.on('notification', function(data) {
-                    console.log('📢 Уведомление:', data);
-                    showToast(data);
-
-                    if (data.type === 'INIT_ERROR' || data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE') {
-                        setTimeout(loadAllData, 500);
+                    webSocketAttempts++;
+                    if (webSocketAttempts < MAX_WS_ATTEMPTS) {
+                        debugLog('🔄 Повторная попытка через 3 секунды...');
+                        setTimeout(connectWebSocket, 3000);
                     }
                 });
 
+                // ============= УВЕДОМЛЕНИЯ =============
+                socket.on('notification', function(data) {
+                    debugLog('📢 Уведомление: ' + (data.type || 'info'));
+                    showToast({
+                        type: data.type || 'info',
+                        message: data.message || 'Уведомление',
+                        data: data.data || {}
+                    });
+                    if (data.type === 'error' || data.type === 'ok') {
+                        if (data.data && data.data.devices) {
+                            setTimeout(loadAllData, 500);
+                        }
+                    }
+                });
+
+                // ============= СТАТУС УСТРОЙСТВ =============
+                socket.on('device_status_update', function(data) {
+                    debugLog('📡 Обновление статуса устройства: ' + data.device_id);
+                    handleDeviceStatusUpdate(data);
+                });
+
+                // ============= МАССОВОЕ ОБНОВЛЕНИЕ СТАТУСА =============
+                socket.on('devices_status_bulk_update', function(data) {
+                    debugLog('📡 Массовое обновление статуса: ' + (data.updates ? data.updates.length : 0) + ' устройств');
+                    const updates = data.updates || [];
+                    updates.forEach(update => {
+                        handleDeviceStatusUpdate(update);
+                    });
+                });
+
+                // ============= ОБНОВЛЕНИЕ ЗНАЧЕНИЙ =============
+                socket.on('device_updated', function(data) {
+                    debugLog('📡 Обновление значений устройства: ' + data.device_id);
+                    handleDeviceValueUpdate(data);
+                });
+
+                // ============= ИСТОРИЯ УВЕДОМЛЕНИЙ =============
                 socket.on('notifications_history', function(data) {
                     if (data.notifications) {
-                        data.notifications.forEach(notification => {
-                            showToast(notification);
+                        data.notifications.slice(0, 5).forEach(notification => {
+                            showToast({
+                                type: notification.type || 'info',
+                                message: notification.message || 'Уведомление',
+                                data: notification.data || {}
+                            });
                         });
                     }
                 });
 
             } catch (error) {
-                console.error('WebSocket ошибка:', error);
+                debugLog('❌ Ошибка WebSocket: ' + error.message);
                 document.getElementById('statusDot').className = 'status-dot error';
                 document.getElementById('statusText').textContent = 'Ошибка';
             }
+        }
+
+        // ===== ОБРАБОТКА ОБНОВЛЕНИЙ =====
+
+        function handleDeviceStatusUpdate(data) {
+            const deviceId = data.device_id;
+            const isOnline = data.is_online;
+
+            if (deviceDataCache[deviceId]) {
+                deviceDataCache[deviceId].is_online = isOnline;
+            }
+
+            updateDeviceCardStatus(deviceId, isOnline);
+        }
+
+        function handleDeviceValueUpdate(data) {
+            const deviceId = data.device_id;
+            const currentValues = data.current_values;
+
+            if (deviceDataCache[deviceId]) {
+                deviceDataCache[deviceId].current_values = currentValues;
+            }
+
+            updateDeviceCardValues(deviceId, currentValues);
+        }
+
+        function updateDeviceCardStatus(deviceId, isOnline) {
+            const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
+            if (!card) return;
+
+            if (isOnline) {
+                card.classList.remove('offline');
+            } else {
+                card.classList.add('offline');
+            }
+
+            const nameSpan = card.querySelector('.device-name');
+            if (nameSpan) {
+                const oldBadge = nameSpan.querySelector('.offline-badge');
+                if (oldBadge) oldBadge.remove();
+                if (!isOnline) {
+                    const badge = document.createElement('span');
+                    badge.className = 'offline-badge';
+                    badge.textContent = 'OFFLINE';
+                    nameSpan.appendChild(badge);
+                }
+            }
+
+            const infoRows = card.querySelectorAll('.info-row');
+            infoRows.forEach(row => {
+                const label = row.querySelector('.info-label');
+                if (label && label.textContent.trim() === 'Статус:') {
+                    const value = row.querySelector('.info-value');
+                    if (value) {
+                        value.className = `info-value ${isOnline ? 'status-online' : 'status-offline'}`;
+                        value.innerHTML = `
+                            <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
+                            ${isOnline ? 'Онлайн' : 'Офлайн'}
+                        `;
+                    }
+                }
+            });
+
+            const readingsSection = card.querySelector('.readings-section');
+            if (readingsSection) {
+                let indicator = readingsSection.querySelector('.readings-offline-indicator');
+                if (!isOnline) {
+                    if (!indicator) {
+                        indicator = document.createElement('div');
+                        indicator.className = 'readings-offline-indicator';
+                        indicator.textContent = '⚠️ Устройство офлайн, показания недоступны';
+                        readingsSection.appendChild(indicator);
+                    }
+                } else {
+                    if (indicator) indicator.remove();
+                }
+            }
+
+            const controls = card.querySelectorAll('.control-btn');
+            controls.forEach(btn => {
+                btn.disabled = !isOnline;
+                if (!isOnline) {
+                    btn.title = 'Устройство офлайн';
+                } else {
+                    btn.title = '';
+                }
+            });
+        }
+
+        function updateDeviceCardValues(deviceId, currentValues) {
+            const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
+            if (!card) return;
+
+            const readingsSection = card.querySelector('.readings-section');
+            if (!readingsSection) return;
+
+            const device = deviceDataCache[deviceId];
+            if (!device) return;
+
+            const config = deviceTypesConfig[device.type_id];
+            if (!config || !config.reading_commands) return;
+
+            const readingItems = readingsSection.querySelectorAll('.reading-item');
+            readingItems.forEach((item, index) => {
+                if (index < config.reading_commands.length) {
+                    const reading = config.reading_commands[index];
+                    const valueElement = item.querySelector('.reading-value');
+                    if (valueElement) {
+                        const displayValue = getDisplayValue(reading, currentValues, config.returning_values);
+                        const oldValue = valueElement.textContent;
+                        const newValue = String(displayValue);
+                        if (oldValue !== newValue) {
+                            valueElement.textContent = newValue;
+                            item.classList.add('updating');
+                            setTimeout(() => item.classList.remove('updating'), 500);
+                        }
+                    }
+                }
+            });
         }
 
         // ===== ЗАГРУЗКА ДАННЫХ =====
@@ -788,8 +1000,6 @@
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const types = await response.json();
 
-                console.log('Загружено типов устройств:', types.length);
-
                 types.forEach(type => {
                     try {
                         let config = {};
@@ -798,11 +1008,9 @@
                         } else if (type.param_names && typeof type.param_names === 'object') {
                             config = type.param_names;
                         }
-
                         if (!config.reading_commands) config.reading_commands = [];
                         if (!config.sending_commands) config.sending_commands = { binary: [], numeric: [] };
                         if (!config.returning_values) config.returning_values = [];
-
                         deviceTypesConfig[type.id] = config;
                     } catch (e) {
                         console.error('Ошибка парсинга для типа', type.id, e);
@@ -824,8 +1032,6 @@
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const devices = await response.json();
 
-                console.log('Загружено устройств:', devices.length);
-
                 devices.forEach(device => {
                     deviceDataCache[device.id] = device;
                 });
@@ -844,8 +1050,12 @@
         }
 
         async function loadAllData() {
+            debugLog('🔄 Загрузка данных...');
+            const startTime = Date.now();
             await loadDeviceTypes();
             await loadDevices();
+            const elapsed = Date.now() - startTime;
+            debugLog(`✅ Данные загружены за ${elapsed}мс`);
         }
 
         function forceRefresh() {
@@ -855,24 +1065,11 @@
         // ===== ПОЛУЧЕНИЕ ЗНАЧЕНИЙ =====
 
         function getDisplayValue(readingCommand, currentValues, returningValues) {
-            if (!currentValues || !Array.isArray(currentValues)) {
-                return '—';
-            }
-
+            if (!currentValues || !Array.isArray(currentValues)) return '—';
             const paramNumber = readingCommand.parameter_number;
-            if (paramNumber === undefined || paramNumber === null) {
-                return '—';
-            }
-
-            if (paramNumber >= currentValues.length) {
-                return '—';
-            }
-
+            if (paramNumber === undefined || paramNumber >= currentValues.length) return '—';
             const value = currentValues[paramNumber];
-            if (value === null || value === undefined) {
-                return '—';
-            }
-
+            if (value === null || value === undefined) return '—';
             if (returningValues && Array.isArray(returningValues) && returningValues.length > 0) {
                 const returnMap = returningValues[0];
                 if (returnMap && returnMap[value] && returnMap[value].description) {
@@ -882,7 +1079,6 @@
                     return returnMap[value];
                 }
             }
-
             return value;
         }
 
@@ -893,12 +1089,9 @@
                 const payload = {
                     command: command.sending_name || command.system_name
                 };
-
                 if (value !== null && value !== undefined) {
                     payload.value = value;
                 }
-
-                console.log('Отправка команды:', payload, 'на устройство:', device.name);
 
                 const response = await fetch(`/api/devices/${device.id}/command`, {
                     method: 'POST',
@@ -907,23 +1100,21 @@
                 });
 
                 if (response.ok) {
-                    const result = await response.json();
                     showToast({
-                        type: 'INFO',
+                        type: 'ok',
                         message: `✅ Команда "${command.display_name}" отправлена на ${device.name}`
                     });
-                    return result;
+                    return await response.json();
                 } else {
                     const error = await response.json();
                     showToast({
-                        type: 'ERROR',
+                        type: 'error',
                         message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
                     });
                 }
             } catch (error) {
-                console.error('Ошибка:', error);
                 showToast({
-                    type: 'ERROR',
+                    type: 'error',
                     message: `❌ Ошибка: ${error.message}`
                 });
             }
@@ -936,15 +1127,14 @@
                 inputElement.value = '';
             } else {
                 showToast({
-                    type: 'WARNING',
+                    type: 'warning',
                     message: '❌ Введите значение'
                 });
             }
         }
 
         function onToggleChange(checkbox, device, command) {
-            const value = checkbox.checked ? 1 : 0;
-            sendCommand(device, command, value);
+            sendCommand(device, command, checkbox.checked ? 1 : 0);
         }
 
         // ===== ОТОБРАЖЕНИЕ =====
@@ -1025,7 +1215,6 @@
                             </div>
                     `;
 
-                    // Показания
                     if (hasReadings) {
                         html += `
                             <div class="readings-section">
@@ -1043,7 +1232,6 @@
                         html += `</div>`;
                     }
 
-                    // Управление
                     if (hasBinary || hasNumeric) {
                         html += `
                             <div class="controls-section">
@@ -1056,7 +1244,7 @@
                                 const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
                                 const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
                                 html += `
-                                    <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})'>
+                                    <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
                                         ${escapeHtml(cmd.display_name)}
                                     </button>
                                 `;
@@ -1073,7 +1261,7 @@
                                     html += `
                                         <div style="display: flex; align-items: center; gap: 8px;">
                                             <label class="toggle-switch">
-                                                <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})'>
+                                                <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
                                                 <span class="toggle-slider"></span>
                                             </label>
                                             <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
@@ -1082,8 +1270,8 @@
                                 } else {
                                     html += `
                                         <div class="numeric-input-group">
-                                            <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any">
-                                            <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))'>
+                                            <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
+                                            <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))' ${!isOnline ? 'disabled' : ''}>
                                                 ${escapeHtml(cmd.display_name)}
                                             </button>
                                         </div>
@@ -1111,11 +1299,20 @@
         window.forceRefresh = forceRefresh;
         window.showAllToasts = showAllToasts;
 
-        connectWebSocket();
+        debugLog('🚀 Старт инициализации...');
+
+        // 1. СРАЗУ загружаем данные (не ждем WebSocket)
         loadAllData();
 
+        // 2. Подключаем WebSocket АСИНХРОННО
+        setTimeout(() => {
+            connectWebSocket();
+        }, 100);
+
+        // 3. Автообновление через 30 секунд (только если WebSocket отключен)
         setInterval(() => {
-            if (!socket || !socket.connected) {
+            if (!isWebSocketConnected) {
+                debugLog('🔄 Автообновление (WebSocket отключен)');
                 loadAllData();
             }
         }, 30000);

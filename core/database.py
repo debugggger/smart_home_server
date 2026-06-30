@@ -21,15 +21,6 @@ class Trigger:
 
 class Database:
     def __init__(self, host = '127.0.0.1', port=443, name='sh_core', user='postgres', password=''):
-        # env_path = Path(__file__).parent.parent / '.env'
-        # load_dotenv(env_path)
-        # self.connection = psycopg2.connect(
-        #     host=os.getenv('CORE_DB_HOST'),
-        #     user=os.getenv('CORE_DB_USER'),
-        #     password=os.getenv('CORE_DB_PASSWORD'),
-        #     database=os.getenv('CORE_DB_NAME'),
-        #     port=os.getenv('CORE_DB_PORT')
-        # )
         self.connection = psycopg2.connect(
             host=host,
             user=user,
@@ -74,14 +65,14 @@ class Database:
         result = self._execute_query(query, (device_id,), fetch_one=True)
         if result:
             return Device(id=result[0], controller_mac=result[1],
-                          port=result[2], params=result[3], current_values=result[4], type=result[5])
+                          port=result[2], params=result[3], current_values=result[5], type=result[4])
         return None
 
     def get_devices_by_controller(self, controller_mac: int) -> List[Device]:
         query = "SELECT * FROM devices WHERE controller_mac = %s ORDER BY id"
         results = self._execute_query(query, (controller_mac,), fetch_all=True)
         return [Device(id=r[0], controller_mac=r[1],
-                          port=r[2], params=r[3], current_values=r[4], type=r[5])
+                          port=r[2], params=r[3], current_values=r[5], type=r[4])
                 for r in results] if results else []
 
     # def get_devices_by_type(self, type_name: int) -> List[Device]:
@@ -96,7 +87,7 @@ class Database:
         query = "SELECT * FROM devices ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
         return [Device(id=r[0], controller_mac=r[1],
-                          port=r[2], params=r[3], current_values=r[4], type=r[5])
+                          port=r[2], params=r[3], current_values=r[5], type=r[4])
                 for r in results] if results else []
 
     def delete_device(self, device_id: int) -> bool:
