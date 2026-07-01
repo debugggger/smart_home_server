@@ -11,3 +11,4 @@ Werkzeug==3.1.8
 Flask-SocketIO==5.3.4
 eventlet==0.33.3
 python-socketio==5.9.0
+Flask-CORS==4.0.0

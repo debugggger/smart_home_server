@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Умный дом - Панель управления</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -102,6 +101,23 @@
         .status-text {
             color: #475569;
             font-weight: 500;
+        }
+
+        .debug-info {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #475569;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .debug-info .time {
+            color: #94a3b8;
+            margin-right: 8px;
         }
 
         .room-section {
@@ -420,23 +436,6 @@
             transform: translateX(26px);
         }
 
-        .debug-info {
-            background: #f1f5f9;
-            padding: 8px 12px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-family: monospace;
-            font-size: 12px;
-            color: #475569;
-            max-height: 80px;
-            overflow-y: auto;
-        }
-
-        .debug-info .time {
-            color: #94a3b8;
-            margin-right: 8px;
-        }
-
         .loading {
             text-align: center;
             padding: 50px;
@@ -631,7 +630,6 @@
             </div>
         </div>
 
-        <!-- Отладочная панель -->
         <div class="debug-info" id="debugInfo">
             <div><span class="time">⏱️</span> Инициализация страницы...</div>
         </div>
@@ -648,14 +646,14 @@
     <div id="toastCounter" class="toast-counter" style="display: none;" onclick="showAllToasts()">0</div>
 
     <script>
-        let socket = null;
+        let eventSource = null;
         let deviceTypesConfig = {};
         let deviceDataCache = {};
         let unreadNotifications = 0;
         const MAX_TOASTS = 10;
-        let isWebSocketConnected = false;
-        let webSocketAttempts = 0;
-        const MAX_WS_ATTEMPTS = 5;
+        let isSSEConnected = false;
+        let connectionAttempts = 0;
+        const MAX_CONNECTION_ATTEMPTS = 5;
 
         // ===== ОТЛАДКА =====
         function debugLog(msg) {
@@ -753,78 +751,58 @@
             updateToastCounter();
         }
 
-        // ===== WEB SOCKET (АСИНХРОННО) =====
+        // ===== SSE (Server-Sent Events) =====
 
-        function connectWebSocket() {
-            debugLog('🔌 Подключение к WebSocket... (попытка ' + (webSocketAttempts + 1) + '/' + MAX_WS_ATTEMPTS + ')');
+        function connectSSE() {
+            connectionAttempts++;
+            debugLog('🔌 Подключение к SSE... (попытка ' + connectionAttempts + '/' + MAX_CONNECTION_ATTEMPTS + ')');
 
             try {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const host = window.location.hostname;
-                const port = window.location.port;
-                const socketUrl = `${protocol}//${host}:${port}`;
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
 
-                socket = io(socketUrl, {
-                    transports: ['websocket', 'polling'],
-                    reconnection: true,
-                    reconnectionAttempts: 5,
-                    reconnectionDelay: 1000,
-                    reconnectionDelayMax: 5000,
-                    timeout: 5000,
-                    autoConnect: true
-                });
+                const url = '/api/sse/events';
+                eventSource = new EventSource(url);
 
-                const connectTimeout = setTimeout(() => {
-                    if (!socket.connected) {
-                        debugLog('⏰ Таймаут подключения WebSocket (5с)');
-                        document.getElementById('statusDot').className = 'status-dot error';
-                        document.getElementById('statusText').textContent = 'Таймаут';
-                        webSocketAttempts++;
-                        if (webSocketAttempts < MAX_WS_ATTEMPTS) {
-                            setTimeout(connectWebSocket, 3000);
-                        }
-                    }
-                }, 5000);
-
-                socket.on('connect', function() {
-                    clearTimeout(connectTimeout);
-                    webSocketAttempts = 0;
-                    isWebSocketConnected = true;
-                    debugLog('✅ WebSocket подключен');
+                eventSource.onopen = function(event) {
+                    connectionAttempts = 0;
+                    isSSEConnected = true;
+                    debugLog('✅ SSE подключен');
                     document.getElementById('statusDot').className = 'status-dot online';
                     document.getElementById('statusText').textContent = 'Подключено';
-                    socket.emit('subscribe_updates', {});
-                    socket.emit('get_notifications', { limit: 10 });
-                });
+                };
 
-                socket.on('disconnect', function() {
-                    isWebSocketConnected = false;
-                    debugLog('❌ WebSocket отключен');
-                    document.getElementById('statusDot').className = 'status-dot offline';
-                    document.getElementById('statusText').textContent = 'Отключено';
-                });
-
-                socket.on('connect_error', function(error) {
-                    clearTimeout(connectTimeout);
-                    isWebSocketConnected = false;
-                    debugLog('❌ Ошибка WebSocket: ' + error.message);
+                eventSource.onerror = function(event) {
+                    isSSEConnected = false;
+                    debugLog('❌ Ошибка SSE');
                     document.getElementById('statusDot').className = 'status-dot error';
                     document.getElementById('statusText').textContent = 'Ошибка';
-                    webSocketAttempts++;
-                    if (webSocketAttempts < MAX_WS_ATTEMPTS) {
-                        debugLog('🔄 Повторная попытка через 3 секунды...');
-                        setTimeout(connectWebSocket, 3000);
-                    }
-                });
 
-                // ============= УВЕДОМЛЕНИЯ =============
-                socket.on('notification', function(data) {
+                    if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+                        setTimeout(() => {
+                            debugLog('🔄 Попытка переподключения SSE...');
+                            connectSSE();
+                        }, 3000);
+                    } else {
+                        debugLog('❌ Превышено количество попыток подключения к SSE');
+                    }
+                };
+
+                // ============= ОБРАБОТЧИКИ СОБЫТИЙ =============
+
+                // 1. Обработчик уведомлений
+                eventSource.addEventListener('notification', function(event) {
+                    const data = JSON.parse(event.data);
                     debugLog('📢 Уведомление: ' + (data.type || 'info'));
+
                     showToast({
                         type: data.type || 'info',
                         message: data.message || 'Уведомление',
                         data: data.data || {}
                     });
+
                     if (data.type === 'error' || data.type === 'ok') {
                         if (data.data && data.data.devices) {
                             setTimeout(loadAllData, 500);
@@ -832,14 +810,23 @@
                     }
                 });
 
-                // ============= СТАТУС УСТРОЙСТВ =============
-                socket.on('device_status_update', function(data) {
+                // 2. Обработчик обновления значений устройств (UPD_VAL_DEVICE)
+                eventSource.addEventListener('device_updated', function(event) {
+                    const data = JSON.parse(event.data);
+                    debugLog('📡 Обновление значений устройства: ' + data.device_id);
+                    handleDeviceValueUpdate(data);
+                });
+
+                // 3. Обработчик обновления статуса устройств (UPD_STATUS_DEVICE)
+                eventSource.addEventListener('device_status_update', function(event) {
+                    const data = JSON.parse(event.data);
                     debugLog('📡 Обновление статуса устройства: ' + data.device_id);
                     handleDeviceStatusUpdate(data);
                 });
 
-                // ============= МАССОВОЕ ОБНОВЛЕНИЕ СТАТУСА =============
-                socket.on('devices_status_bulk_update', function(data) {
+                // 4. Обработчик массового обновления статуса
+                eventSource.addEventListener('devices_status_bulk_update', function(event) {
+                    const data = JSON.parse(event.data);
                     debugLog('📡 Массовое обновление статуса: ' + (data.updates ? data.updates.length : 0) + ' устройств');
                     const updates = data.updates || [];
                     updates.forEach(update => {
@@ -847,27 +834,26 @@
                     });
                 });
 
-                // ============= ОБНОВЛЕНИЕ ЗНАЧЕНИЙ =============
-                socket.on('device_updated', function(data) {
-                    debugLog('📡 Обновление значений устройства: ' + data.device_id);
-                    handleDeviceValueUpdate(data);
+                // 5. Обработчик ping (keep-alive)
+                eventSource.addEventListener('ping', function(event) {
+                    // Просто поддерживаем соединение
                 });
 
-                // ============= ИСТОРИЯ УВЕДОМЛЕНИЙ =============
-                socket.on('notifications_history', function(data) {
-                    if (data.notifications) {
-                        data.notifications.slice(0, 5).forEach(notification => {
-                            showToast({
-                                type: notification.type || 'info',
-                                message: notification.message || 'Уведомление',
-                                data: notification.data || {}
-                            });
-                        });
+                // 6. Обработчик connected (приветствие)
+                eventSource.addEventListener('connected', function(event) {
+                    const data = JSON.parse(event.data);
+                    debugLog('✅ SSE соединение установлено: ' + data.client_id);
+                });
+
+                window.addEventListener('beforeunload', function() {
+                    if (eventSource) {
+                        eventSource.close();
+                        debugLog('🔌 SSE соединение закрыто');
                     }
                 });
 
             } catch (error) {
-                debugLog('❌ Ошибка WebSocket: ' + error.message);
+                debugLog('❌ Ошибка инициализации SSE: ' + error.message);
                 document.getElementById('statusDot').className = 'status-dot error';
                 document.getElementById('statusText').textContent = 'Ошибка';
             }
@@ -879,10 +865,12 @@
             const deviceId = data.device_id;
             const isOnline = data.is_online;
 
+            // Обновляем кеш
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].is_online = isOnline;
             }
 
+            // Обновляем карточку устройства
             updateDeviceCardStatus(deviceId, isOnline);
         }
 
@@ -890,10 +878,12 @@
             const deviceId = data.device_id;
             const currentValues = data.current_values;
 
+            // Обновляем кеш
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].current_values = currentValues;
             }
 
+            // Обновляем значения в карточке
             updateDeviceCardValues(deviceId, currentValues);
         }
 
@@ -901,12 +891,14 @@
             const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
             if (!card) return;
 
+            // Обновляем класс карточки
             if (isOnline) {
                 card.classList.remove('offline');
             } else {
                 card.classList.add('offline');
             }
 
+            // Обновляем badge
             const nameSpan = card.querySelector('.device-name');
             if (nameSpan) {
                 const oldBadge = nameSpan.querySelector('.offline-badge');
@@ -919,6 +911,7 @@
                 }
             }
 
+            // Обновляем статус в информации
             const infoRows = card.querySelectorAll('.info-row');
             infoRows.forEach(row => {
                 const label = row.querySelector('.info-label');
@@ -934,6 +927,7 @@
                 }
             });
 
+            // Обновляем индикатор в секции показаний
             const readingsSection = card.querySelector('.readings-section');
             if (readingsSection) {
                 let indicator = readingsSection.querySelector('.readings-offline-indicator');
@@ -949,6 +943,7 @@
                 }
             }
 
+            // Блокируем/разблокируем кнопки
             const controls = card.querySelectorAll('.control-btn');
             controls.forEach(btn => {
                 btn.disabled = !isOnline;
@@ -982,8 +977,10 @@
                         const displayValue = getDisplayValue(reading, currentValues, config.returning_values);
                         const oldValue = valueElement.textContent;
                         const newValue = String(displayValue);
+
                         if (oldValue !== newValue) {
                             valueElement.textContent = newValue;
+                            // Анимация обновления
                             item.classList.add('updating');
                             setTimeout(() => item.classList.remove('updating'), 500);
                         }
@@ -1301,18 +1298,18 @@
 
         debugLog('🚀 Старт инициализации...');
 
-        // 1. СРАЗУ загружаем данные (не ждем WebSocket)
+        // 1. Сначала загружаем данные
         loadAllData();
 
-        // 2. Подключаем WebSocket АСИНХРОННО
+        // 2. Затем подключаем SSE
         setTimeout(() => {
-            connectWebSocket();
+            connectSSE();
         }, 100);
 
-        // 3. Автообновление через 30 секунд (только если WebSocket отключен)
+        // 3. Автообновление через 30 секунд (как резервный вариант)
         setInterval(() => {
-            if (!isWebSocketConnected) {
-                debugLog('🔄 Автообновление (WebSocket отключен)');
+            if (!isSSEConnected) {
+                debugLog('🔄 Автообновление (SSE отключен)');
                 loadAllData();
             }
         }, 30000);

@@ -5,9 +5,10 @@ import time
 import logging
 
 from flask import Flask
-from flask_socketio import SocketIO
+from flask_cors import CORS
+#from flask_socketio import SocketIO
 
-from api.api_websocket_routes import register_websocket_routes
+from api.api_sse_routes import register_sse_routes
 from database import Database
 
 from api.api_base_routes import register_base_routes
@@ -20,8 +21,14 @@ from api.api_firmware_routes import register_firmware_routes
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _init_secret_key():
+    import secrets
+    return secrets.token_hex(64)
+
+
 class WebInterface:
-    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=False, db_instance=None, secret_key = '123321'):
+    def __init__(self, host='0.0.0.0', port=5000, kafka_handler = None, auto_open_browser=False, db_instance=None):
 
         self.host, self.port = host, port
         self.auto_open_browser = auto_open_browser
@@ -31,7 +38,7 @@ class WebInterface:
         self.is_running = False
         self.socketio = None
         self.kafkaHandler = kafka_handler
-        self.secret_key = secret_key
+        self.secret_key = _init_secret_key()
 
         if self.kafkaHandler:
             self.kafkaHandler.app_api_device_value_update_callback = self._on_device_value_update
@@ -41,7 +48,7 @@ class WebInterface:
     def _create_app(self):
         app = Flask(__name__)
         app.config['SECRET_KEY'] = self.secret_key
-        self.socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+        CORS(app, origins="*")
 
         register_base_routes(app, self.db)
         register_device_routes(app, self.db, self.kafkaHandler)
@@ -49,7 +56,7 @@ class WebInterface:
         register_room_routes(app, self.db)
         register_trigger_routes(app, self.db, self.kafkaHandler)
         register_firmware_routes(app, self.db, self.kafkaHandler)
-        register_websocket_routes(self.socketio, self.db, self.kafkaHandler)
+        register_sse_routes(app, self.db, self.kafkaHandler)
 
         return app
 
@@ -128,17 +135,17 @@ class WebInterface:
     def _on_device_value_update(self, device_id, current_values):
         logger.info(f"Device update from Kafka: device_id={device_id}, values={current_values}")
 
-        if self.socketio and hasattr(self.socketio, 'broadcast_device_update'):
-            self.socketio.broadcast_device_update(device_id, current_values)
+        # if self.socketio and hasattr(self.socketio, 'broadcast_device_update'):
+        #     self.socketio.broadcast_device_update(device_id, current_values)
 
     def _on_device_status_update(self, device_id, status):
         logger.info(f"Device update from Kafka: device_id={device_id}, status={status}")
 
-        if self.socketio and hasattr(self.socketio, 'broadcast_device_update_status'):
-            self.socketio.broadcast_device_update(device_id, status)
+        # if self.socketio and hasattr(self.socketio, 'broadcast_device_update_status'):
+        #     self.socketio.broadcast_device_update(device_id, status)
 
     def _on_notification(self, notification):
         print(f"[WebInterface] Got notification: {notification.get('type')}")
 
-        if self.socketio and hasattr(self.socketio, 'broadcast_notification'):
-            self.socketio.broadcast_notification(notification)
+        # if self.socketio and hasattr(self.socketio, 'broadcast_notification'):
+        #     self.socketio.broadcast_notification(notification)

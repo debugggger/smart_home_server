@@ -32,7 +32,8 @@ class AppKafkaHandler:
 
         self.consumer = create_kafka_consumer(
             topics=[TOPICS['UPD_VAL_DEVICE'],
-                    TOPICS['UPD_DEVICE_STATUS']
+                    TOPICS['UPD_DEVICE_STATUS'],
+                    TOPICS['NOTIFICATION']
                     ],
             group_id='interface-service-group',
             bootstrap_servers=self.bootstrap_servers
@@ -83,8 +84,8 @@ class AppKafkaHandler:
         print(f"[App Kafka] Updating device table with data: {data}")
 
         try:
-            id = data.get('device_id', [])
-            value = data.get('value', [])
+            id = data.get('device_id')
+            value = data.get('value')
             self.db.update_device_current_values(id, value)
 
             if self.app_api_device_value_update_callback:
@@ -99,8 +100,8 @@ class AppKafkaHandler:
         print(f"[App Kafka] Updating device table with data: {data}")
 
         try:
-            id = data.get('device_id', [])
-            status = data.get('status', [])
+            id = data.get('device_id')
+            status = data.get('status')
             self.db.update_device_status(id, status)
 
             if self.app_api_device_status_update_callback:

@@ -28,8 +28,7 @@ if __name__ == '__main__':
                 auto_open_browser=False,
                 db_instance=db,
                 host=host,
-                port=port,
-                secret_key=get_env_value('APP_SOCKET_KEY', env_file)
+                port=port
             )
 
     web_interface.start()
