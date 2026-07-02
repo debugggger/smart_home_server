@@ -1,14 +1,10 @@
-import os
 import threading
 from datetime import datetime
 import uuid
-from pathlib import Path
-
-from dotenv import load_dotenv
 from kafka.errors import KafkaError
 
+from core.database import Device, Trigger
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
-
 
 class CoreKafkaHandler:
 
@@ -196,10 +192,15 @@ class CoreKafkaHandler:
         print(f"[Core Kafka] Updating device table with data: {data}")
 
         try:
-            devices = data.get('devices', [])
-            for device_data in devices:
-                self.db.add_device(device_data)
-                pass
+            device = Device(
+                id=data.get('id'),
+                controller_mac=data.get('controller_mac'),
+                port=data.get('port'),
+                params=data.get('params', '{}'),
+                type=data.get('type')
+            )
+            self.db.add_device(device)
+            pass
 
             print(f"[Core Kafka] Device table updated successfully")
         except Exception as e:
@@ -210,10 +211,13 @@ class CoreKafkaHandler:
         print(f"[Core Kafka] Updating trigger table with data: {data}")
 
         try:
-            triggers = data.get('triggers', [])
-            for trigger_data in triggers:
-                self.db.add_trigger(trigger_data)
-                pass
+            trig = Trigger(
+                id=data.get('id'),
+                controller_mac=data.get('controller_mac'),
+                trig=data.get('trig')
+            )
+            self.db.add_trigger(trig)
+            pass
 
             print(f"[Core Kafka] Trigger table updated successfully")
         except Exception as e:

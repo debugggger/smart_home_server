@@ -118,7 +118,7 @@ def register_trigger_routes(app, db, kafkaHandler):
         data_for_trig = get_trig_data_for_core(trigger)
 
         if data_for_trig is not None:
-            success, offset = kafkaHandler.update_device_table(data_for_trig)
+            success, offset = kafkaHandler.update_trig_table(data_for_trig)
             if success:
                 return jsonify({'success': True, 'id': trigger_id})
         else:
@@ -193,7 +193,7 @@ def register_trigger_routes(app, db, kafkaHandler):
         data_for_trig = get_trig_data_for_core(trigger)
 
         if data_for_trig is not None:
-            success, offset = kafkaHandler.update_device_table(data_for_trig)
+            success, offset = kafkaHandler.update_trig_table(data_for_trig)
             if success:
                 return jsonify({'success': True, 'id': trigger_id})
         else:
@@ -243,7 +243,7 @@ def register_trigger_routes(app, db, kafkaHandler):
 
         trig_data_for_core = {
             'id': trigger.id,
-            'controller_mac': "",
+            'controller_mac': db.get_controller_by_id(trigger.controller_id).mac,
             'trig': req
         }
         return trig_data_for_core

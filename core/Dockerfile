@@ -15,4 +15,4 @@ COPY core/ .
 COPY kafka_config.py .
 COPY sh_utils.py .
 
-CMD ["python", "main.py", "--docker"]
+CMD ["python", "core_main.py", "--docker"]

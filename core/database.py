@@ -20,7 +20,7 @@ class Trigger:
     trig: str = None
 
 class Database:
-    def __init__(self, host = '127.0.0.1', port=443, name='sh_core', user='postgres', password=''):
+    def __init__(self, host='127.0.0.1', port=443, name='sh_core', user='postgres', password=''):
         self.connection = psycopg2.connect(
             host=host,
             user=user,
@@ -50,7 +50,7 @@ class Database:
     def add_device(self, device: Device) -> Optional[int]:
         query = """
             INSERT INTO devices (id, controller_mac, port, params, type) 
-            VALUES (%s, %s, %s, %s) 
+            VALUES (%s, %s, %s, %s, %s) 
             RETURNING id
         """
         result = self._execute_query(query, (device.id, device.controller_mac, device.port, device.params,
@@ -111,7 +111,7 @@ class Database:
 
         query = """
             INSERT INTO triggers (id, controller_mac, trig) 
-            VALUES ( %s, %s) 
+            VALUES ( %s, %s, %s) 
             RETURNING id
         """
         result = self._execute_query(query, (trigger.id, trigger.controller_mac, trigger.trig),

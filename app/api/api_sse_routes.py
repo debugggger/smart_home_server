@@ -52,29 +52,6 @@ def register_sse_routes(app, db, kafka_handler=None):
                         pass
 
                 if kafka_handler:
-                    # old_notification_callback = kafka_handler.app_api_notification_callback
-                    # old_value_callback = kafka_handler.app_api_device_value_update_callback
-                    # old_status_callback = kafka_handler.app_api_device_status_update_callback
-                    #
-                    # # Создаем комбинированные callback
-                    # def combined_notification_callback(notification):
-                    #     notification_callback(notification)
-                    #     if old_notification_callback:
-                    #         old_notification_callback(notification)
-                    #
-                    # def combined_value_callback(device_id, current_values):
-                    #     value_update_callback(device_id, current_values)
-                    #     if old_value_callback:
-                    #         old_value_callback(device_id, current_values)
-                    #
-                    # def combined_status_callback(device_id, status):
-                    #     status_update_callback(device_id, status)
-                    #     if old_status_callback:
-                    #         old_status_callback(device_id, status)
-
-                    # kafka_handler.app_api_notification_callback = combined_notification_callback
-                    # kafka_handler.app_api_device_value_update_callback = combined_value_callback
-                    # kafka_handler.app_api_device_status_update_callback = combined_status_callback
                     kafka_handler.app_api_notification_callback = notification_callback
                     kafka_handler.app_api_device_value_update_callback = value_update_callback
                     kafka_handler.app_api_device_status_update_callback = status_update_callback

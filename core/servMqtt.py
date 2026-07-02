@@ -63,7 +63,7 @@ class servMqtt:
             try:
                 result = self.client.publish(topic, message, qos=qos, retain=retain)
                 if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                    print(f"Сообщение отправлено: топик='{topic}', сообщение='{message}'")
+                    #print(f"Сообщение отправлено: топик='{topic}', сообщение='{message}'")
                     return True
                 else:
                     print(f"Ошибка отправки сообщения: {result.rc}")

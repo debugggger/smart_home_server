@@ -156,7 +156,7 @@ class Core:
             if device.port:
                 req_parts.append(device.port)
             if device.params:
-                req_parts.append(device.params)
+                req_parts.append(str(device.params))
                 req_parts.append("next")
 
         req = "/".join(req_parts)
@@ -265,17 +265,15 @@ class Core:
                         if device_id not in self.device_failure_counters:
                             self.device_failure_counters[device_id] = 0
 
-                        self.device_failure_counters[device_id] += 1
-
-                        print(
-                            f"[CORE] Устройство {device_id} на {mac} нет ответа (попытка {self.device_failure_counters[device_id]}/{MAX_FAILURES})")
+                        if self.device_failure_counters[device_id] < MAX_FAILURES:
+                            self.device_failure_counters[device_id] += 1
+                            # print(
+                            #     f"[CORE] Устройство {device_id} на {mac} нет ответа")
 
                         if self.device_failure_counters[device_id] >= MAX_FAILURES:
                             if not self.device_offline_status.get(device_id, False):
                                 self.device_offline_status[device_id] = True
-
                                 self.kafka_handler.send_device_status(device_id, False)
-
                                 self.kafka_handler.send_notification(f"Устройство {device_id} на {mac} нет ответа", 'error')
 
                 time.sleep(1)
