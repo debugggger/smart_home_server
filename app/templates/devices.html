@@ -36,6 +36,13 @@
             font-size: 28px;
         }
 
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
         .back-btn, .add-btn {
             padding: 10px 20px;
             border: none;
@@ -121,6 +128,10 @@
             background-color: #ef4444;
         }
 
+        .device-row {
+            transition: background-color 0.3s;
+        }
+
         .device-row.offline {
             opacity: 0.6;
         }
@@ -130,12 +141,21 @@
             font-size: 12px;
         }
 
+        .status-online {
+            color: #10b981;
+        }
+
+        .status-offline {
+            color: #ef4444;
+        }
+
         .empty-state {
             text-align: center;
             padding: 40px;
             color: #94a3b8;
         }
 
+        /* Модальные окна */
         .modal {
             display: none;
             position: fixed;
@@ -158,12 +178,20 @@
             padding: 24px;
             border-radius: 24px;
             width: 90%;
-            max-width: 500px;
+            max-width: 550px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .modal-content h3 {
             margin-bottom: 20px;
             color: #1e2a3a;
+        }
+
+        .modal-content .form-description {
+            color: #64748b;
+            font-size: 13px;
+            margin-bottom: 16px;
         }
 
         .form-group {
@@ -172,18 +200,55 @@
 
         .form-group label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             color: #334155;
             font-weight: 500;
+            font-size: 14px;
         }
 
         .form-group input,
         .form-group select {
             width: 100%;
-            padding: 10px;
+            padding: 10px 12px;
             border: 1px solid #cbd5e1;
-            border-radius: 12px;
+            border-radius: 10px;
             font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.15);
+        }
+
+        .field-required {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .field-hint {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .dynamic-field {
+            animation: fadeIn 0.25s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .modal-buttons {
@@ -199,6 +264,8 @@
             border-radius: 12px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 14px;
+            transition: 0.2s;
         }
 
         .modal-buttons button:first-child {
@@ -206,9 +273,18 @@
             color: white;
         }
 
+        .modal-buttons button:first-child:hover {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+
         .modal-buttons button:last-child {
             background: #e2e8f0;
             color: #475569;
+        }
+
+        .modal-buttons button:last-child:hover {
+            background: #cbd5e1;
         }
 
         .toast-msg {
@@ -229,6 +305,12 @@
             opacity: 1;
         }
 
+        .loading-text {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -240,6 +322,13 @@
                 padding: 10px 8px;
                 font-size: 12px;
             }
+            .header-buttons {
+                justify-content: flex-end;
+            }
+            .modal-content {
+                width: 95%;
+                padding: 16px;
+            }
         }
     </style>
 </head>
@@ -249,7 +338,7 @@
             <div>
                 <h1 id="pageTitle">📟 Устройства контроллера</h1>
             </div>
-            <div>
+            <div class="header-buttons">
                 <button class="back-btn" onclick="goBack()">← Назад к контроллерам</button>
                 <button class="add-btn" onclick="showAddDeviceModal()">+ Добавить устройство</button>
             </div>
@@ -269,31 +358,37 @@
                             <th>Действие</th>
                         </tr>
                     </thead>
-                    <tbody id="devicesTableBody"></tbody>
+                    <tbody id="devicesTableBody">
+                        <tr>
+                            <td colspan="7" class="loading-text">⏳ Загрузка устройств...</td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
 
+    <!-- Модальное окно добавления устройства -->
     <div id="addDeviceModal" class="modal">
         <div class="modal-content">
             <h3>➕ Добавить устройство</h3>
+            <p class="form-description">Заполните данные для нового устройства на контроллере.</p>
+
             <div class="form-group">
-                <label>Имя устройства</label>
+                <label>Имя устройства <span class="field-required">*</span></label>
                 <input type="text" id="deviceName" placeholder="Например: Датчик температуры">
             </div>
+
             <div class="form-group">
-                <label>Тип устройства</label>
-                <select id="deviceTypeId"></select>
+                <label>Тип устройства <span class="field-required">*</span></label>
+                <select id="deviceTypeId" onchange="onDeviceTypeChange()">
+                    <option value="">Выберите тип</option>
+                </select>
             </div>
-            <div class="form-group">
-                <label>Порт</label>
-                <input type="text" id="devicePort" placeholder="GPIO2, A0 и т.д.">
-            </div>
-            <div class="form-group">
-                <label>Параметры (JSON)</label>
-                <input type="text" id="deviceParams" placeholder='{"threshold": 25}'>
-            </div>
+
+            <!-- Контейнер для динамических полей (device_params) -->
+            <div id="dynamicFieldsContainer"></div>
+
             <div class="modal-buttons">
                 <button onclick="saveDevice()">Сохранить</button>
                 <button onclick="closeModal('addDeviceModal')">Отмена</button>
@@ -304,135 +399,351 @@
     <div id="toastMsg" class="toast-msg"></div>
 
     <script>
+        // ============ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============
         let currentControllerId = null;
         let currentControllerName = '';
+        let currentDeviceParams = {}; // Хранит текущие param_names.device_params для выбранного типа
+        let devicesData = {};
+        let deviceTypesList = []; // Полный список типов устройств
 
-        // Загрузка устройств
-        async function loadDevices() {
-            const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
-            const devices = await response.json();
-            const tbody = document.getElementById('devicesTableBody');
-            tbody.innerHTML = '';
-
-            if (devices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
-                return;
-            }
-
-            devices.forEach(device => {
-                const isOnline = device.is_online !== undefined ? device.is_online : true;
-                const row = tbody.insertRow();
-                row.className = isOnline ? '' : 'device-row offline';
-
-                row.insertCell(0).innerText = device.id;
-                row.insertCell(1).innerText = device.name;
-                row.insertCell(2).innerText = device.type_name || 'Unknown';
-                row.insertCell(3).innerText = device.port || '—';
-
-                const statusCell = row.insertCell(4);
-                statusCell.innerHTML = `
-                    <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
-                    ${isOnline ? 'Онлайн' : 'Офлайн'}
-                `;
-
-                row.insertCell(5).innerText = device.params || '{}';
-
-                const actionCell = row.insertCell(6);
-                const delBtn = document.createElement('button');
-                delBtn.innerText = 'Удалить';
-                delBtn.className = 'delete-btn';
-                delBtn.onclick = () => deleteDevice(device.id);
-                actionCell.appendChild(delBtn);
-            });
-        }
-
-        async function loadDeviceTypes() {
-            const response = await fetch('/api/device-types');
-            const types = await response.json();
-            const select = document.getElementById('deviceTypeId');
-            select.innerHTML = '<option value="">Выберите тип</option>';
-            types.forEach(type => {
-                select.innerHTML += `<option value="${type.id}">${type.name}</option>`;
-            });
-        }
-
-        function showAddDeviceModal() {
-            if (!currentControllerId) return;
-            loadDeviceTypes();
-            document.getElementById('addDeviceModal').classList.add('active');
-        }
-
-        async function saveDevice() {
-            const name = document.getElementById('deviceName').value;
-            const typeId = document.getElementById('deviceTypeId').value;
-            const port = document.getElementById('devicePort').value;
-            const params = document.getElementById('deviceParams').value;
-
-            if (!name || !typeId) {
-                alert('Заполните имя и тип устройства');
-                return;
-            }
-
-            const response = await fetch('/api/devices', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    controller_id: currentControllerId,
-                    type_id: parseInt(typeId),
-                    port: port,
-                    params: params || '{}'
-                })
-            });
-
-            if (response.ok) {
-                closeModal('addDeviceModal');
-                showToast('✅ Устройство добавлено');
-                loadDevices();
-                document.getElementById('deviceName').value = '';
-                document.getElementById('devicePort').value = '';
-                document.getElementById('deviceParams').value = '';
-            } else {
-                showToast('❌ Ошибка добавления');
-            }
-        }
-
-        async function deleteDevice(deviceId) {
-            if (!confirm('Удалить устройство?')) return;
-            const response = await fetch(`/api/devices/${deviceId}`, { method: 'DELETE' });
-            if (response.ok) {
-                showToast('✅ Устройство удалено');
-                loadDevices();
-            } else {
-                showToast('❌ Ошибка удаления');
-            }
-        }
-
-        function goBack() {
-            window.location.href = '/controllers-page';
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
-
-        function showToast(msg) {
-            const toast = document.getElementById('toastMsg');
-            toast.innerText = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
-        }
-
-        // Инициализация
+        // ============ ИНИЦИАЛИЗАЦИЯ ============
         currentControllerId = localStorage.getItem('selectedControllerId');
         currentControllerName = localStorage.getItem('selectedControllerName');
 
         if (currentControllerId) {
             document.getElementById('pageTitle').innerHTML = `📟 Устройства контроллера: ${currentControllerName}`;
             loadDevices();
+            loadDeviceTypes();
         } else {
-            document.getElementById('devicesTableBody').innerHTML = '<tr><td colspan="7" class="empty-state">❌ Ошибка: контроллер не выбран</td></tr>';
+            document.getElementById('devicesTableBody').innerHTML =
+                '<tr><td colspan="7" class="empty-state">❌ Контроллер не выбран</td></tr>';
         }
+
+        // ============ ЗАГРУЗКА УСТРОЙСТВ ============
+        async function loadDevices() {
+            try {
+                const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const devices = await response.json();
+                const tbody = document.getElementById('devicesTableBody');
+
+                if (!devices || devices.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                devices.forEach(device => {
+                    const isOnline = device.is_online !== undefined ? device.is_online : true;
+                    const row = document.createElement('tr');
+                    row.className = `device-row ${isOnline ? '' : 'offline'}`;
+                    row.dataset.deviceId = device.id;
+                    devicesData[device.id] = device;
+
+                    row.innerHTML = `
+                        <td>${device.id}</td>
+                        <td>${escapeHtml(device.name)}</td>
+                        <td>${escapeHtml(device.type_name || 'Unknown')}</td>
+                        <td>${escapeHtml(device.port || '—')}</td>
+                        <td class="status-cell">
+                            <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
+                            <span class="status-text ${isOnline ? 'status-online' : 'status-offline'}">
+                                ${isOnline ? 'Онлайн' : 'Офлайн'}
+                            </span>
+                        </td>
+                        <td class="params-cell">${escapeHtml(device.params || '{}')}</td>
+                        <td>
+                            <button class="delete-btn" onclick="deleteDevice(${device.id})">Удалить</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+                showToast('❌ Ошибка загрузки устройств');
+            }
+        }
+
+        // ============ ЗАГРУЗКА ТИПОВ УСТРОЙСТВ ============
+        async function loadDeviceTypes() {
+            try {
+                const response = await fetch('/api/device-types');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                deviceTypesList = await response.json();
+                const select = document.getElementById('deviceTypeId');
+
+                select.innerHTML = '<option value="">Выберите тип</option>';
+                deviceTypesList.forEach(type => {
+                    const displayName = type.param_names?.display_name || type.name;
+                    select.innerHTML += `<option value="${type.id}">${displayName}</option>`;
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки типов:', error);
+                showToast('❌ Ошибка загрузки типов устройств');
+            }
+        }
+
+        // ============ ПОИСК ТИПА ПО ID ============
+        function findTypeById(typeId) {
+            return deviceTypesList.find(t => t.id == typeId);
+        }
+
+        // ============ ОБРАБОТЧИК СМЕНЫ ТИПА ============
+        function onDeviceTypeChange() {
+            const typeId = document.getElementById('deviceTypeId').value;
+            const container = document.getElementById('dynamicFieldsContainer');
+            container.innerHTML = '';
+
+            if (!typeId) {
+                currentDeviceParams = {};
+                return;
+            }
+
+            const type = findTypeById(typeId);
+            if (!type) {
+                currentDeviceParams = {};
+                return;
+            }
+
+            const deviceParams = type.param_names?.device_params || {};
+            currentDeviceParams = deviceParams;
+
+            // Создаём поля для каждого параметра
+            const paramKeys = Object.keys(deviceParams);
+            if (paramKeys.length === 0) {
+                // Если нет параметров — показываем сообщение
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.innerHTML = `
+                    <label>Параметры</label>
+                    <input type="text" id="deviceParamsFallback" placeholder='{"extra": "value"}'>
+                    <span class="field-hint">Дополнительные параметры в формате JSON</span>
+                `;
+                container.appendChild(div);
+                return;
+            }
+
+            paramKeys.forEach(key => {
+                const div = document.createElement('div');
+                div.className = 'form-group dynamic-field';
+
+                const label = document.createElement('label');
+                const displayName = deviceParams[key] || key;
+                const isRequired = key === 'port'; // port всегда обязателен
+                label.innerHTML = `${displayName} ${isRequired ? '<span class="field-required">*</span>' : ''}`;
+                div.appendChild(label);
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = `param_${key}`;
+                input.className = 'dynamic-input';
+                input.dataset.paramKey = key;
+                input.dataset.required = isRequired;
+                input.placeholder = `Введите ${displayName.toLowerCase()}`;
+
+                // Если это порт — добавляем подсказку
+                if (key === 'port') {
+                    input.placeholder = 'GPIO2, A0 и т.д.';
+                }
+
+                div.appendChild(input);
+
+                // Подсказка
+                const hint = document.createElement('span');
+                hint.className = 'field-hint';
+                hint.textContent = `Параметр "${key}"`;
+                div.appendChild(hint);
+
+                container.appendChild(div);
+            });
+        }
+
+        // ============ СБОР ПАРАМЕТРОВ УСТРОЙСТВА ============
+        function collectDeviceParams() {
+            const params = {};
+            const inputs = document.querySelectorAll('.dynamic-input');
+            inputs.forEach(input => {
+                const key = input.dataset.paramKey;
+                if (key) {
+                    params[key] = input.value || '';
+                }
+            });
+
+            // Если есть fallback поле
+            const fallback = document.getElementById('deviceParamsFallback');
+            if (fallback && fallback.value) {
+                try {
+                    const extra = JSON.parse(fallback.value);
+                    Object.assign(params, extra);
+                } catch {
+                    // Игнорируем
+                }
+            }
+
+            return params;
+        }
+
+        // ============ ФОРМИРОВАНИЕ PARAMS ДЛЯ СОХРАНЕНИЯ ============
+        function buildDeviceParamsForSave() {
+            const collected = collectDeviceParams();
+            const port = collected.port || '';
+
+            // Убираем port из параметров, если он есть
+            const { port: _, ...restParams } = collected;
+
+            // Если есть только port — сохраняем как пустую строку
+            if (Object.keys(restParams).length === 0) {
+                return { port: port, params: '' };
+            }
+
+            // Объединяем остальные параметры через "/"
+            const paramsStr = Object.values(restParams).join('/');
+
+            return {
+                port: port,
+                params: paramsStr
+            };
+        }
+
+        // ============ СОХРАНЕНИЕ УСТРОЙСТВА ============
+        async function saveDevice() {
+            const name = document.getElementById('deviceName').value.trim();
+            const typeId = document.getElementById('deviceTypeId').value;
+
+            if (!name) {
+                showToast('❌ Введите имя устройства');
+                document.getElementById('deviceName').focus();
+                return;
+            }
+
+            if (!typeId) {
+                showToast('❌ Выберите тип устройства');
+                document.getElementById('deviceTypeId').focus();
+                return;
+            }
+
+            // Проверяем обязательные поля
+            const requiredInputs = document.querySelectorAll('.dynamic-input[data-required="true"]');
+            let hasError = false;
+            requiredInputs.forEach(input => {
+                if (!input.value || input.value.trim() === '') {
+                    const label = input.closest('.form-group')?.querySelector('label');
+                    showToast(`❌ Поле "${label?.textContent?.replace('*', '').trim() || 'порт'}" обязательно`);
+                    input.focus();
+                    input.style.borderColor = '#ef4444';
+                    setTimeout(() => { input.style.borderColor = ''; }, 3000);
+                    hasError = true;
+                }
+            });
+            if (hasError) return;
+
+            // Собираем параметры
+            const { port, params } = buildDeviceParamsForSave();
+
+            try {
+                const payload = {
+                    name: name,
+                    controller_id: parseInt(currentControllerId),
+                    type_id: parseInt(typeId),
+                    port: port || '',
+                    params: params || '{}'
+                };
+
+                console.log('[Save] Payload:', payload);
+
+                const response = await fetch('/api/devices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    closeModal('addDeviceModal');
+                    showToast('✅ Устройство добавлено');
+                    loadDevices();
+
+                    // Сброс формы
+                    document.getElementById('deviceName').value = '';
+                    document.getElementById('deviceTypeId').value = '';
+                    document.getElementById('dynamicFieldsContainer').innerHTML = '';
+                    currentDeviceParams = {};
+                } else {
+                    const error = await response.json();
+                    showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                }
+            } catch (error) {
+                console.error('Ошибка сохранения:', error);
+                showToast('❌ Ошибка сохранения устройства');
+            }
+        }
+
+        // ============ УДАЛЕНИЕ УСТРОЙСТВА ============
+        async function deleteDevice(deviceId) {
+            if (!confirm('Удалить устройство?')) return;
+            try {
+                const response = await fetch(`/api/devices/${deviceId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    showToast('✅ Устройство удалено');
+                    delete devicesData[deviceId];
+                    loadDevices();
+                } else {
+                    showToast('❌ Ошибка удаления');
+                }
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+                showToast('❌ Ошибка удаления');
+            }
+        }
+
+        // ============ МОДАЛЬНЫЕ ОКНА ============
+        function showAddDeviceModal() {
+            if (!currentControllerId) {
+                showToast('❌ Контроллер не выбран');
+                return;
+            }
+            document.getElementById('addDeviceModal').classList.add('active');
+            document.getElementById('dynamicFieldsContainer').innerHTML = '';
+            currentDeviceParams = {};
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // ============ НАВИГАЦИЯ ============
+        function goBack() {
+            window.location.href = '/controllers-page';
+        }
+
+        // ============ УВЕДОМЛЕНИЯ ============
+        function showToast(msg) {
+            const toast = document.getElementById('toastMsg');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // ============ ВСПОМОГАТЕЛЬНЫЕ ============
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML ============
+        window.showAddDeviceModal = showAddDeviceModal;
+        window.closeModal = closeModal;
+        window.saveDevice = saveDevice;
+        window.deleteDevice = deleteDevice;
+        window.goBack = goBack;
+        window.onDeviceTypeChange = onDeviceTypeChange;
     </script>
 </body>
 </html>

@@ -3,7 +3,7 @@ from .api_utils import handle_api_errors
 from database import Room
 
 
-def register_room_routes(app, db):
+def register_room_routes(app, db, kafkaHandler):
     @app.route('/api/rooms', methods=['GET'])
     @handle_api_errors
     def get_rooms():
@@ -22,12 +22,6 @@ def register_room_routes(app, db):
     @app.route('/api/rooms/<int:room_id>', methods=['DELETE'])
     @handle_api_errors
     def delete_room(room_id):
-        db.delete_room(room_id)
+        db.delete_room(room_id, kafkaHandler)
         return jsonify({'success': True})
 
-    @app.route('/api/device-types', methods=['GET'])
-    @handle_api_errors
-    def get_device_types():
-        types = db.get_all_device_types()
-        return jsonify(
-            [{'id': t.id, 'name': t.name, 'description': t.description, 'param_names': t.param_name} for t in types])

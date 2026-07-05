@@ -53,7 +53,7 @@ class WebInterface:
         register_base_routes(app, self.db)
         register_device_routes(app, self.db, self.kafkaHandler)
         register_controller_routes(app, self.db, self.kafkaHandler)
-        register_room_routes(app, self.db)
+        register_room_routes(app, self.db, self.kafkaHandler)
         register_trigger_routes(app, self.db, self.kafkaHandler)
         register_firmware_routes(app, self.db, self.kafkaHandler)
         register_sse_routes(app, self.db, self.kafkaHandler)

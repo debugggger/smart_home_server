@@ -1,16 +1,7 @@
 import json
-from pathlib import Path
-
 import psycopg2
-from psycopg2 import sql
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-from dotenv import load_dotenv
-import os
+from typing import Optional, List
 from dataclasses import dataclass
-from enum import Enum
-
-
 
 @dataclass
 class Room:
@@ -45,10 +36,6 @@ class Device:
 #     value: int = None
 #     device_id: int = None
 #     time: datetime = None
-#
-#     def __post_init__(self):
-#         if self.time is None:
-#             self.time = datetime.now()
 
 
 @dataclass
@@ -72,14 +59,12 @@ class TrigResponse:
     resp: str = None
     trigger_id: int = None
 
-
 @dataclass
 class Trigger:
     id: Optional[int] = None
     controller_id: int = None
     controller_resp_id: int = None
     name: str = None
-
 
 class Database:
     def __init__(self, host='127.0.0.1', port=443, name='sh', user='postgres', password=''):
@@ -135,7 +120,12 @@ class Database:
         results = self._execute_query(query, fetch_all=True)
         return [Room(id=r[0], name=r[1]) for r in results] if results else []
 
-    def delete_room(self, room_id: int) -> bool:
+    def delete_room(self, room_id: int, kafkaHandler) -> bool:
+
+        conntollers = self.get_controllers_by_room(room_id)
+        for controller in conntollers:
+            self.delete_controller(controller.id, kafkaHandler)
+
         query = "DELETE FROM rooms WHERE id = %s"
         self._execute_query(query, (room_id,))
         return True
@@ -175,7 +165,26 @@ class Database:
         results = self._execute_query(query, fetch_all=True)
         return [Controller(id=r[0], mac=r[1], room_id=r[2], name=r[3], is_online=r[4]) for r in results] if results else []
 
-    def delete_controller(self, controller_id: int) -> bool:
+    def delete_controller(self, controller_id: int, kafkaHandler) -> bool:
+
+        triggers = {}
+        for t in self.get_triggers_by_controller(controller_id):
+            triggers[t.id] = t
+
+        for t in self.get_triggers_by_resp_controller(controller_id):
+            if t.id not in triggers:
+                triggers[t.id] = t
+
+        unique_triggers = list(triggers.values())
+        for trig in unique_triggers:
+            if not self.delete_trigger(trig.id, kafkaHandler):
+                return False
+
+        devices = self.get_devices_by_controller(controller_id)
+        for device in devices:
+            if not self.delete_device(device.id, kafkaHandler):
+                return False
+
         query = "DELETE FROM controllers WHERE id = %s"
         self._execute_query(query, (controller_id,))
         return True
@@ -255,10 +264,36 @@ class Database:
         return [Device(id=r[0], name=r[1], controller_id=r[2], type_id=r[3], port=r[4], params=r[5], current_values=r[6], is_online=r[7])
                 for r in results] if results else []
 
-    def delete_device(self, device_id: int) -> bool:
-        query = "DELETE FROM devices WHERE id = %s"
-        self._execute_query(query, (device_id,))
-        return True
+    def delete_device(self, device_id: int, kafkaHandler) -> bool:
+
+        device = self.get_device_by_id(device_id)
+        if not device:
+            return False
+
+        affected_triggers = set()
+        all_conditions = self.get_all_trig_conditions()
+        for condition in all_conditions:
+            if condition.device_id == device_id:
+                affected_triggers.add(condition.trigger_id)
+        all_responses = self.get_all_trig_responses()
+        for response in all_responses:
+            if response.device_id == device_id:
+                affected_triggers.add(response.trigger_id)
+        for trigger_id in affected_triggers:
+            success = self.delete_trigger(trigger_id, kafkaHandler)
+            if not success:
+                return False
+
+        kafka_data = {
+            'command_type': 'DELETE',
+            'id': device_id
+        }
+        success = kafkaHandler.update_device_table(kafka_data)
+        if success:
+            query = "DELETE FROM devices WHERE id = %s"
+            self._execute_query(query, (device_id,))
+            return True
+        return False
 
     def update_device_status(self, device_id: int, status: bool):
         query = """
@@ -322,10 +357,24 @@ class Database:
         return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3]) for r in
                 results] if results else []
 
-    def delete_trigger(self, trigger_id: int) -> bool:
-        query = "DELETE FROM triggers WHERE id = %s"
-        self._execute_query(query, (trigger_id,))
-        return True
+    def delete_trigger(self, trigger_id: int, kafkaHandler) -> bool:
+
+        kafka_data = {
+            'command_type': 'DELETE',
+            'id': trigger_id
+        }
+        if kafkaHandler.update_trig_table(kafka_data):
+            trig_conditions = self.get_trig_conditions_by_trigger(trigger_id)
+            for trig_cond in trig_conditions:
+                self.delete_trig_condition(trig_cond.id)
+            trig_responses = self.get_trig_responses_by_trigger(trigger_id)
+            for trig_resp in trig_responses:
+                self.delete_trig_response(trig_resp.id)
+            #TODO откат транзации если что-то не выполнилось
+            query = "DELETE FROM triggers WHERE id = %s"
+            self._execute_query(query, (trigger_id,))
+            return True
+        return False
 
     def add_trig_condition(self, condition: TrigCondition) -> Optional[int]:
         query = """
@@ -411,3 +460,4 @@ class Database:
         query = "DELETE FROM trig_responses WHERE id = %s"
         self._execute_query(query, (response_id,))
         return True
+

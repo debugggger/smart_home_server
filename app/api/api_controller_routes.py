@@ -54,7 +54,7 @@ def register_controller_routes(app, db, kafkaHandler):
     @app.route('/api/controllers/<int:controller_id>', methods=['DELETE'])
     @handle_api_errors
     def delete_controller(controller_id):
-        db.delete_controller(controller_id)
+        db.delete_controller(controller_id, kafkaHandler)
         return jsonify({'success': True})
 
     @app.route('/api/controllers/init', methods=['POST'])

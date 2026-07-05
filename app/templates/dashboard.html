@@ -1147,146 +1147,153 @@
         }
 
         function renderDashboard(rooms) {
-            const container = document.getElementById('dashboardContent');
+    const container = document.getElementById('dashboardContent');
 
-            if (Object.keys(rooms).length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">📭</div>
-                        <p>Нет устройств в системе</p>
+    if (Object.keys(rooms).length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">📭</div>
+                <p>Нет устройств в системе</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+
+    for (const [roomName, devices] of Object.entries(rooms)) {
+        html += `
+            <div class="room-section">
+                <div class="room-header">
+                    <span class="room-icon">🏠</span>
+                    <h2>${escapeHtml(roomName)}</h2>
+                    <span class="devices-count">${devices.length} устройств</span>
+                </div>
+                <div class="devices-grid">
+        `;
+
+        for (const device of devices) {
+            const isOnline = device.is_online !== undefined ? device.is_online : true;
+
+            // ✅ Правильно получаем конфиг
+            const config = deviceTypesConfig[device.type_id] || {
+                reading_commands: [],
+                sending_commands: { binary: [], numeric: [] },
+                returning_values: [],
+                param_names: {}
+            };
+
+            // ✅ Правильно извлекаем param_names из config
+            const paramNames = config.param_names || {};
+            const displayName = paramNames.display_name || device.type_name || 'Unknown';
+
+            const hasReadings = config.reading_commands && config.reading_commands.length > 0;
+            const hasBinary = config.sending_commands?.binary?.length > 0;
+            const hasNumeric = config.sending_commands?.numeric?.length > 0;
+
+            html += `
+                <div class="device-card ${isOnline ? '' : 'offline'}" data-device-id="${device.id}">
+                    <div class="device-header">
+                        <span class="device-name">
+                            ${escapeHtml(device.name)}
+                            ${!isOnline ? '<span class="offline-badge">OFFLINE</span>' : ''}
+                        </span>
+                        <span class="device-type">${escapeHtml(displayName)}</span>
                     </div>
+                    <div class="device-info">
+                        <div class="info-row">
+                            <span class="info-label">Статус:</span>
+                            <span class="info-value ${isOnline ? 'status-online' : 'status-offline'}">
+                                <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
+                                ${isOnline ? 'Онлайн' : 'Офлайн'}
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Контроллер:</span>
+                            <span class="info-value">${escapeHtml(device.controller_name || '—')}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Порт:</span>
+                            <span class="info-value">${escapeHtml(device.port || '—')}</span>
+                        </div>
+                    </div>
+            `;
+
+            if (hasReadings) {
+                html += `
+                    <div class="readings-section">
+                        <div class="readings-title">📊 Показания</div>
                 `;
-                return;
+                for (const reading of config.reading_commands) {
+                    const displayValue = getDisplayValue(reading, device.current_values, config.returning_values);
+                    html += `
+                        <div class="reading-item">
+                            <span class="reading-name">${escapeHtml(reading.display_name)}:</span>
+                            <span class="reading-value">${escapeHtml(String(displayValue))}</span>
+                        </div>
+                    `;
+                }
+                html += `</div>`;
             }
 
-            let html = '';
-
-            for (const [roomName, devices] of Object.entries(rooms)) {
+            if (hasBinary || hasNumeric) {
                 html += `
-                    <div class="room-section">
-                        <div class="room-header">
-                            <span class="room-icon">🏠</span>
-                            <h2>${escapeHtml(roomName)}</h2>
-                            <span class="devices-count">${devices.length} устройств</span>
-                        </div>
-                        <div class="devices-grid">
+                    <div class="controls-section">
+                        <div class="controls-title">🎮 Управление</div>
+                        <div class="device-controls">
                 `;
 
-                for (const device of devices) {
-                    const isOnline = device.is_online !== undefined ? device.is_online : true;
-                    const config = deviceTypesConfig[device.type_id] || {
-                        reading_commands: [],
-                        sending_commands: { binary: [], numeric: [] },
-                        returning_values: []
-                    };
-
-                    const hasReadings = config.reading_commands && config.reading_commands.length > 0;
-                    const hasBinary = config.sending_commands?.binary?.length > 0;
-                    const hasNumeric = config.sending_commands?.numeric?.length > 0;
-
-                    html += `
-                        <div class="device-card ${isOnline ? '' : 'offline'}" data-device-id="${device.id}">
-                            <div class="device-header">
-                                <span class="device-name">
-                                    ${escapeHtml(device.name)}
-                                    ${!isOnline ? '<span class="offline-badge">OFFLINE</span>' : ''}
-                                </span>
-                                <span class="device-type">${escapeHtml(device.type_name || 'Unknown')}</span>
-                            </div>
-                            <div class="device-info">
-                                <div class="info-row">
-                                    <span class="info-label">Статус:</span>
-                                    <span class="info-value ${isOnline ? 'status-online' : 'status-offline'}">
-                                        <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
-                                        ${isOnline ? 'Онлайн' : 'Офлайн'}
-                                    </span>
-                                </div>
-                                <div class="info-row">
-                                    <span class="info-label">Контроллер:</span>
-                                    <span class="info-value">${escapeHtml(device.controller_name || '—')}</span>
-                                </div>
-                                <div class="info-row">
-                                    <span class="info-label">Порт:</span>
-                                    <span class="info-value">${escapeHtml(device.port || '—')}</span>
-                                </div>
-                            </div>
-                    `;
-
-                    if (hasReadings) {
+                if (hasBinary) {
+                    for (const cmd of config.sending_commands.binary) {
+                        const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
+                        const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
                         html += `
-                            <div class="readings-section">
-                                <div class="readings-title">📊 Показания</div>
+                            <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
+                                ${escapeHtml(cmd.display_name)}
+                            </button>
                         `;
-                        for (const reading of config.reading_commands) {
-                            const displayValue = getDisplayValue(reading, device.current_values, config.returning_values);
+                    }
+                }
+
+                if (hasNumeric) {
+                    for (const cmd of config.sending_commands.numeric) {
+                        const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`.replace(/[^a-zA-Z0-9_]/g, '_');
+                        const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
+                        const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+
+                        if (cmd.dataType === 'boolT') {
                             html += `
-                                <div class="reading-item">
-                                    <span class="reading-name">${escapeHtml(reading.display_name)}:</span>
-                                    <span class="reading-value">${escapeHtml(String(displayValue))}</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
+                                </div>
+                            `;
+                        } else {
+                            html += `
+                                <div class="numeric-input-group">
+                                    <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
+                                    <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))' ${!isOnline ? 'disabled' : ''}>
+                                        ${escapeHtml(cmd.display_name)}
+                                    </button>
                                 </div>
                             `;
                         }
-                        html += `</div>`;
                     }
-
-                    if (hasBinary || hasNumeric) {
-                        html += `
-                            <div class="controls-section">
-                                <div class="controls-title">🎮 Управление</div>
-                                <div class="device-controls">
-                        `;
-
-                        if (hasBinary) {
-                            for (const cmd of config.sending_commands.binary) {
-                                const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
-                                const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
-                                html += `
-                                    <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
-                                        ${escapeHtml(cmd.display_name)}
-                                    </button>
-                                `;
-                            }
-                        }
-
-                        if (hasNumeric) {
-                            for (const cmd of config.sending_commands.numeric) {
-                                const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`.replace(/[^a-zA-Z0-9_]/g, '_');
-                                const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
-                                const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
-
-                                if (cmd.dataType === 'boolT') {
-                                    html += `
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
-                                                <span class="toggle-slider"></span>
-                                            </label>
-                                            <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
-                                        </div>
-                                    `;
-                                } else {
-                                    html += `
-                                        <div class="numeric-input-group">
-                                            <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
-                                            <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))' ${!isOnline ? 'disabled' : ''}>
-                                                ${escapeHtml(cmd.display_name)}
-                                            </button>
-                                        </div>
-                                    `;
-                                }
-                            }
-                        }
-
-                        html += `</div></div>`;
-                    }
-
-                    html += `</div>`;
                 }
+
                 html += `</div></div>`;
             }
 
-            container.innerHTML = html;
+            html += `</div>`;
         }
+        html += `</div></div>`;
+    }
+
+    container.innerHTML = html;
+}
 
         // ===== ИНИЦИАЛИЗАЦИЯ =====
 

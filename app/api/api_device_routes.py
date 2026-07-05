@@ -50,7 +50,7 @@ def register_device_routes(app, db, kafkaHandler):
                 'port': d.port,
                 'params': d.params,
                 'current_values': current_values,
-                'status': 'online'
+                'is_online': d.is_online
             })
         return jsonify(result)
 
@@ -68,6 +68,7 @@ def register_device_routes(app, db, kafkaHandler):
                 'type_name': device_type.name if device_type else 'Unknown',
                 'port': d.port,
                 'params': d.params,
+                'is_online': d.is_online,
                 'current_values': d.current_values
             })
         return jsonify(result)
@@ -86,6 +87,7 @@ def register_device_routes(app, db, kafkaHandler):
                 'type_name': device_type.name if device_type else 'Unknown',
                 'port': device.port,
                 'params': device.params,
+                'is_online': device.is_online,
                 'current_values': device.current_values
             })
         return jsonify(result)
@@ -120,7 +122,7 @@ def register_device_routes(app, db, kafkaHandler):
     @app.route('/api/devices/<int:device_id>', methods=['DELETE'])
     @handle_api_errors
     def delete_device(device_id):
-        db.delete_device(device_id)
+        db.delete_device(device_id, kafkaHandler)
         return jsonify({'success': True})
 
     @app.route('/api/devices/<int:device_id>/command', methods=['POST'])
@@ -176,6 +178,12 @@ def register_device_routes(app, db, kafkaHandler):
 
         return jsonify([])
 
+    @app.route('/api/device-types', methods=['GET'])
+    @handle_api_errors
+    def get_device_types():
+        types = db.get_all_device_types()
+        return jsonify(
+            [{'id': t.id, 'name': t.name, 'description': t.description, 'param_names': t.param_name} for t in types])
 
     def get_device_data_for_core(device):
 
@@ -183,6 +191,7 @@ def register_device_routes(app, db, kafkaHandler):
         device_type = db.get_device_type_by_id(device.type_id).name
 
         device_data_for_core = {
+            'command_type': 'ADD',
             'id': device.id,
             'controller_mac': controller_mac,
             'port': device.port,
@@ -192,3 +201,24 @@ def register_device_routes(app, db, kafkaHandler):
         }
         return device_data_for_core
 
+    @app.route('/api/device-types/<int:type_id>/params', methods=['GET'])
+    def get_device_type_params(type_id):
+        device_type = db.get_device_type_by_id(type_id)
+        if not device_type:
+            return jsonify({'error': 'Device type not found'}), 404
+
+        try:
+            if device_type.params:
+                config = json.loads(device_type.params)
+            else:
+                config = {}
+        except:
+            config = {}
+
+        fields = config.get('input_fields', [])
+
+        return jsonify({
+            'type_id': type_id,
+            'type_name': device_type.name,
+            'fields': fields
+        })

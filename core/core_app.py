@@ -156,8 +156,9 @@ class Core:
             if device.port:
                 req_parts.append(device.port)
             if device.params:
-                req_parts.append(str(device.params))
-                req_parts.append("next")
+                params = '/'.join(device.params.values())
+                req_parts.append(params)
+            req_parts.append("next")
 
         req = "/".join(req_parts)
         self.mqtt_client.publish(parts[0], req)

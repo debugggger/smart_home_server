@@ -2,28 +2,106 @@
   {
     "name": "btn",
     "description": "button",
-    "param_names": {"reading_commands":[{"display_name":"Состояние кнопки","system_name":"btnGetState","parameter_number":0}],"sending_commands":{"numeric":[],"binary":[]},"returning_values":[{"0":{"description":"Удержание"},"1":{"description":"Одиночное нажатие"},"2":{"description":"Двойное нажатие"},"3":{"description":"Длинное нажатие"},"4":{"description":"Отпущена"}}]}
+    "param_names": {
+      "display_name": "кнопка",
+      "device_params":
+      {
+        "port": "порт подключения"
+      },
+      "reading_commands":[
+        {
+          "display_name":"Состояние кнопки","system_name":"btnGetState","parameter_number":0
+        }
+      ],
+      "sending_commands":{
+        "numeric":[],
+        "binary":[]},
+      "returning_values":[
+        {
+          "0":{"description":"Удержание"},
+          "1":{"description":"Одиночное нажатие"},
+          "2":{"description":"Двойное нажатие"},
+          "3":{"description":"Длинное нажатие"},
+          "4":{"description":"Отпущена"}
+        }
+      ]
+    }
   },
   {
     "name": "binOut",
     "description": "any binary out",
-    "param_names": {"reading_commands":[],"sending_commands":{"numeric":[],"binary":[{"display_name":"Переключить","system_name":"toggleBinOut","sending_name":"toggle"},{"display_name":"Включить","system_name":"setHighBinOut","sending_name":"setHigh"},{"display_name":"Выключить","system_name":"setLowBinOut","sending_name":"setLow"}]},"returning_values":[{}]}
+    "param_names": {
+      "display_name": "двоичный выход",
+      "device_params":
+      {
+        "port": "порт подключения"
+      },
+      "reading_commands":[],
+      "sending_commands":{
+        "numeric":[],
+        "binary":[
+          {"display_name":"Переключить","system_name":"toggleBinOut","sending_name":"toggle"},
+          {"display_name":"Включить","system_name":"setHighBinOut","sending_name":"setHigh"},
+          {"display_name":"Выключить","system_name":"setLowBinOut","sending_name":"setLow"}
+        ]
+      },
+      "returning_values":[{}]}
+  },
+  {
+    "name": "bin",
+    "description": "binary input",
+    "param_names": {
+      "display_name": "двоичный вход",
+      "device_params":
+      {
+        "port": "порт подключения"
+      }
+    }
   },
   {
     "name": "aht",
     "description": "aht20 sensor",
-    "param_names": {"reading_commands":[
-      {"display_name":"Температура","system_name":"ahtGetTemp","parameter_number":0},{"display_name":"Влажность","system_name":"ahtGetHum","parameter_number":1}],"sending_commands":{"numeric":[],"binary":[]},"returning_values":[{}]}
+    "param_names": {
+      "display_name": "датчик температуры и влажности aht20",
+      "device_params":
+      {
+        "port": "порт подключения SDA",
+        "port2": "порт подключения SCL"
+      },
+      "reading_commands":[
+      {"display_name":"Температура","system_name":"ahtGetTemp","parameter_number":0},
+      {"display_name":"Влажность","system_name":"ahtGetHum","parameter_number":1}],
+      "sending_commands":{
+        "numeric":[],
+        "binary":[]
+      },
+      "returning_values":[{}]
+    }
   },
   {
     "name": "led",
     "description": "smart led sensor",
-    "param_names": {}
+
+    "param_names": {
+      "display_name": "адресная светодиодная лента",
+      "device_params":
+      {
+        "port": "порт подключения",
+        "led count": "число светодиодов"
+      }
+    }
   },
   {
     "name": "stepper",
     "description": "stepper motor",
     "param_names": {
+      "display_name": "шаговый двигатель",
+      "device_params":
+      {
+        "port": "порт подключения EN",
+        "port2": "порт подключения STEP",
+        "port3": "порт подключения DIR"
+      },
       "reading_commands": [],
       "sending_commands":
       {
@@ -50,22 +128,25 @@
   },
   {
     "name": "analog",
-    "description": "smart led sensor",
-    "param_names": {}
+    "description": "analog input",
+    "param_names": {
+      "display_name": "аналоговый вход",
+      "device_params":
+      {
+        "port": "порт подключения"
+      }
+    }
   },
   {
     "name": "micro",
     "description": "smart led sensor",
-    "param_names": {}
-  },
-  {
-    "name": "led",
-    "description": "smart led sensor",
-    "param_names": {}
-  },
-  {
-    "name": "bin",
-    "description": "any binary input",
-    "param_names": {}
+    "param_names": {
+      "display_name": "микрофон",
+      "device_params":
+      {
+        "port": "порт подключения"
+      }
+    }
   }
+
 ]

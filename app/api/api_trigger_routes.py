@@ -145,7 +145,7 @@ def register_trigger_routes(app, db, kafkaHandler):
         for resp in responses:
             db.delete_trig_response(resp.id)
 
-        db.delete_trigger(trigger_id)
+        db.delete_trigger(trigger_id, kafkaHandler)
         return jsonify({'success': True})
 
     @app.route('/api/triggers/<int:trigger_id>', methods=['PUT'])

@@ -33,7 +33,7 @@ def get_device_with_details(db, device):
         'controller': controller.name if controller else 'Unknown',
         'port': device.port,
         'params': json.loads(device.params) if device.params else {},
-        'status': 'online',
+        'is_online': device.is_online,
         'value': None
     }
 

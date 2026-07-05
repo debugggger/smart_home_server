@@ -192,15 +192,19 @@ class CoreKafkaHandler:
         print(f"[Core Kafka] Updating device table with data: {data}")
 
         try:
-            device = Device(
-                id=data.get('id'),
-                controller_mac=data.get('controller_mac'),
-                port=data.get('port'),
-                params=data.get('params', '{}'),
-                type=data.get('type')
-            )
-            self.db.add_device(device)
-            pass
+            if data.get('command_type') == 'DELETE':
+                id = data.get('id')
+                self.db.delete_device(id)
+            else:
+                device = Device(
+                    id=data.get('id'),
+                    controller_mac=data.get('controller_mac'),
+                    port=data.get('port'),
+                    params=data.get('params', '{}'),
+                    type=data.get('type')
+                )
+                self.db.add_device(device)
+                pass
 
             print(f"[Core Kafka] Device table updated successfully")
         except Exception as e:
@@ -211,13 +215,17 @@ class CoreKafkaHandler:
         print(f"[Core Kafka] Updating trigger table with data: {data}")
 
         try:
-            trig = Trigger(
-                id=data.get('id'),
-                controller_mac=data.get('controller_mac'),
-                trig=data.get('trig')
-            )
-            self.db.add_trigger(trig)
-            pass
+            if data.get('command_type') == 'DELETE':
+                id=data.get('id')
+                self.db.delete_trigger(id)
+            else:
+                trig = Trigger(
+                    id=data.get('id'),
+                    controller_mac=data.get('controller_mac'),
+                    trig=data.get('trig')
+                )
+                self.db.add_trigger(trig)
+                pass
 
             print(f"[Core Kafka] Trigger table updated successfully")
         except Exception as e:

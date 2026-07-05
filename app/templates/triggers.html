@@ -108,7 +108,8 @@
             font-weight: 500;
         }
 
-        .form-group input, .form-group select {
+        .form-group input,
+        .form-group select {
             width: 100%;
             padding: 10px;
             border: 1px solid #cbd5e1;
@@ -116,7 +117,8 @@
             font-size: 14px;
         }
 
-        .condition-block, .action-block {
+        .condition-block,
+        .action-block {
             background: #f8fafc;
             border-radius: 16px;
             padding: 20px;
@@ -144,7 +146,7 @@
             font-size: 12px;
         }
 
-        .add-condition-btn, .add-action-btn {
+        .add-condition-btn {
             background: #e2e8f0;
             border: none;
             padding: 8px 16px;
@@ -163,21 +165,13 @@
             display: block;
         }
 
-        .server-action-field {
-            margin-top: 10px;
-            display: none;
-        }
-
-        .server-action-field.show {
-            display: block;
-        }
-
         .triggers-list table {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .triggers-list th, .triggers-list td {
+        .triggers-list th,
+        .triggers-list td {
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid #e2e8f0;
@@ -243,7 +237,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 2000;
             align-items: center;
             justify-content: center;
@@ -270,25 +264,6 @@
             .card {
                 padding: 16px;
             }
-        }
-
-        .controller-type-badge {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            margin-left: 8px;
-        }
-
-        .controller-type-badge.server {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .controller-type-badge.esp {
-            background: #dbeafe;
-            color: #1e40af;
         }
     </style>
 </head>
@@ -339,16 +314,12 @@
 
             <div class="form-group">
                 <label>Контроллер-источник (откуда идет сигнал)</label>
-                <select id="srcController"></select>
+                <select id="srcController" onchange="onSrcControllerChange()"></select>
             </div>
 
             <div class="form-group">
                 <label>Контроллер-приемник (куда отправлять команду)</label>
-                <select id="dstController" onchange="onDstControllerTypeChange()">
-                    <option value="">Выберите контроллер</option>
-                    <!-- Опции будут добавлены динамически -->
-                </select>
-                <small style="color: #64748b;">Выберите "Сервер" для обновления значений в БД</small>
+                <select id="dstController" onchange="onDstControllerChange()"></select>
             </div>
 
             <h4>📊 Условия (что должно произойти)</h4>
@@ -357,20 +328,7 @@
 
             <h4 style="margin-top: 20px;">⚡ Действие (что нужно сделать)</h4>
             <div id="actionsContainer"></div>
-
-            <!-- Секция для обновления значения (показывается только если выбран сервер) -->
-            <div id="serverActionSection" style="display: none; margin-top: 20px; padding: 16px; background: #fef3c7; border-radius: 12px; border: 1px solid #f59e0b;">
-                <h4 style="color: #92400e;">📊 Обновить значение на сервере</h4>
-                <div class="form-group">
-                    <label>Действие с числовым значением</label>
-                    <select id="serverActionType">
-                        <option value="">Выберите действие</option>
-                        <option value="addOne">➕ Прибавить 1</option>
-                        <option value="minusOne">➖ Вычесть 1</option>
-                    </select>
-                </div>
-                <small style="color: #92400e;">При выборе этого действия, триггер будет обновлять числовое значение в БД</small>
-            </div>
+            <button class="add-condition-btn" onclick="addAction()">+ Добавить действие</button>
 
             <div class="modal-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
                 <button class="add-btn" onclick="saveTrigger()" style="background: #10b981; color: white;">Сохранить</button>
@@ -386,14 +344,10 @@
         let controllersList = [];
         let devicesCache = {};
         let commandsCache = {};
-        let deviceTypesCache = {};
+        let deviceTypesList = [];
 
-        // Константа для идентификации сервера
-        const SERVER_CONTROLLER_ID = -1;
-        const SERVER_CONTROLLER_NAME = 'Сервер';
-        const SERVER_CONTROLLER_MAC = 'SERVER';
+        // ============ ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ ============
 
-        // Переключение режимов
         function switchMode(mode) {
             if (mode === 'controller') {
                 document.querySelectorAll('.mode-btn')[0].classList.add('active');
@@ -406,81 +360,70 @@
             }
         }
 
-        // Обновление видимости кнопок удаления действий
-        function updateActionRemoveButtonsVisibility() {
-            const actionsContainer = document.getElementById('actionsContainer');
-            const actionBlocks = actionsContainer.querySelectorAll('.action-block');
+        // ============ ЗАГРУЗКА ТИПОВ УСТРОЙСТВ ============
 
-            if (actionBlocks.length <= 1) {
-                actionsContainer.classList.remove('has-multiple');
-            } else {
-                actionsContainer.classList.add('has-multiple');
+        async function loadDeviceTypes() {
+            try {
+                const response = await fetch('/api/device-types');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                deviceTypesList = await response.json();
+                console.log('[Triggers] Device types loaded:', deviceTypesList.length);
+            } catch (error) {
+                console.error('Error loading device types:', error);
             }
         }
 
-        // ============= ЗАГРУЗКА ДАННЫХ С СЕРВЕРА =============
+        // ============ ПОИСК ТИПА ПО ID ============
 
-        // Загрузка всех контроллеров + добавление виртуального "Сервер"
+        function findTypeById(typeId) {
+            return deviceTypesList.find(t => t.id == typeId);
+        }
+
+        // ============ ПОЛУЧЕНИЕ DISPLAY_NAME ТИПА ============
+
+        function getTypeDisplayName(typeId) {
+            const type = findTypeById(typeId);
+            if (type && type.param_names && type.param_names.display_name) {
+                return type.param_names.display_name;
+            }
+            return type?.name || 'Unknown';
+        }
+
+        // ============ ЗАГРУЗКА КОНТРОЛЛЕРОВ ============
+
         async function loadControllers() {
-            const response = await fetch('/api/controllers');
-            const controllers = await response.json();
+            try {
+                const response = await fetch('/api/controllers');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                controllersList = await response.json();
+                console.log('[Triggers] Controllers loaded:', controllersList.length);
 
-            // Добавляем виртуальный контроллер "Сервер"
-            controllersList = [
-                {
-                    id: SERVER_CONTROLLER_ID,
-                    name: SERVER_CONTROLLER_NAME,
-                    mac: SERVER_CONTROLLER_MAC,
-                    room_name: 'Сервер',
-                    is_server: true
-                },
-                ...controllers.map(c => ({ ...c, is_server: false }))
-            ];
+                const srcSelect = document.getElementById('srcController');
+                const dstSelect = document.getElementById('dstController');
 
-            const srcSelect = document.getElementById('srcController');
-            const dstSelect = document.getElementById('dstController');
+                srcSelect.innerHTML = '<option value="">Выберите контроллер</option>';
+                dstSelect.innerHTML = '<option value="">Выберите контроллер</option>';
 
-            srcSelect.innerHTML = '<option value="">Выберите контроллер</option>';
-            dstSelect.innerHTML = '<option value="">Выберите контроллер</option>';
+                controllersList.forEach(ctrl => {
+                    const optionSrc = document.createElement('option');
+                    optionSrc.value = ctrl.id;
+                    optionSrc.textContent = `${ctrl.name} (${ctrl.room_name})`;
+                    srcSelect.appendChild(optionSrc);
 
-            controllersList.forEach(ctrl => {
-                const isServer = ctrl.is_server;
-                const label = isServer ? `${ctrl.name} (${ctrl.room_name})` : `${ctrl.name} (${ctrl.room_name})`;
-                const badge = isServer ? '🖥️' : '🎮';
-
-                const optionSrc = document.createElement('option');
-                optionSrc.value = ctrl.id;
-                optionSrc.textContent = `${badge} ${label}`;
-                if (isServer) {
-                    optionSrc.disabled = true; // Сервер не может быть источником
-                    optionSrc.title = 'Сервер не может быть источником сигнала';
-                }
-                srcSelect.appendChild(optionSrc);
-
-                const optionDst = document.createElement('option');
-                optionDst.value = ctrl.id;
-                optionDst.textContent = `${badge} ${label}`;
-                if (isServer) {
-                    optionDst.dataset.isServer = 'true';
-                }
-                dstSelect.appendChild(optionDst);
-            });
+                    const optionDst = document.createElement('option');
+                    optionDst.value = ctrl.id;
+                    optionDst.textContent = `${ctrl.name} (${ctrl.room_name})`;
+                    dstSelect.appendChild(optionDst);
+                });
+            } catch (error) {
+                console.error('Error loading controllers:', error);
+                showToast('❌ Ошибка загрузки контроллеров');
+            }
         }
 
-        // Загрузка устройств для конкретного контроллера
-        async function loadDevicesForController(controllerId) {
-            // Если выбран сервер - возвращаем виртуальное устройство
-            if (controllerId == SERVER_CONTROLLER_ID) {
-                return [{
-                    id: -1,
-                    name: 'Числовое значение',
-                    type_id: -1,
-                    type_name: 'server_value',
-                    port: 'value',
-                    params: '{}'
-                }];
-            }
+        // ============ ЗАГРУЗКА УСТРОЙСТВ КОНТРОЛЛЕРА ============
 
+        async function loadDevicesForController(controllerId) {
             if (!controllerId || controllerId === '') return [];
 
             if (devicesCache[controllerId]) {
@@ -489,85 +432,93 @@
 
             try {
                 const response = await fetch(`/api/devices/by-controller/${controllerId}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const devices = await response.json();
                 devicesCache[controllerId] = devices;
-
-                devices.forEach(device => {
-                    deviceTypesCache[device.id] = device.type_id;
-                });
-
+                console.log(`[Triggers] Devices loaded for controller ${controllerId}:`, devices.length);
                 return devices;
             } catch (error) {
-                console.error('Ошибка загрузки устройств:', error);
+                console.error('Error loading devices:', error);
                 return [];
             }
         }
 
-        // Загрузка команд для типа устройства
-        async function loadCommandsForDeviceType(deviceTypeId) {
-            if (!deviceTypeId) return [];
+        // ============ ЗАПОЛНЕНИЕ СПИСКА УСТРОЙСТВ ============
 
-            if (commandsCache[deviceTypeId]) {
-                return commandsCache[deviceTypeId];
+        async function populateDeviceSelect(selectElement, controllerId, selectedDeviceId = null) {
+            if (!controllerId || controllerId === '') {
+                selectElement.innerHTML = '<option value="">Сначала выберите контроллер</option>';
+                return;
             }
 
-            try {
-                const response = await fetch(`/api/device-commands/${deviceTypeId}`);
-                const commands = await response.json();
-                commandsCache[deviceTypeId] = commands;
-                return commands;
-            } catch (error) {
-                console.error('Ошибка загрузки команд:', error);
-                return [];
-            }
-        }
+            const devices = await loadDevicesForController(controllerId);
+            selectElement.innerHTML = '<option value="">Выберите устройство</option>';
 
-        // Получение типа устройства по его ID
-        async function getDeviceTypeId(deviceId) {
-            if (deviceTypesCache[deviceId]) {
-                return deviceTypesCache[deviceId];
-            }
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.id;
 
-            for (const controllerId in devicesCache) {
-                const device = devicesCache[controllerId].find(d => d.id == deviceId);
-                if (device) {
-                    deviceTypesCache[deviceId] = device.type_id;
-                    return device.type_id;
+                // Получаем display_name из param_names
+                const typeDisplayName = getTypeDisplayName(device.type_id);
+                const deviceLabel = `${device.name} (${typeDisplayName}, порт: ${device.port || '—'})`;
+                option.textContent = deviceLabel;
+
+                if (selectedDeviceId && device.id == selectedDeviceId) {
+                    option.selected = true;
                 }
-            }
-
-            return null;
+                selectElement.appendChild(option);
+            });
         }
 
-        // ============= УПРАВЛЕНИЕ УСЛОВИЯМИ =============
+        // ============ ОБРАБОТЧИКИ СМЕНЫ КОНТРОЛЛЕРА ============
 
-        // Добавление условия
+        async function onSrcControllerChange() {
+            const srcControllerId = document.getElementById('srcController').value;
+            const conditionBlocks = document.querySelectorAll('.condition-block');
+
+            for (const block of conditionBlocks) {
+                const deviceSelect = block.querySelector('.condition-device');
+                await populateDeviceSelect(deviceSelect, srcControllerId);
+            }
+        }
+
+        async function onDstControllerChange() {
+            const dstControllerId = document.getElementById('dstController').value;
+            const actionBlocks = document.querySelectorAll('.action-block');
+
+            for (const block of actionBlocks) {
+                const deviceSelect = block.querySelector('.action-device');
+                await populateDeviceSelect(deviceSelect, dstControllerId);
+            }
+        }
+
+        // ============ ДОБАВЛЕНИЕ УСЛОВИЯ ============
+
         async function addCondition(conditionData = null) {
             const container = document.getElementById('conditionsContainer');
-            const blockId = Date.now() + Math.random();
-
+            const index = container.children.length;
             const div = document.createElement('div');
             div.className = 'condition-block';
-            div.setAttribute('data-id', blockId);
+            div.dataset.index = index;
 
             div.innerHTML = `
                 <div class="block-header">
-                    <span>Условие ${container.children.length + 1}</span>
+                    <span>Условие ${index + 1}</span>
                     <button class="remove-btn" onclick="this.closest('.condition-block').remove()">Удалить</button>
                 </div>
                 <div class="form-group">
                     <label>Устройство (датчик)</label>
-                    <select class="condition-device" data-id="${blockId}" onchange="onConditionDeviceChange(this)">
+                    <select class="condition-device" data-index="${index}" onchange="onConditionDeviceChange(this)">
                         <option value="">Выберите устройство</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Действие (условие)</label>
-                    <select class="condition-command" data-id="${blockId}" onchange="onConditionCommandChange(this)">
+                    <select class="condition-command" data-index="${index}" onchange="onConditionCommandChange(this)">
                         <option value="">Сначала выберите устройство</option>
                     </select>
                 </div>
-                <div class="value-field" data-id="${blockId}">
+                <div class="value-field" id="condition-value-${index}">
                     <div class="form-group">
                         <label>Значение</label>
                         <input type="number" class="condition-value" placeholder="Введите число">
@@ -579,10 +530,7 @@
 
             const srcControllerId = document.getElementById('srcController').value;
             const deviceSelect = div.querySelector('.condition-device');
-
-            if (srcControllerId) {
-                await populateDeviceSelect(deviceSelect, srcControllerId);
-            }
+            await populateDeviceSelect(deviceSelect, srcControllerId);
 
             if (conditionData) {
                 deviceSelect.value = conditionData.device_id;
@@ -599,6 +547,8 @@
             }
         }
 
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В УСЛОВИИ ============
+
         async function onConditionDeviceChange(selectElement) {
             const block = selectElement.closest('.condition-block');
             const deviceId = selectElement.value;
@@ -609,13 +559,7 @@
                 return;
             }
 
-            const deviceTypeId = await getDeviceTypeId(deviceId);
-
-            if (!deviceTypeId) {
-                commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>';
-                return;
-            }
-
+            // Для условий всегда показываем стандартные действия
             const standardCommands = [
                 { value: 'greater', label: '📈 Значение больше' },
                 { value: 'less', label: '📉 Значение меньше' },
@@ -625,7 +569,6 @@
             ];
 
             commandSelect.innerHTML = '<option value="">Выберите условие</option>';
-
             standardCommands.forEach(cmd => {
                 const option = document.createElement('option');
                 option.value = cmd.value;
@@ -634,7 +577,9 @@
             });
         }
 
-        async function onConditionCommandChange(selectElement) {
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В УСЛОВИИ ============
+
+        function onConditionCommandChange(selectElement) {
             const block = selectElement.closest('.condition-block');
             const valueField = block.querySelector('.value-field');
             const command = selectElement.value;
@@ -649,36 +594,33 @@
             }
         }
 
-        // ============= УПРАВЛЕНИЕ ДЕЙСТВИЕМ =============
+        // ============ ДОБАВЛЕНИЕ ДЕЙСТВИЯ ============
 
-        async function initAction(actionData = null) {
+        async function addAction(actionData = null) {
             const container = document.getElementById('actionsContainer');
-            container.innerHTML = '';
-
-            const blockId = Date.now() + Math.random();
-
+            const index = container.children.length;
             const div = document.createElement('div');
             div.className = 'action-block';
-            div.setAttribute('data-id', blockId);
+            div.dataset.index = index;
 
             div.innerHTML = `
                 <div class="block-header">
-                    <span>Действие</span>
-                    <button class="remove-btn" style="display: none;">Удалить</button>
+                    <span>Действие ${index + 1}</span>
+                    <button class="remove-btn" onclick="this.closest('.action-block').remove()">Удалить</button>
                 </div>
                 <div class="form-group">
                     <label>Устройство (исполнитель)</label>
-                    <select class="action-device" data-id="${blockId}" onchange="onActionDeviceChange(this)">
+                    <select class="action-device" data-index="${index}" onchange="onActionDeviceChange(this)">
                         <option value="">Выберите устройство</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Команда</label>
-                    <select class="action-command" data-id="${blockId}" onchange="onActionCommandChange(this)">
+                    <select class="action-command" data-index="${index}" onchange="onActionCommandChange(this)">
                         <option value="">Сначала выберите устройство</option>
                     </select>
                 </div>
-                <div class="value-field" data-id="${blockId}">
+                <div class="value-field" id="action-value-${index}">
                     <div class="form-group">
                         <label>Значение</label>
                         <input type="text" class="action-value" placeholder="Введите значение">
@@ -690,10 +632,7 @@
 
             const dstControllerId = document.getElementById('dstController').value;
             const deviceSelect = div.querySelector('.action-device');
-
-            if (dstControllerId) {
-                await populateDeviceSelect(deviceSelect, dstControllerId);
-            }
+            await populateDeviceSelect(deviceSelect, dstControllerId);
 
             if (actionData) {
                 deviceSelect.value = actionData.device_id;
@@ -710,6 +649,8 @@
             }
         }
 
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В ДЕЙСТВИИ ============
+
         async function onActionDeviceChange(selectElement) {
             const block = selectElement.closest('.action-block');
             const deviceId = selectElement.value;
@@ -720,41 +661,66 @@
                 return;
             }
 
-            const deviceTypeId = await getDeviceTypeId(deviceId);
-
-            if (!deviceTypeId) {
+            // Находим тип устройства, чтобы получить команды
+            const device = await findDeviceInCache(deviceId);
+            if (!device) {
                 commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>';
                 return;
             }
 
-            // Если это серверное устройство
-            if (deviceId == -1) {
-                commandSelect.innerHTML = `
-                    <option value="">Выберите действие</option>
-                    <option value="addOne">➕ Прибавить 1</option>
-                    <option value="minusOne">➖ Вычесть 1</option>
-                `;
+            // Получаем команды из param_names
+            const type = findTypeById(device.type_id);
+            if (!type || !type.param_names || !type.param_names.sending_commands) {
+                commandSelect.innerHTML = '<option value="">Команды не найдены</option>';
                 return;
             }
 
-            const commands = await loadCommandsForDeviceType(deviceTypeId);
+            const sendingCommands = type.param_names.sending_commands;
+            const allCommands = [];
+
+            // Добавляем binary команды
+            if (sendingCommands.binary && sendingCommands.binary.length > 0) {
+                sendingCommands.binary.forEach(cmd => {
+                    const displayName = cmd.display_name || cmd.sending_name || cmd.system_name;
+                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName });
+                });
+            }
+
+            // Добавляем numeric команды
+            if (sendingCommands.numeric && sendingCommands.numeric.length > 0) {
+                sendingCommands.numeric.forEach(cmd => {
+                    const displayName = cmd.display_name || cmd.sending_name || cmd.system_name;
+                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName });
+                });
+            }
 
             commandSelect.innerHTML = '<option value="">Выберите команду</option>';
-
-            commands.forEach(cmd => {
+            allCommands.forEach(cmd => {
                 const option = document.createElement('option');
-                option.value = cmd;
-                option.textContent = cmd;
+                option.value = cmd.value;
+                option.textContent = cmd.label;
                 commandSelect.appendChild(option);
             });
         }
 
-        async function onActionCommandChange(selectElement) {
+        // ============ ПОИСК УСТРОЙСТВА В КЕШЕ ============
+
+        async function findDeviceInCache(deviceId) {
+            for (const controllerId in devicesCache) {
+                const device = devicesCache[controllerId].find(d => d.id == deviceId);
+                if (device) return device;
+            }
+            return null;
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В ДЕЙСТВИИ ============
+
+        function onActionCommandChange(selectElement) {
             const block = selectElement.closest('.action-block');
             const valueField = block.querySelector('.value-field');
             const command = selectElement.value;
 
-            const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop', 'addOne', 'minusOne'];
+            const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
             const needsValue = command && !commandsWithoutValue.includes(command);
 
             if (needsValue) {
@@ -764,89 +730,12 @@
             }
         }
 
-        // ============= ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =============
-
-        async function populateDeviceSelect(selectElement, controllerId) {
-            if (!controllerId || controllerId === '') {
-                selectElement.innerHTML = '<option value="">Сначала выберите контроллер</option>';
-                return;
-            }
-
-            const devices = await loadDevicesForController(controllerId);
-            selectElement.innerHTML = '<option value="">Выберите устройство</option>';
-
-            devices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.id;
-                const label = controllerId == SERVER_CONTROLLER_ID
-                    ? `${device.name} (числовое значение)`
-                    : `${device.name} (${device.type_name}, порт: ${device.port})`;
-                option.textContent = label;
-                selectElement.appendChild(option);
-            });
-        }
-
-        async function onSrcControllerChange() {
-            const srcControllerId = document.getElementById('srcController').value;
-            const conditionBlocks = document.querySelectorAll('.condition-block');
-
-            for (const block of conditionBlocks) {
-                const deviceSelect = block.querySelector('.condition-device');
-                await populateDeviceSelect(deviceSelect, srcControllerId);
-
-                const commandSelect = block.querySelector('.condition-command');
-                commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
-
-                const valueField = block.querySelector('.value-field');
-                valueField.classList.remove('show');
-            }
-        }
-
-        async function onDstControllerChange() {
-            const dstControllerId = document.getElementById('dstController').value;
-
-            // Показываем/скрываем секцию для сервера
-            const serverSection = document.getElementById('serverActionSection');
-            if (dstControllerId == SERVER_CONTROLLER_ID) {
-                serverSection.style.display = 'block';
-            } else {
-                serverSection.style.display = 'none';
-            }
-
-            // Обновляем устройство в действии
-            const deviceSelect = document.querySelector('.action-device');
-            if (deviceSelect) {
-                await populateDeviceSelect(deviceSelect, dstControllerId);
-
-                const commandSelect = document.querySelector('.action-command');
-                commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
-
-                const valueField = document.querySelector('.action-block .value-field');
-                if (valueField) {
-                    valueField.classList.remove('show');
-                }
-            }
-        }
-
-        // Обработчик изменения типа контроллера-приемника (для отображения подсказки)
-        function onDstControllerTypeChange() {
-            const dstSelect = document.getElementById('dstController');
-            const selectedOption = dstSelect.options[dstSelect.selectedIndex];
-            const isServer = selectedOption && selectedOption.dataset && selectedOption.dataset.isServer === 'true';
-
-            const serverSection = document.getElementById('serverActionSection');
-            if (isServer) {
-                serverSection.style.display = 'block';
-            } else {
-                serverSection.style.display = 'none';
-            }
-        }
-
-        // ============= ЗАГРУЗКА И ОТОБРАЖЕНИЕ ТРИГГЕРОВ =============
+        // ============ ЗАГРУЗКА ТРИГГЕРОВ ============
 
         async function loadTriggers() {
             try {
                 const response = await fetch('/api/triggers');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const triggers = await response.json();
                 const tbody = document.getElementById('triggersTableBody');
                 tbody.innerHTML = '';
@@ -860,58 +749,45 @@
                     const row = tbody.insertRow();
                     row.insertCell(0).innerText = trigger.id;
                     row.insertCell(1).innerText = trigger.name;
+                    row.insertCell(2).innerText = trigger.src_controller_name;
+                    row.insertCell(3).innerText = trigger.dst_controller_name;
 
-                    // Проверяем, является ли источник сервером
-                    const isSrcServer = trigger.src_controller_name === SERVER_CONTROLLER_NAME;
-                    const srcDisplay = isSrcServer
-                        ? `${trigger.src_controller_name} 🖥️`
-                        : trigger.src_controller_name;
-                    row.insertCell(2).innerText = srcDisplay;
-
-                    // Проверяем, является ли приемник сервером
-                    const isDstServer = trigger.dst_controller_name === SERVER_CONTROLLER_NAME;
-                    const dstDisplay = isDstServer
-                        ? `${trigger.dst_controller_name} 🖥️`
-                        : trigger.dst_controller_name;
-                    row.insertCell(3).innerText = dstDisplay;
-
-                    // Условия
                     const conditionsCell = row.insertCell(4);
                     if (trigger.conditions.length > 0) {
                         const subTable = document.createElement('table');
                         subTable.className = 'sub-table';
                         trigger.conditions.forEach(cond => {
                             const subRow = subTable.insertRow();
-                            const isServerValue = cond.device_name === 'Числовое значение';
-                            const displayValue = isServerValue
-                                ? `🖥️ ${cond.command}: ${cond.value || '—'}`
-                                : `${cond.device_name}: ${cond.command} ${cond.value || '—'}`;
-                            subRow.insertCell(0).innerHTML = displayValue;
+                            const typeDisplayName = getTypeDisplayName(cond.device_type_id);
+                            const deviceLabel = `${cond.device_name} (${typeDisplayName})`;
+                            subRow.insertCell(0).innerHTML = `
+                                <strong>${deviceLabel}</strong><br>
+                                <small>📊 ${cond.command}: ${cond.value || '—'}</small>
+                            `;
                         });
                         conditionsCell.appendChild(subTable);
                     } else {
                         conditionsCell.innerText = '—';
                     }
 
-                    // Действия
                     const actionsCell = row.insertCell(5);
                     if (trigger.responses.length > 0) {
                         const subTable = document.createElement('table');
                         subTable.className = 'sub-table';
                         trigger.responses.forEach(resp => {
                             const subRow = subTable.insertRow();
-                            const isServerValue = resp.device_name === 'Числовое значение';
-                            const displayValue = isServerValue
-                                ? `🖥️ ${resp.command}: ${resp.value || '—'}`
-                                : `${resp.device_name}: ${resp.command} ${resp.value || '—'}`;
-                            subRow.insertCell(0).innerHTML = displayValue;
+                            const typeDisplayName = getTypeDisplayName(resp.device_type_id);
+                            const deviceLabel = `${resp.device_name} (${typeDisplayName})`;
+                            subRow.insertCell(0).innerHTML = `
+                                <strong>${deviceLabel}</strong><br>
+                                <small>⚡ ${resp.command}: ${resp.value || '—'}</small>
+                            `;
                         });
                         actionsCell.appendChild(subTable);
                     } else {
                         actionsCell.innerText = '—';
                     }
 
-                    // Кнопки управления
                     const actionCell = row.insertCell(6);
                     const editBtn = document.createElement('button');
                     editBtn.innerText = '✏️';
@@ -928,12 +804,12 @@
                     actionCell.appendChild(delBtn);
                 });
             } catch (error) {
-                console.error('Ошибка загрузки триггеров:', error);
+                console.error('Error loading triggers:', error);
                 showToast('❌ Ошибка загрузки сценариев');
             }
         }
 
-        // ============= СОЗДАНИЕ И РЕДАКТИРОВАНИЕ =============
+        // ============ СОЗДАНИЕ И РЕДАКТИРОВАНИЕ ============
 
         async function showCreateModal() {
             currentEditId = null;
@@ -943,16 +819,15 @@
             document.getElementById('dstController').value = '';
             document.getElementById('conditionsContainer').innerHTML = '';
             document.getElementById('actionsContainer').innerHTML = '';
-            document.getElementById('serverActionSection').style.display = 'none';
-            document.getElementById('serverActionType').value = '';
 
+            await loadDeviceTypes();
             await loadControllers();
 
             document.getElementById('srcController').onchange = onSrcControllerChange;
             document.getElementById('dstController').onchange = onDstControllerChange;
 
             await addCondition();
-            await initAction();
+            await addAction();
 
             document.getElementById('triggerModal').classList.add('active');
         }
@@ -962,26 +837,14 @@
             document.getElementById('modalTitle').innerText = '✏️ Редактировать сценарий';
             document.getElementById('triggerName').value = trigger.name;
 
+            await loadDeviceTypes();
             await loadControllers();
 
             document.getElementById('srcController').onchange = onSrcControllerChange;
             document.getElementById('dstController').onchange = onDstControllerChange;
 
-            // Устанавливаем выбранные контроллеры
-            const srcController = controllersList.find(c => c.name === trigger.src_controller_name);
-            const dstController = controllersList.find(c => c.name === trigger.dst_controller_name);
-
-            if (srcController) {
-                document.getElementById('srcController').value = srcController.id;
-            }
-            if (dstController) {
-                document.getElementById('dstController').value = dstController.id;
-            }
-
-            // Показываем секцию сервера если нужно
-            if (dstController && dstController.is_server) {
-                document.getElementById('serverActionSection').style.display = 'block';
-            }
+            document.getElementById('srcController').value = trigger.src_controller_id;
+            document.getElementById('dstController').value = trigger.dst_controller_id;
 
             await onSrcControllerChange();
             await onDstControllerChange();
@@ -991,10 +854,15 @@
                 await addCondition(cond);
             }
 
-            await initAction(trigger.responses[0] || null);
+            document.getElementById('actionsContainer').innerHTML = '';
+            for (const resp of trigger.responses) {
+                await addAction(resp);
+            }
 
             document.getElementById('triggerModal').classList.add('active');
         }
+
+        // ============ СОХРАНЕНИЕ ТРИГГЕРА ============
 
         async function saveTrigger() {
             const name = document.getElementById('triggerName').value;
@@ -1006,7 +874,6 @@
                 return;
             }
 
-            // Собираем условия
             const conditions = [];
             document.querySelectorAll('.condition-block').forEach(block => {
                 const deviceId = block.querySelector('.condition-device').value;
@@ -1023,24 +890,12 @@
                 }
             });
 
-            // Собираем действие
-            const actionBlock = document.querySelector('.action-block');
             const responses = [];
-
-            if (actionBlock) {
-                const deviceId = actionBlock.querySelector('.action-device').value;
-                let command = actionBlock.querySelector('.action-command').value;
-                const valueInput = actionBlock.querySelector('.action-value');
-                let value = valueInput ? valueInput.value : '';
-
-                // Если выбран сервер, берем действие из отдельного селекта
-                if (dstControllerId == SERVER_CONTROLLER_ID) {
-                    const serverAction = document.getElementById('serverActionType').value;
-                    if (serverAction) {
-                        command = serverAction;
-                        value = '0';
-                    }
-                }
+            document.querySelectorAll('.action-block').forEach(block => {
+                const deviceId = block.querySelector('.action-device').value;
+                const command = block.querySelector('.action-command').value;
+                const valueInput = block.querySelector('.action-value');
+                const value = valueInput ? valueInput.value : '';
 
                 if (deviceId && command) {
                     responses.push({
@@ -1049,7 +904,7 @@
                         value: value
                     });
                 }
-            }
+            });
 
             if (conditions.length === 0) {
                 showToast('❌ Добавьте хотя бы одно условие');
@@ -1057,28 +912,8 @@
             }
 
             if (responses.length === 0) {
-                showToast('❌ Добавьте действие');
+                showToast('❌ Добавьте хотя бы одно действие');
                 return;
-            }
-
-            // Если выбран сервер, формируем специальную структуру для trig_response
-            if (dstControllerId == SERVER_CONTROLLER_ID) {
-                const srcController = controllersList.find(c => c.id == srcControllerId);
-                const srcDevice = document.querySelector('.condition-device');
-                const srcDeviceId = srcDevice ? srcDevice.value : null;
-                const srcDeviceObj = await getDeviceById(srcDeviceId);
-
-                // Формируем строку: serv/мак_адрес_отправителя/тип_устройства/порт/0/действие
-                if (srcController && srcDeviceObj) {
-                    const serverCommand = responses[0].command; // addOne или minusOne
-                    const deviceType = srcDeviceObj.type_name || 'unknown';
-                    const devicePort = srcDeviceObj.port || '0';
-
-                    // Формируем специальную команду для сервера
-                    const serverResp = `serv/${srcController.mac}/${deviceType}/${devicePort}/0/${serverCommand}`;
-                    responses[0].command = serverResp;
-                    responses[0].value = '';
-                }
             }
 
             const data = {
@@ -1104,30 +939,17 @@
                     closeModal();
                     loadTriggers();
                     devicesCache = {};
-                    commandsCache = {};
-                    deviceTypesCache = {};
                 } else {
                     const error = await response.json();
                     showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
                 }
             } catch (error) {
-                console.error('Ошибка сохранения:', error);
+                console.error('Error saving trigger:', error);
                 showToast('❌ Ошибка сохранения сценария');
             }
         }
 
-        // Вспомогательная функция для получения устройства по ID
-        async function getDeviceById(deviceId) {
-            if (!deviceId) return null;
-
-            // Ищем во всех контроллерах
-            for (const controllerId in devicesCache) {
-                const device = devicesCache[controllerId].find(d => d.id == deviceId);
-                if (device) return device;
-            }
-
-            return null;
-        }
+        // ============ УДАЛЕНИЕ ТРИГГЕРА ============
 
         async function deleteTrigger(triggerId) {
             if (!confirm('Удалить сценарий? Это действие нельзя отменить.')) return;
@@ -1141,12 +963,12 @@
                     showToast('❌ Ошибка удаления');
                 }
             } catch (error) {
-                console.error('Ошибка удаления:', error);
+                console.error('Error deleting trigger:', error);
                 showToast('❌ Ошибка удаления сценария');
             }
         }
 
-        // ============= ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =============
+        // ============ ВСПОМОГАТЕЛЬНЫЕ ============
 
         function goBack() {
             window.location.href = '/';
@@ -1163,7 +985,9 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
-        // Инициализация
+        // ============ ИНИЦИАЛИЗАЦИЯ ============
+
+        loadDeviceTypes();
         loadTriggers();
     </script>
 </body>
