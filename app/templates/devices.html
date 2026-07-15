@@ -639,20 +639,160 @@
             });
             if (hasError) return;
 
+            // ============ ПРОВЕРКА ЗАНЯТОСТИ ПОРТОВ ============
+            try {
+                // 1. Получаем все устройства текущего контроллера
+                const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const existingDevices = await response.json();
+
+                // 2. Собираем все порты из существующих устройств
+                const usedPorts = [];
+
+                existingDevices.forEach(device => {
+                    // Основной порт
+                    if (device.port && device.port.trim() !== '') {
+                        usedPorts.push(device.port.trim());
+                    }
+
+                    // Парсим параметры устройства
+                    if (device.params) {
+                        try {
+                            const params = typeof device.params === 'string'
+                                ? JSON.parse(device.params)
+                                : device.params;
+
+                            // Ищем все поля, которые могут быть портами (port, port2, port3 и т.д.)
+                            for (const [key, value] of Object.entries(params)) {
+                                if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
+                                    usedPorts.push(value.trim());
+                                }
+                            }
+                        } catch (e) {
+                            // Если не JSON, игнорируем
+                        }
+                    }
+                });
+
+                console.log('[Port Check] Used ports:', usedPorts);
+
+                // 3. Собираем выбранные порты из формы
+                const selectedPorts = [];
+
+                // Основной порт
+                const mainPortInput = document.getElementById('devicePort');
+                if (mainPortInput && mainPortInput.value.trim() !== '') {
+                    selectedPorts.push(mainPortInput.value.trim());
+                }
+
+                // Динамические поля (параметры)
+                const dynamicInputs = document.querySelectorAll('.dynamic-input');
+                dynamicInputs.forEach(input => {
+                    const value = input.value.trim();
+                    if (!value) return;
+
+                    const paramKey = input.dataset.paramKey || '';
+                    // Проверяем, является ли это портом (port, port2, port3 и т.д.)
+                    if (paramKey.toLowerCase().includes('port') ||
+                        input.closest('.form-group')?.querySelector('label')?.textContent?.toLowerCase().includes('порт')) {
+                        selectedPorts.push(value);
+                    }
+                });
+
+                // Дополнительно проверяем параметры из поля deviceParams (если оно видимо)
+                const paramsInput = document.getElementById('deviceParams');
+                if (paramsInput && paramsInput.value.trim() !== '') {
+                    try {
+                        const extraParams = JSON.parse(paramsInput.value.trim());
+                        for (const [key, value] of Object.entries(extraParams)) {
+                            if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
+                                selectedPorts.push(value.trim());
+                            }
+                        }
+                    } catch (e) {
+                        // Если не JSON - игнорируем
+                    }
+                }
+
+                console.log('[Port Check] Selected ports:', selectedPorts);
+
+                // 4. Проверяем пересечение
+                const duplicatePorts = selectedPorts.filter(port => usedPorts.includes(port));
+
+                if (duplicatePorts.length > 0) {
+                    const uniqueDuplicates = [...new Set(duplicatePorts)];
+                    const portsList = uniqueDuplicates.join(', ');
+                    showToast(`❌ Порт(ы) уже заняты: ${portsList}`);
+
+                    // Подсвечиваем конфликтующие поля
+                    const allInputs = document.querySelectorAll('input[type="text"], input[type="number"]');
+                    allInputs.forEach(input => {
+                        const value = input.value.trim();
+                        if (value && uniqueDuplicates.includes(value)) {
+                            input.style.borderColor = '#ef4444';
+                            input.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+                            setTimeout(() => {
+                                input.style.borderColor = '';
+                                input.style.boxShadow = '';
+                            }, 3000);
+                        }
+                    });
+
+                    return;
+                }
+
+                console.log('[Port Check] ✅ All ports are available');
+
+            } catch (error) {
+                console.error('[Port Check] Error checking ports:', error);
+                showToast('⚠️ Ошибка проверки портов, продолжаем сохранение...');
+            }
+
+            // ============ СОХРАНЕНИЕ ============
+
             // Собираем параметры
-            const { port, params } = buildDeviceParamsForSave();
+            const collectedParams = collectDeviceParams();
+            const port = collectedParams.port || '';
+
+            // Убираем port из параметров
+            const { port: _, ...restParams } = collectedParams;
+
+            // Формируем params для сохранения
+            let paramsForSave = {};
+
+            // Если есть дополнительные параметры
+            if (Object.keys(restParams).length > 0) {
+                // Собираем все параметры в объект
+                Object.keys(restParams).forEach(key => {
+                    const value = restParams[key];
+                    if (value) {
+                        paramsForSave[key] = value;
+                    }
+                });
+            }
+
+            // Добавляем дополнительные параметры из поля (если оно не скрыто)
+            const paramsInput = document.getElementById('deviceParams');
+            if (paramsInput && paramsInput.style.display !== 'none' && paramsInput.value.trim()) {
+                try {
+                    const extra = JSON.parse(paramsInput.value.trim());
+                    Object.assign(paramsForSave, extra);
+                } catch (e) {
+                    // Если не JSON - игнорируем
+                }
+            }
+
+            const payload = {
+                name: name,
+                controller_id: parseInt(currentControllerId),
+                type_id: parseInt(typeId),
+                port: port || '',
+                params: JSON.stringify(paramsForSave)
+            };
+
+            console.log('[Save] Payload:', payload);
 
             try {
-                const payload = {
-                    name: name,
-                    controller_id: parseInt(currentControllerId),
-                    type_id: parseInt(typeId),
-                    port: port || '',
-                    params: params || '{}'
-                };
-
-                console.log('[Save] Payload:', payload);
-
                 const response = await fetch('/api/devices', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -668,6 +808,8 @@
                     document.getElementById('deviceName').value = '';
                     document.getElementById('deviceTypeId').value = '';
                     document.getElementById('dynamicFieldsContainer').innerHTML = '';
+                    document.getElementById('devicePort').value = '';
+                    document.getElementById('deviceParams').value = '';
                     currentDeviceParams = {};
                 } else {
                     const error = await response.json();
@@ -676,6 +818,61 @@
             } catch (error) {
                 console.error('Ошибка сохранения:', error);
                 showToast('❌ Ошибка сохранения устройства');
+            }
+        }
+
+        // Вспомогательная функция для извлечения всех портов из устройства
+        function extractAllPortsFromDevice(device) {
+            const ports = [];
+
+            // Основной порт
+            if (device.port && device.port.trim() !== '') {
+                ports.push(device.port.trim());
+            }
+
+            // Параметры
+            if (device.params) {
+                try {
+                    const params = typeof device.params === 'string'
+                        ? JSON.parse(device.params)
+                        : device.params;
+
+                    for (const [key, value] of Object.entries(params)) {
+                        // Проверяем поля, содержащие "port"
+                        if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
+                            ports.push(value.trim());
+                        }
+                    }
+                } catch (e) {
+                    // Игнорируем ошибки парсинга
+                }
+            }
+
+            return ports;
+        }
+
+        // Функция для проверки занятости портов
+        async function checkPortsAvailability(selectedPorts) {
+            try {
+                const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const existingDevices = await response.json();
+
+                const usedPorts = [];
+                existingDevices.forEach(device => {
+                    const ports = extractAllPortsFromDevice(device);
+                    usedPorts.push(...ports);
+                });
+
+                const duplicatePorts = selectedPorts.filter(port => usedPorts.includes(port));
+                return {
+                    available: duplicatePorts.length === 0,
+                    duplicatePorts: [...new Set(duplicatePorts)],
+                    usedPorts: [...new Set(usedPorts)]
+                };
+            } catch (error) {
+                console.error('Error checking ports:', error);
+                return { available: true, duplicatePorts: [], usedPorts: [] };
             }
         }
 

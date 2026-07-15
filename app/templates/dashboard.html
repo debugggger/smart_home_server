@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Умный дом - Панель управления</title>
+
+    <!-- Подключаем глобальные уведомления -->
+    <link rel="stylesheet" href="/static/css/notifications.css">
+
     <style>
+        /* ===== ОСНОВНЫЕ СТИЛИ ===== */
         * {
             margin: 0;
             padding: 0;
@@ -103,23 +108,7 @@
             font-weight: 500;
         }
 
-        .debug-info {
-            background: #f1f5f9;
-            padding: 8px 12px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-family: monospace;
-            font-size: 12px;
-            color: #475569;
-            max-height: 80px;
-            overflow-y: auto;
-        }
-
-        .debug-info .time {
-            color: #94a3b8;
-            margin-right: 8px;
-        }
-
+        /* ===== КАРТОЧКИ УСТРОЙСТВ ===== */
         .room-section {
             margin-bottom: 30px;
         }
@@ -165,6 +154,7 @@
             padding: 20px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
         }
 
         .device-card:hover {
@@ -453,134 +443,6 @@
             margin-bottom: 15px;
         }
 
-        /* ===== УВЕДОМЛЕНИЯ (TOAST) ===== */
-        .toast-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column-reverse;
-            gap: 10px;
-            max-width: 420px;
-            width: 100%;
-            max-height: 80vh;
-            overflow-y: auto;
-            padding: 10px;
-            pointer-events: none;
-        }
-
-        .toast-container .toast {
-            pointer-events: auto;
-            background: white;
-            border-radius: 12px;
-            padding: 14px 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            animation: slideIn 0.3s ease;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            transition: opacity 0.3s, transform 0.3s;
-        }
-
-        .toast-container .toast.type-ok {
-            border-left: 4px solid #10b981;
-        }
-
-        .toast-container .toast.type-error {
-            border-left: 4px solid #ef4444;
-        }
-
-        .toast-container .toast.type-warning {
-            border-left: 4px solid #f59e0b;
-        }
-
-        .toast-container .toast .toast-icon {
-            font-size: 20px;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .toast-container .toast .toast-icon.ok {
-            color: #10b981;
-        }
-
-        .toast-container .toast .toast-icon.error {
-            color: #ef4444;
-        }
-
-        .toast-container .toast .toast-icon.warning {
-            color: #f59e0b;
-        }
-
-        .toast-container .toast .toast-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .toast-container .toast .toast-message {
-            font-size: 14px;
-            color: #1e2a3a;
-            word-wrap: break-word;
-        }
-
-        .toast-container .toast .toast-details {
-            font-size: 12px;
-            color: #64748b;
-            margin-top: 4px;
-            padding-left: 4px;
-        }
-
-        .toast-container .toast .toast-close {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            color: #94a3b8;
-            padding: 0 4px;
-            flex-shrink: 0;
-            transition: color 0.2s;
-        }
-
-        .toast-container .toast .toast-close:hover {
-            color: #475569;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .toast-counter {
-            position: fixed;
-            bottom: 20px;
-            right: 30px;
-            background: #ef4444;
-            color: white;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 700;
-            z-index: 9998;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(239, 68, 68, 0.4);
-            transition: transform 0.2s;
-        }
-
-        .toast-counter:hover {
-            transform: scale(1.1);
-        }
-
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -599,20 +461,6 @@
                 order: -1;
                 justify-content: center;
             }
-            .toast-container {
-                max-width: 100%;
-                bottom: 10px;
-                right: 10px;
-                padding: 5px;
-            }
-            .toast-container .toast {
-                padding: 12px 14px;
-                font-size: 13px;
-            }
-            .debug-info {
-                font-size: 10px;
-                max-height: 60px;
-            }
         }
     </style>
 </head>
@@ -621,7 +469,7 @@
         <div class="header">
             <h1>🏠 Умный дом - панель управления</h1>
             <div class="header-buttons">
-                <div class="connection-status" id="connectionStatus">
+                <div class="connection-status">
                     <span class="status-dot offline" id="statusDot"></span>
                     <span class="status-text" id="statusText">Отключено</span>
                 </div>
@@ -630,179 +478,29 @@
             </div>
         </div>
 
-        <div class="debug-info" id="debugInfo">
-            <div><span class="time">⏱️</span> Инициализация страницы...</div>
-        </div>
-
         <div id="dashboardContent">
             <div class="loading">⏳ Загрузка устройств...</div>
         </div>
     </div>
 
-    <!-- Контейнер для уведомлений -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- Контейнер для уведомлений создается автоматически через notifications.js -->
+    <!-- Счетчик уведомлений также создается автоматически -->
 
-    <!-- Счетчик уведомлений -->
-    <div id="toastCounter" class="toast-counter" style="display: none;" onclick="showAllToasts()">0</div>
-
+    <script src="/static/js/notifications.js"></script>
     <script>
-        let eventSource = null;
+        // ============ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============
         let deviceTypesConfig = {};
         let deviceDataCache = {};
-        let unreadNotifications = 0;
-        const MAX_TOASTS = 10;
-        let isSSEConnected = false;
-        let connectionAttempts = 0;
-        const MAX_CONNECTION_ATTEMPTS = 5;
+        let notificationManager = window.notificationManager;
 
-        // ===== ОТЛАДКА =====
-        function debugLog(msg) {
-            const debug = document.getElementById('debugInfo');
-            if (debug) {
-                const time = new Date().toLocaleTimeString();
-                debug.innerHTML += `<div><span class="time">${time}</span> ${msg}</div>`;
-                debug.scrollTop = debug.scrollHeight;
-            }
-            console.log(`[DEBUG] ${msg}`);
-        }
+        // ============ ПОДПИСКА НА ОБНОВЛЕНИЯ ============
 
-        // ===== TOAST УВЕДОМЛЕНИЯ =====
-
-        function showToast(notification) {
-            const container = document.getElementById('toastContainer');
-
-            if (container.children.length >= MAX_TOASTS) {
-                const lastToast = container.lastElementChild;
-                if (lastToast) {
-                    lastToast.remove();
-                }
-            }
-
-            const type = notification.type || 'info';
-            const message = notification.message || 'Уведомление';
-            const details = notification.data || {};
-
-            const toast = document.createElement('div');
-            toast.className = `toast type-${type}`;
-
-            const iconMap = {
-                'ok': '✅',
-                'error': '❌',
-                'warning': '⚠️'
-            };
-
-            const iconClassMap = {
-                'ok': 'ok',
-                'error': 'error',
-                'warning': 'warning'
-            };
-
-            let detailsHtml = '';
-            if (details.devices && details.devices.length > 0) {
-                detailsHtml = '<div class="toast-details">';
-                details.devices.forEach(d => {
-                    const name = d.device_name || d.name || 'Устройство';
-                    const typeInfo = d.device_type || d.type || '';
-                    const port = d.port || '';
-                    detailsHtml += `• ${name}${typeInfo ? ` (${typeInfo})` : ''}${port ? `, порт: ${port}` : ''}<br>`;
-                });
-                detailsHtml += '</div>';
-            }
-
-            toast.innerHTML = `
-                <span class="toast-icon ${iconClassMap[type] || 'info'}">${iconMap[type] || 'ℹ️'}</span>
-                <div class="toast-content">
-                    <div class="toast-message">${escapeHtml(message)}</div>
-                    ${detailsHtml}
-                </div>
-                <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
-            `;
-
-            container.prepend(toast);
-
-            if (type === 'error' || type === 'warning') {
-                unreadNotifications++;
-                updateToastCounter();
-            }
-
-            if (type === 'ok') {
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        toast.remove();
-                    }
-                }, 5000);
-            }
-        }
-
-        function updateToastCounter() {
-            const counter = document.getElementById('toastCounter');
-            if (unreadNotifications > 0) {
-                counter.textContent = unreadNotifications;
-                counter.style.display = 'flex';
-            } else {
-                counter.style.display = 'none';
-            }
-        }
-
-        function showAllToasts() {
-            const container = document.getElementById('toastContainer');
-            container.scrollTop = 0;
-            unreadNotifications = 0;
-            updateToastCounter();
-        }
-
-        // ===== SSE (Server-Sent Events) =====
-
-        function connectSSE() {
-            connectionAttempts++;
-            debugLog('🔌 Подключение к SSE... (попытка ' + connectionAttempts + '/' + MAX_CONNECTION_ATTEMPTS + ')');
-
-            try {
-                if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
-                }
-
-                const url = '/api/sse/events';
-                eventSource = new EventSource(url);
-
-                eventSource.onopen = function(event) {
-                    connectionAttempts = 0;
-                    isSSEConnected = true;
-                    debugLog('✅ SSE подключен');
-                    document.getElementById('statusDot').className = 'status-dot online';
-                    document.getElementById('statusText').textContent = 'Подключено';
-                };
-
-                eventSource.onerror = function(event) {
-                    isSSEConnected = false;
-                    debugLog('❌ Ошибка SSE');
-                    document.getElementById('statusDot').className = 'status-dot error';
-                    document.getElementById('statusText').textContent = 'Ошибка';
-
-                    if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
-                        setTimeout(() => {
-                            debugLog('🔄 Попытка переподключения SSE...');
-                            connectSSE();
-                        }, 3000);
-                    } else {
-                        debugLog('❌ Превышено количество попыток подключения к SSE');
-                    }
-                };
-
-                // ============= ОБРАБОТЧИКИ СОБЫТИЙ =============
-
-                // 1. Обработчик уведомлений
-                eventSource.addEventListener('notification', function(event) {
-                    const data = JSON.parse(event.data);
-                    debugLog('📢 Уведомление: ' + (data.type || 'info'));
-
-                    showToast({
-                        type: data.type || 'info',
-                        message: data.message || 'Уведомление',
-                        data: data.data || {}
-                    });
-
+        document.addEventListener('DOMContentLoaded', function() {
+            // Подписываемся на уведомления
+            if (notificationManager) {
+                notificationManager.addListener('notification', function(data) {
+                    console.log('[Dashboard] Уведомление:', data);
+                    // Обновляем данные если нужно
                     if (data.type === 'error' || data.type === 'ok') {
                         if (data.data && data.data.devices) {
                             setTimeout(loadAllData, 500);
@@ -810,67 +508,46 @@
                     }
                 });
 
-                // 2. Обработчик обновления значений устройств (UPD_VAL_DEVICE)
-                eventSource.addEventListener('device_updated', function(event) {
-                    const data = JSON.parse(event.data);
-                    debugLog('📡 Обновление значений устройства: ' + data.device_id);
+                notificationManager.addListener('device_updated', function(data) {
+                    console.log('[Dashboard] Обновление значений:', data);
                     handleDeviceValueUpdate(data);
                 });
 
-                // 3. Обработчик обновления статуса устройств (UPD_STATUS_DEVICE)
-                eventSource.addEventListener('device_status_update', function(event) {
-                    const data = JSON.parse(event.data);
-                    debugLog('📡 Обновление статуса устройства: ' + data.device_id);
+                notificationManager.addListener('device_status_update', function(data) {
+                    console.log('[Dashboard] Обновление статуса:', data);
                     handleDeviceStatusUpdate(data);
                 });
 
-                // 4. Обработчик массового обновления статуса
-                eventSource.addEventListener('devices_status_bulk_update', function(event) {
-                    const data = JSON.parse(event.data);
-                    debugLog('📡 Массовое обновление статуса: ' + (data.updates ? data.updates.length : 0) + ' устройств');
-                    const updates = data.updates || [];
-                    updates.forEach(update => {
-                        handleDeviceStatusUpdate(update);
-                    });
-                });
-
-                // 5. Обработчик ping (keep-alive)
-                eventSource.addEventListener('ping', function(event) {
-                    // Просто поддерживаем соединение
-                });
-
-                // 6. Обработчик connected (приветствие)
-                eventSource.addEventListener('connected', function(event) {
-                    const data = JSON.parse(event.data);
-                    debugLog('✅ SSE соединение установлено: ' + data.client_id);
-                });
-
-                window.addEventListener('beforeunload', function() {
-                    if (eventSource) {
-                        eventSource.close();
-                        debugLog('🔌 SSE соединение закрыто');
+                notificationManager.addListener('connection_status', function(status) {
+                    console.log('[Dashboard] Статус соединения:', status);
+                    const dot = document.getElementById('statusDot');
+                    const text = document.getElementById('statusText');
+                    if (dot && text) {
+                        dot.className = `status-dot ${status}`;
+                        const statusMap = {
+                            'online': 'Подключено',
+                            'offline': 'Отключено',
+                            'error': 'Ошибка'
+                        };
+                        text.textContent = statusMap[status] || 'Неизвестно';
                     }
                 });
-
-            } catch (error) {
-                debugLog('❌ Ошибка инициализации SSE: ' + error.message);
-                document.getElementById('statusDot').className = 'status-dot error';
-                document.getElementById('statusText').textContent = 'Ошибка';
             }
-        }
 
-        // ===== ОБРАБОТКА ОБНОВЛЕНИЙ =====
+            // Загружаем данные
+            loadAllData();
+        });
+
+        // ============ ОБРАБОТКА ОБНОВЛЕНИЙ ============
 
         function handleDeviceStatusUpdate(data) {
             const deviceId = data.device_id;
             const isOnline = data.is_online;
 
-            // Обновляем кеш
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].is_online = isOnline;
             }
 
-            // Обновляем карточку устройства
             updateDeviceCardStatus(deviceId, isOnline);
         }
 
@@ -878,14 +555,14 @@
             const deviceId = data.device_id;
             const currentValues = data.current_values;
 
-            // Обновляем кеш
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].current_values = currentValues;
             }
 
-            // Обновляем значения в карточке
             updateDeviceCardValues(deviceId, currentValues);
         }
+
+        // ============ ОБНОВЛЕНИЕ КАРТОЧЕК ============
 
         function updateDeviceCardStatus(deviceId, isOnline) {
             const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
@@ -977,10 +654,8 @@
                         const displayValue = getDisplayValue(reading, currentValues, config.returning_values);
                         const oldValue = valueElement.textContent;
                         const newValue = String(displayValue);
-
                         if (oldValue !== newValue) {
                             valueElement.textContent = newValue;
-                            // Анимация обновления
                             item.classList.add('updating');
                             setTimeout(() => item.classList.remove('updating'), 500);
                         }
@@ -989,7 +664,7 @@
             });
         }
 
-        // ===== ЗАГРУЗКА ДАННЫХ =====
+        // ============ ЗАГРУЗКА ДАННЫХ ============
 
         async function loadDeviceTypes() {
             try {
@@ -1047,19 +722,20 @@
         }
 
         async function loadAllData() {
-            debugLog('🔄 Загрузка данных...');
+            console.log('[Dashboard] Загрузка данных...');
             const startTime = Date.now();
             await loadDeviceTypes();
             await loadDevices();
             const elapsed = Date.now() - startTime;
-            debugLog(`✅ Данные загружены за ${elapsed}мс`);
+            console.log(`[Dashboard] Данные загружены за ${elapsed}мс`);
         }
 
         function forceRefresh() {
+            console.log('[Dashboard] Принудительное обновление');
             loadAllData();
         }
 
-        // ===== ПОЛУЧЕНИЕ ЗНАЧЕНИЙ =====
+        // ============ ПОЛУЧЕНИЕ ЗНАЧЕНИЙ ============
 
         function getDisplayValue(readingCommand, currentValues, returningValues) {
             if (!currentValues || !Array.isArray(currentValues)) return '—';
@@ -1079,7 +755,7 @@
             return value;
         }
 
-        // ===== ОТПРАВКА КОМАНД =====
+        // ============ ОТПРАВКА КОМАНД ============
 
         async function sendCommand(device, command, value = null) {
             try {
@@ -1097,23 +773,30 @@
                 });
 
                 if (response.ok) {
-                    showToast({
-                        type: 'ok',
-                        message: `✅ Команда "${command.display_name}" отправлена на ${device.name}`
-                    });
+                    // Уведомление будет показано через глобальную систему
+                    if (notificationManager) {
+                        notificationManager.showToast({
+                            type: 'ok',
+                            message: `✅ Команда "${command.display_name}" отправлена на ${device.name}`
+                        });
+                    }
                     return await response.json();
                 } else {
                     const error = await response.json();
-                    showToast({
-                        type: 'error',
-                        message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
-                    });
+                    if (notificationManager) {
+                        notificationManager.showToast({
+                            type: 'error',
+                            message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
+                        });
+                    }
                 }
             } catch (error) {
-                showToast({
-                    type: 'error',
-                    message: `❌ Ошибка: ${error.message}`
-                });
+                if (notificationManager) {
+                    notificationManager.showToast({
+                        type: 'error',
+                        message: `❌ Ошибка: ${error.message}`
+                    });
+                }
             }
         }
 
@@ -1123,10 +806,12 @@
                 sendCommand(device, command, value);
                 inputElement.value = '';
             } else {
-                showToast({
-                    type: 'warning',
-                    message: '❌ Введите значение'
-                });
+                if (notificationManager) {
+                    notificationManager.showToast({
+                        type: 'warning',
+                        message: '❌ Введите значение'
+                    });
+                }
             }
         }
 
@@ -1134,7 +819,7 @@
             sendCommand(device, command, checkbox.checked ? 1 : 0);
         }
 
-        // ===== ОТОБРАЖЕНИЕ =====
+        // ============ ОТОБРАЖЕНИЕ ============
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -1147,176 +832,160 @@
         }
 
         function renderDashboard(rooms) {
-    const container = document.getElementById('dashboardContent');
+            const container = document.getElementById('dashboardContent');
 
-    if (Object.keys(rooms).length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="icon">📭</div>
-                <p>Нет устройств в системе</p>
-            </div>
-        `;
-        return;
-    }
-
-    let html = '';
-
-    for (const [roomName, devices] of Object.entries(rooms)) {
-        html += `
-            <div class="room-section">
-                <div class="room-header">
-                    <span class="room-icon">🏠</span>
-                    <h2>${escapeHtml(roomName)}</h2>
-                    <span class="devices-count">${devices.length} устройств</span>
-                </div>
-                <div class="devices-grid">
-        `;
-
-        for (const device of devices) {
-            const isOnline = device.is_online !== undefined ? device.is_online : true;
-
-            // ✅ Правильно получаем конфиг
-            const config = deviceTypesConfig[device.type_id] || {
-                reading_commands: [],
-                sending_commands: { binary: [], numeric: [] },
-                returning_values: [],
-                param_names: {}
-            };
-
-            // ✅ Правильно извлекаем param_names из config
-            const paramNames = config.param_names || {};
-            const displayName = paramNames.display_name || device.type_name || 'Unknown';
-
-            const hasReadings = config.reading_commands && config.reading_commands.length > 0;
-            const hasBinary = config.sending_commands?.binary?.length > 0;
-            const hasNumeric = config.sending_commands?.numeric?.length > 0;
-
-            html += `
-                <div class="device-card ${isOnline ? '' : 'offline'}" data-device-id="${device.id}">
-                    <div class="device-header">
-                        <span class="device-name">
-                            ${escapeHtml(device.name)}
-                            ${!isOnline ? '<span class="offline-badge">OFFLINE</span>' : ''}
-                        </span>
-                        <span class="device-type">${escapeHtml(displayName)}</span>
+            if (Object.keys(rooms).length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📭</div>
+                        <p>Нет устройств в системе</p>
                     </div>
-                    <div class="device-info">
-                        <div class="info-row">
-                            <span class="info-label">Статус:</span>
-                            <span class="info-value ${isOnline ? 'status-online' : 'status-offline'}">
-                                <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
-                                ${isOnline ? 'Онлайн' : 'Офлайн'}
-                            </span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Контроллер:</span>
-                            <span class="info-value">${escapeHtml(device.controller_name || '—')}</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Порт:</span>
-                            <span class="info-value">${escapeHtml(device.port || '—')}</span>
-                        </div>
-                    </div>
-            `;
-
-            if (hasReadings) {
-                html += `
-                    <div class="readings-section">
-                        <div class="readings-title">📊 Показания</div>
                 `;
-                for (const reading of config.reading_commands) {
-                    const displayValue = getDisplayValue(reading, device.current_values, config.returning_values);
-                    html += `
-                        <div class="reading-item">
-                            <span class="reading-name">${escapeHtml(reading.display_name)}:</span>
-                            <span class="reading-value">${escapeHtml(String(displayValue))}</span>
-                        </div>
-                    `;
-                }
-                html += `</div>`;
+                return;
             }
 
-            if (hasBinary || hasNumeric) {
+            let html = '';
+
+            for (const [roomName, devices] of Object.entries(rooms)) {
                 html += `
-                    <div class="controls-section">
-                        <div class="controls-title">🎮 Управление</div>
-                        <div class="device-controls">
+                    <div class="room-section">
+                        <div class="room-header">
+                            <span class="room-icon">🏠</span>
+                            <h2>${escapeHtml(roomName)}</h2>
+                            <span class="devices-count">${devices.length} устройств</span>
+                        </div>
+                        <div class="devices-grid">
                 `;
 
-                if (hasBinary) {
-                    for (const cmd of config.sending_commands.binary) {
-                        const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
-                        const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
-                        html += `
-                            <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
-                                ${escapeHtml(cmd.display_name)}
-                            </button>
-                        `;
-                    }
-                }
+                for (const device of devices) {
+                    const isOnline = device.is_online !== undefined ? device.is_online : true;
+                    const config = deviceTypesConfig[device.type_id] || {
+                        reading_commands: [],
+                        sending_commands: { binary: [], numeric: [] },
+                        returning_values: []
+                    };
 
-                if (hasNumeric) {
-                    for (const cmd of config.sending_commands.numeric) {
-                        const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`.replace(/[^a-zA-Z0-9_]/g, '_');
-                        const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
-                        const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+                    const hasReadings = config.reading_commands && config.reading_commands.length > 0;
+                    const hasBinary = config.sending_commands?.binary?.length > 0;
+                    const hasNumeric = config.sending_commands?.numeric?.length > 0;
 
-                        if (cmd.dataType === 'boolT') {
-                            html += `
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                    <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
+                    html += `
+                        <div class="device-card ${isOnline ? '' : 'offline'}" data-device-id="${device.id}">
+                            <div class="device-header">
+                                <span class="device-name">
+                                    ${escapeHtml(device.name)}
+                                    ${!isOnline ? '<span class="offline-badge">OFFLINE</span>' : ''}
+                                </span>
+                                <span class="device-type">${escapeHtml(device.type_name || 'Unknown')}</span>
+                            </div>
+                            <div class="device-info">
+                                <div class="info-row">
+                                    <span class="info-label">Статус:</span>
+                                    <span class="info-value ${isOnline ? 'status-online' : 'status-offline'}">
+                                        <span class="device-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
+                                        ${isOnline ? 'Онлайн' : 'Офлайн'}
+                                    </span>
                                 </div>
-                            `;
-                        } else {
+                                <div class="info-row">
+                                    <span class="info-label">Контроллер:</span>
+                                    <span class="info-value">${escapeHtml(device.controller_name || '—')}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Порт:</span>
+                                    <span class="info-value">${escapeHtml(device.port || '—')}</span>
+                                </div>
+                            </div>
+                    `;
+
+                    if (hasReadings) {
+                        html += `
+                            <div class="readings-section">
+                                <div class="readings-title">📊 Показания</div>
+                        `;
+                        for (const reading of config.reading_commands) {
+                            const displayValue = getDisplayValue(reading, device.current_values, config.returning_values);
                             html += `
-                                <div class="numeric-input-group">
-                                    <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
-                                    <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))' ${!isOnline ? 'disabled' : ''}>
-                                        ${escapeHtml(cmd.display_name)}
-                                    </button>
+                                <div class="reading-item">
+                                    <span class="reading-name">${escapeHtml(reading.display_name)}:</span>
+                                    <span class="reading-value">${escapeHtml(String(displayValue))}</span>
                                 </div>
                             `;
                         }
+                        html += `</div>`;
                     }
-                }
 
+                    if (hasBinary || hasNumeric) {
+                        html += `
+                            <div class="controls-section">
+                                <div class="controls-title">🎮 Управление</div>
+                                <div class="device-controls">
+                        `;
+
+                        if (hasBinary) {
+                            for (const cmd of config.sending_commands.binary) {
+                                const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
+                                const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+                                html += `
+                                    <button class="control-btn" onclick='sendCommand(${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
+                                        ${escapeHtml(cmd.display_name)}
+                                    </button>
+                                `;
+                            }
+                        }
+
+                        if (hasNumeric) {
+                            for (const cmd of config.sending_commands.numeric) {
+                                const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`.replace(/[^a-zA-Z0-9_]/g, '_');
+                                const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
+                                const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+
+                                if (cmd.dataType === 'boolT') {
+                                    html += `
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
+                                        </div>
+                                    `;
+                                } else {
+                                    html += `
+                                        <div class="numeric-input-group">
+                                            <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
+                                            <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))' ${!isOnline ? 'disabled' : ''}>
+                                                ${escapeHtml(cmd.display_name)}
+                                            </button>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        }
+
+                        html += `</div></div>`;
+                    }
+
+                    html += `</div>`;
+                }
                 html += `</div></div>`;
             }
 
-            html += `</div>`;
+            container.innerHTML = html;
         }
-        html += `</div></div>`;
-    }
 
-    container.innerHTML = html;
-}
+        // ============ ИНИЦИАЛИЗАЦИЯ ============
 
-        // ===== ИНИЦИАЛИЗАЦИЯ =====
-
+        // Делаем функции глобальными для HTML
         window.sendCommand = sendCommand;
         window.sendNumericValue = sendNumericValue;
         window.onToggleChange = onToggleChange;
         window.forceRefresh = forceRefresh;
-        window.showAllToasts = showAllToasts;
 
-        debugLog('🚀 Старт инициализации...');
-
-        // 1. Сначала загружаем данные
-        loadAllData();
-
-        // 2. Затем подключаем SSE
-        setTimeout(() => {
-            connectSSE();
-        }, 100);
-
-        // 3. Автообновление через 30 секунд (как резервный вариант)
+        // Автообновление через 30 секунд (только если нет соединения)
         setInterval(() => {
-            if (!isSSEConnected) {
-                debugLog('🔄 Автообновление (SSE отключен)');
+            const statusDot = document.getElementById('statusDot');
+            if (statusDot && statusDot.classList.contains('offline')) {
+                console.log('[Dashboard] Автообновление (SSE отключен)');
                 loadAllData();
             }
         }, 30000);

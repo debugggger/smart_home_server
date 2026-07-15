@@ -27,7 +27,7 @@ class servMqtt:
         self.clientThread.start()
 
     def on_connect(self, client, userdata, flags, rc):
-        print("Соединение установлено с кодом результата: " + str(rc))
+        print("MQTT Соединение установлено с кодом результата: " + str(rc))
         if rc == 0:
             self.connected = True
             client.subscribe("serv/#")

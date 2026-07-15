@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Управление контроллерами - Умный дом</title>
-    <!-- Удален script src="https://cdn.socket.io/4.7.2/socket.io.min.js" -->
+    <link rel="stylesheet" href="/static/css/notifications.css">
     <style>
         * {
             margin: 0;
@@ -415,7 +415,39 @@
 
     <div id="toastMsg" class="toast-msg"></div>
 
+    <script src="/static/js/notifications.js"></script>
+
     <script>
+
+        // ============ ДОБАВИТЬ ПОДПИСКУ НА УВЕДОМЛЕНИЯ ============
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.notificationManager) {
+                // Подписка на уведомления
+                window.notificationManager.addListener('notification', function(data) {
+                    console.log('[Controllers] Уведомление:', data);
+                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS' ||
+                        data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE') {
+                        loadControllers();
+                    }
+                });
+
+                window.notificationManager.addListener('connection_status', function(status) {
+                    // Обновление статуса подключения
+                    const dot = document.getElementById('statusDot');
+                    const text = document.getElementById('statusText');
+                    if (dot && text) {
+                        dot.className = `status-dot ${status}`;
+                        const statusMap = {
+                            'online': 'Подключено',
+                            'offline': 'Отключено',
+                            'error': 'Ошибка'
+                        };
+                        text.textContent = statusMap[status] || 'Неизвестно';
+                    }
+                });
+            }
+        });
+
         let currentEditControllerId = null;
         let currentEditElement = null;
 
@@ -633,15 +665,12 @@
 
         // ===== ИНИЦИАЛИЗАЦИЯ =====
 
-        // Удален connectWebSocket()
-        console.log('🚀 Загрузка страницы без WebSocket...');
         loadControllers();
 
-        // Автообновление каждые 30 секунд
-        setInterval(() => {
-            console.log('🔄 Периодическое обновление...');
-            loadControllers();
-        }, 30000);
+<!--        setInterval(() => {-->
+<!--            console.log('🔄 Периодическое обновление...');-->
+<!--            loadControllers();-->
+<!--        }, 30000);-->
 
     </script>
 </body>

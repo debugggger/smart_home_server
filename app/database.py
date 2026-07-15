@@ -130,7 +130,6 @@ class Database:
         self._execute_query(query, (room_id,))
         return True
 
-
     def add_controller(self, controller: Controller) -> Optional[int]:
         query = """
             INSERT INTO controllers (mac, room_id, name) 

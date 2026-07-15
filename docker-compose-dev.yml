@@ -20,52 +20,6 @@ services:
       retries: 5
       start_period: 10s
 
-#  core-db:
-#    image: postgres:16
-#    container_name: smart_home_core_db
-#    environment:
-#      POSTGRES_DB: ${CORE_DB_NAME}
-#      POSTGRES_USER: ${CORE_DB_USER}
-#      POSTGRES_HOST_AUTH_METHOD: trust
-#      #POSTGRES_PASSWORD: ${CORE_DB_PASSWORD}  # Закомментировано, т.к. используем trust
-##    ports:
-##      - "${CORE_DB_PORT}:5432"
-#    volumes:
-#      - core_db_data:/var/lib/postgresql/data
-#      - ./init/init_core.sql:/docker-entrypoint-initdb.d/init.sql:ro
-#    networks:
-#      - smart_home_network
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U ${CORE_DB_USER} -d ${CORE_DB_NAME}"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 5
-#
-#  app-db:
-#    image: postgres:16
-#    container_name: smart_home_app_db
-#    environment:
-#      POSTGRES_DB: ${APP_DB_NAME}
-#      POSTGRES_USER: ${APP_DB_USER}
-#      POSTGRES_HOST_AUTH_METHOD: trust
-#      #POSTGRES_PASSWORD: ${APP_DB_PASSWORD}  # Закомментировано, т.к. используем trust
-##    ports:
-##      - "${APP_DB_PORT}:5432"
-#    volumes:
-##      - app_db_data:/var/lib/postgresql/data
-##      - ./init/init_app.sql:/docker-entrypoint-initdb.d/init_app.sql:ro
-#      - app_db_data:/var/lib/postgresql/data
-#      - ./init/init_app.sql:/docker-entrypoint-initdb.d/01-init_app.sql:ro
-#      - ./init/load_device_types.sql:/docker-entrypoint-initdb.d/02-load_device_types.sql:ro
-#      - ./init/device_types.json:/docker-entrypoint-initdb.d/device_types_data.json:ro
-#    networks:
-#      - smart_home_network
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME}"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 5
-
   kafka:
     image: apache/kafka
     container_name: smart_home_kafka

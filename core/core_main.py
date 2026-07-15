@@ -1,3 +1,4 @@
+import socket
 import sys
 import time
 from pathlib import Path
@@ -20,6 +21,8 @@ if __name__ == '__main__':
                   password=get_env_value('CORE_DB_PASSWORD', env_file))
 
     host, port = get_parsed_addr('ADDR_MQTT', env_file)
+    if host == 'localhost':
+        host = socket.gethostbyname(socket.gethostname())
     smqtt = servMqtt(host=host, port=port)
 
     smqtt.start()

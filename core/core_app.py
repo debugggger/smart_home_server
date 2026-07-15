@@ -47,6 +47,9 @@ class Core:
             if parts[1] == "changeVal":
                 self.parse_changes(parts)
             if parts[1] == "error":
+                # self.device_offline_status[device_id] = True
+                # self.kafka_handler.send_device_status(device_id, False)
+                self.kafka_handler.send_notification(f"Контроллер {parts[0]} ошибка {parts[1]}", 'error')
                 print(f"[Core Error] Ошибка в контроллере: {parts}")
             if parts[1] == "ok":
                 if parts[2] == "init":
