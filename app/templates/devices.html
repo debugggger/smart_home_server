@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Управление устройствами - Умный дом</title>
+
+    <!-- ✅ ДОБАВЛЕНО: Подключаем глобальные уведомления -->
+    <link rel="stylesheet" href="/static/css/notifications.css">
+
     <style>
         * {
             margin: 0;
@@ -41,6 +45,43 @@
             gap: 10px;
             align-items: center;
             flex-wrap: wrap;
+        }
+
+        /* ✅ ДОБАВЛЕНО: Индикатор статуса подключения */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .status-dot.online {
+            background-color: #10b981;
+        }
+
+        .status-dot.offline {
+            background-color: #ef4444;
+        }
+
+        .status-dot.error {
+            background-color: #f59e0b;
+        }
+
+        .status-text {
+            color: #475569;
+            font-weight: 500;
         }
 
         .back-btn, .add-btn {
@@ -339,6 +380,11 @@
                 <h1 id="pageTitle">📟 Устройства контроллера</h1>
             </div>
             <div class="header-buttons">
+                <!-- ✅ ДОБАВЛЕНО: Индикатор статуса подключения -->
+                <div class="connection-status">
+                    <span class="status-dot offline" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Отключено</span>
+                </div>
                 <button class="back-btn" onclick="goBack()">← Назад к контроллерам</button>
                 <button class="add-btn" onclick="showAddDeviceModal()">+ Добавить устройство</button>
             </div>
@@ -396,15 +442,16 @@
         </div>
     </div>
 
-    <div id="toastMsg" class="toast-msg"></div>
+    <!-- ✅ ДОБАВЛЕНО: Подключаем глобальные уведомления -->
+    <script src="/static/js/notifications.js"></script>
 
     <script>
         // ============ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============
         let currentControllerId = null;
         let currentControllerName = '';
-        let currentDeviceParams = {}; // Хранит текущие param_names.device_params для выбранного типа
+        let currentDeviceParams = {};
         let devicesData = {};
-        let deviceTypesList = []; // Полный список типов устройств
+        let deviceTypesList = [];
 
         // ============ ИНИЦИАЛИЗАЦИЯ ============
         currentControllerId = localStorage.getItem('selectedControllerId');
@@ -510,10 +557,8 @@
             const deviceParams = type.param_names?.device_params || {};
             currentDeviceParams = deviceParams;
 
-            // Создаём поля для каждого параметра
             const paramKeys = Object.keys(deviceParams);
             if (paramKeys.length === 0) {
-                // Если нет параметров — показываем сообщение
                 const div = document.createElement('div');
                 div.className = 'form-group';
                 div.innerHTML = `
@@ -531,7 +576,7 @@
 
                 const label = document.createElement('label');
                 const displayName = deviceParams[key] || key;
-                const isRequired = key === 'port'; // port всегда обязателен
+                const isRequired = key === 'port';
                 label.innerHTML = `${displayName} ${isRequired ? '<span class="field-required">*</span>' : ''}`;
                 div.appendChild(label);
 
@@ -543,14 +588,12 @@
                 input.dataset.required = isRequired;
                 input.placeholder = `Введите ${displayName.toLowerCase()}`;
 
-                // Если это порт — добавляем подсказку
                 if (key === 'port') {
                     input.placeholder = 'GPIO2, A0 и т.д.';
                 }
 
                 div.appendChild(input);
 
-                // Подсказка
                 const hint = document.createElement('span');
                 hint.className = 'field-hint';
                 hint.textContent = `Параметр "${key}"`;
@@ -571,7 +614,6 @@
                 }
             });
 
-            // Если есть fallback поле
             const fallback = document.getElementById('deviceParamsFallback');
             if (fallback && fallback.value) {
                 try {
@@ -590,15 +632,12 @@
             const collected = collectDeviceParams();
             const port = collected.port || '';
 
-            // Убираем port из параметров, если он есть
             const { port: _, ...restParams } = collected;
 
-            // Если есть только port — сохраняем как пустую строку
             if (Object.keys(restParams).length === 0) {
                 return { port: port, params: '' };
             }
 
-            // Объединяем остальные параметры через "/"
             const paramsStr = Object.values(restParams).join('/');
 
             return {
@@ -624,7 +663,6 @@
                 return;
             }
 
-            // Проверяем обязательные поля
             const requiredInputs = document.querySelectorAll('.dynamic-input[data-required="true"]');
             let hasError = false;
             requiredInputs.forEach(input => {
@@ -641,65 +679,55 @@
 
             // ============ ПРОВЕРКА ЗАНЯТОСТИ ПОРТОВ ============
             try {
-                // 1. Получаем все устройства текущего контроллера
                 const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const existingDevices = await response.json();
 
-                // 2. Собираем все порты из существующих устройств
                 const usedPorts = [];
 
                 existingDevices.forEach(device => {
-                    // Основной порт
                     if (device.port && device.port.trim() !== '') {
                         usedPorts.push(device.port.trim());
                     }
 
-                    // Парсим параметры устройства
                     if (device.params) {
                         try {
                             const params = typeof device.params === 'string'
                                 ? JSON.parse(device.params)
                                 : device.params;
 
-                            // Ищем все поля, которые могут быть портами (port, port2, port3 и т.д.)
                             for (const [key, value] of Object.entries(params)) {
                                 if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
                                     usedPorts.push(value.trim());
                                 }
                             }
                         } catch (e) {
-                            // Если не JSON, игнорируем
+                            // Игнорируем
                         }
                     }
                 });
 
                 console.log('[Port Check] Used ports:', usedPorts);
 
-                // 3. Собираем выбранные порты из формы
                 const selectedPorts = [];
 
-                // Основной порт
                 const mainPortInput = document.getElementById('devicePort');
                 if (mainPortInput && mainPortInput.value.trim() !== '') {
                     selectedPorts.push(mainPortInput.value.trim());
                 }
 
-                // Динамические поля (параметры)
                 const dynamicInputs = document.querySelectorAll('.dynamic-input');
                 dynamicInputs.forEach(input => {
                     const value = input.value.trim();
                     if (!value) return;
 
                     const paramKey = input.dataset.paramKey || '';
-                    // Проверяем, является ли это портом (port, port2, port3 и т.д.)
                     if (paramKey.toLowerCase().includes('port') ||
                         input.closest('.form-group')?.querySelector('label')?.textContent?.toLowerCase().includes('порт')) {
                         selectedPorts.push(value);
                     }
                 });
 
-                // Дополнительно проверяем параметры из поля deviceParams (если оно видимо)
                 const paramsInput = document.getElementById('deviceParams');
                 if (paramsInput && paramsInput.value.trim() !== '') {
                     try {
@@ -710,21 +738,28 @@
                             }
                         }
                     } catch (e) {
-                        // Если не JSON - игнорируем
+                        // Игнорируем
                     }
                 }
 
                 console.log('[Port Check] Selected ports:', selectedPorts);
 
-                // 4. Проверяем пересечение
                 const duplicatePorts = selectedPorts.filter(port => usedPorts.includes(port));
 
                 if (duplicatePorts.length > 0) {
                     const uniqueDuplicates = [...new Set(duplicatePorts)];
                     const portsList = uniqueDuplicates.join(', ');
-                    showToast(`❌ Порт(ы) уже заняты: ${portsList}`);
 
-                    // Подсвечиваем конфликтующие поля
+                    // ✅ ИСПОЛЬЗУЕМ ГЛОБАЛЬНЫЙ NOTIFICATION MANAGER
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'error',
+                            message: `Порт(ы) уже заняты: ${portsList}`
+                        });
+                    } else {
+                        showToast(`❌ Порт(ы) уже заняты: ${portsList}`);
+                    }
+
                     const allInputs = document.querySelectorAll('input[type="text"], input[type="number"]');
                     allInputs.forEach(input => {
                         const value = input.value.trim();
@@ -745,24 +780,26 @@
 
             } catch (error) {
                 console.error('[Port Check] Error checking ports:', error);
-                showToast('⚠️ Ошибка проверки портов, продолжаем сохранение...');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'warning',
+                        message: '⚠️ Ошибка проверки портов, продолжаем сохранение...'
+                    });
+                } else {
+                    showToast('⚠️ Ошибка проверки портов, продолжаем сохранение...');
+                }
             }
 
             // ============ СОХРАНЕНИЕ ============
 
-            // Собираем параметры
             const collectedParams = collectDeviceParams();
             const port = collectedParams.port || '';
 
-            // Убираем port из параметров
             const { port: _, ...restParams } = collectedParams;
 
-            // Формируем params для сохранения
             let paramsForSave = {};
 
-            // Если есть дополнительные параметры
             if (Object.keys(restParams).length > 0) {
-                // Собираем все параметры в объект
                 Object.keys(restParams).forEach(key => {
                     const value = restParams[key];
                     if (value) {
@@ -771,14 +808,13 @@
                 });
             }
 
-            // Добавляем дополнительные параметры из поля (если оно не скрыто)
             const paramsInput = document.getElementById('deviceParams');
             if (paramsInput && paramsInput.style.display !== 'none' && paramsInput.value.trim()) {
                 try {
                     const extra = JSON.parse(paramsInput.value.trim());
                     Object.assign(paramsForSave, extra);
                 } catch (e) {
-                    // Если не JSON - игнорируем
+                    // Игнорируем
                 }
             }
 
@@ -801,10 +837,18 @@
 
                 if (response.ok) {
                     closeModal('addDeviceModal');
-                    showToast('✅ Устройство добавлено');
+
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'ok',
+                            message: '✅ Устройство добавлено'
+                        });
+                    } else {
+                        showToast('✅ Устройство добавлено');
+                    }
+
                     loadDevices();
 
-                    // Сброс формы
                     document.getElementById('deviceName').value = '';
                     document.getElementById('deviceTypeId').value = '';
                     document.getElementById('dynamicFieldsContainer').innerHTML = '';
@@ -813,66 +857,25 @@
                     currentDeviceParams = {};
                 } else {
                     const error = await response.json();
-                    showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'error',
+                            message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
+                        });
+                    } else {
+                        showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                    }
                 }
             } catch (error) {
                 console.error('Ошибка сохранения:', error);
-                showToast('❌ Ошибка сохранения устройства');
-            }
-        }
-
-        // Вспомогательная функция для извлечения всех портов из устройства
-        function extractAllPortsFromDevice(device) {
-            const ports = [];
-
-            // Основной порт
-            if (device.port && device.port.trim() !== '') {
-                ports.push(device.port.trim());
-            }
-
-            // Параметры
-            if (device.params) {
-                try {
-                    const params = typeof device.params === 'string'
-                        ? JSON.parse(device.params)
-                        : device.params;
-
-                    for (const [key, value] of Object.entries(params)) {
-                        // Проверяем поля, содержащие "port"
-                        if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
-                            ports.push(value.trim());
-                        }
-                    }
-                } catch (e) {
-                    // Игнорируем ошибки парсинга
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: `❌ Ошибка: ${error.message}`
+                    });
+                } else {
+                    showToast(`❌ Ошибка: ${error.message}`);
                 }
-            }
-
-            return ports;
-        }
-
-        // Функция для проверки занятости портов
-        async function checkPortsAvailability(selectedPorts) {
-            try {
-                const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const existingDevices = await response.json();
-
-                const usedPorts = [];
-                existingDevices.forEach(device => {
-                    const ports = extractAllPortsFromDevice(device);
-                    usedPorts.push(...ports);
-                });
-
-                const duplicatePorts = selectedPorts.filter(port => usedPorts.includes(port));
-                return {
-                    available: duplicatePorts.length === 0,
-                    duplicatePorts: [...new Set(duplicatePorts)],
-                    usedPorts: [...new Set(usedPorts)]
-                };
-            } catch (error) {
-                console.error('Error checking ports:', error);
-                return { available: true, duplicatePorts: [], usedPorts: [] };
             }
         }
 
@@ -882,22 +885,50 @@
             try {
                 const response = await fetch(`/api/devices/${deviceId}`, { method: 'DELETE' });
                 if (response.ok) {
-                    showToast('✅ Устройство удалено');
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'ok',
+                            message: '✅ Устройство удалено'
+                        });
+                    } else {
+                        showToast('✅ Устройство удалено');
+                    }
                     delete devicesData[deviceId];
                     loadDevices();
                 } else {
-                    showToast('❌ Ошибка удаления');
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'error',
+                            message: '❌ Ошибка удаления'
+                        });
+                    } else {
+                        showToast('❌ Ошибка удаления');
+                    }
                 }
             } catch (error) {
                 console.error('Ошибка удаления:', error);
-                showToast('❌ Ошибка удаления');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: `❌ Ошибка: ${error.message}`
+                    });
+                } else {
+                    showToast(`❌ Ошибка: ${error.message}`);
+                }
             }
         }
 
         // ============ МОДАЛЬНЫЕ ОКНА ============
         function showAddDeviceModal() {
             if (!currentControllerId) {
-                showToast('❌ Контроллер не выбран');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Контроллер не выбран'
+                    });
+                } else {
+                    showToast('❌ Контроллер не выбран');
+                }
                 return;
             }
             document.getElementById('addDeviceModal').classList.add('active');
@@ -914,7 +945,7 @@
             window.location.href = '/controllers-page';
         }
 
-        // ============ УВЕДОМЛЕНИЯ ============
+        // ============ УВЕДОМЛЕНИЯ (FALLBACK) ============
         function showToast(msg) {
             const toast = document.getElementById('toastMsg');
             toast.textContent = msg;
@@ -932,6 +963,93 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        // ============ ✅ ДОБАВЛЕНО: ПОДПИСКА НА УВЕДОМЛЕНИЯ ============
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.notificationManager) {
+                // Подписка на уведомления
+                window.notificationManager.addListener('notification', function(data) {
+                    console.log('[Devices] Уведомление:', data);
+                    // Обновляем список устройств при изменении статуса
+                    if (data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE') {
+                        loadDevices();
+                    }
+                    // Обновляем список устройств при ошибке инициализации
+                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS') {
+                        loadDevices();
+                    }
+                });
+
+                // Подписка на обновление статуса
+                window.notificationManager.addListener('device_status_update', function(data) {
+                    console.log('[Devices] Обновление статуса устройства:', data);
+                    // Обновляем конкретное устройство в таблице
+                    updateDeviceStatusInTable(data.device_id, data.is_online);
+                });
+
+                // Подписка на обновление значений
+                window.notificationManager.addListener('device_updated', function(data) {
+                    console.log('[Devices] Обновление значений устройства:', data);
+                    // Обновляем конкретное устройство в таблице
+                    updateDeviceValuesInTable(data.device_id, data.current_values);
+                });
+
+                // Подписка на статус подключения
+                window.notificationManager.addListener('connection_status', function(status) {
+                    const dot = document.getElementById('statusDot');
+                    const text = document.getElementById('statusText');
+                    if (dot && text) {
+                        dot.className = `status-dot ${status}`;
+                        const statusMap = {
+                            'online': 'Подключено',
+                            'offline': 'Отключено',
+                            'error': 'Ошибка'
+                        };
+                        text.textContent = statusMap[status] || 'Неизвестно';
+                    }
+                });
+            }
+        });
+
+        // ============ ОБНОВЛЕНИЕ СТАТУСА В ТАБЛИЦЕ ============
+        function updateDeviceStatusInTable(deviceId, isOnline) {
+            const row = document.querySelector(`.device-row[data-device-id="${deviceId}"]`);
+            if (!row) return;
+
+            // Обновляем класс строки
+            row.className = `device-row ${isOnline ? '' : 'offline'}`;
+
+            // Обновляем статус в ячейке
+            const statusCell = row.querySelector('.status-cell');
+            if (statusCell) {
+                const indicator = statusCell.querySelector('.device-status-indicator');
+                const text = statusCell.querySelector('.status-text');
+
+                if (indicator) {
+                    indicator.className = `device-status-indicator ${isOnline ? 'online' : 'offline'}`;
+                }
+                if (text) {
+                    text.className = `status-text ${isOnline ? 'status-online' : 'status-offline'}`;
+                    text.textContent = isOnline ? 'Онлайн' : 'Офлайн';
+                }
+            }
+
+            console.log(`[Devices] Обновлен статус устройства ${deviceId}: ${isOnline ? 'онлайн' : 'офлайн'}`);
+        }
+
+        // ============ ОБНОВЛЕНИЕ ЗНАЧЕНИЙ В ТАБЛИЦЕ ============
+        function updateDeviceValuesInTable(deviceId, currentValues) {
+            const row = document.querySelector(`.device-row[data-device-id="${deviceId}"]`);
+            if (!row) return;
+
+            // Обновляем параметры (если нужно отображать значения)
+            const paramsCell = row.querySelector('.params-cell');
+            if (paramsCell && currentValues) {
+                paramsCell.textContent = JSON.stringify(currentValues);
+            }
+
+            console.log(`[Devices] Обновлены значения устройства ${deviceId}:`, currentValues);
         }
 
         // ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML ============

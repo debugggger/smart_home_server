@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Управление сценариями - Умный дом</title>
+
+    <link rel="stylesheet" href="/static/css/notifications.css">
+
     <style>
         * {
             margin: 0;
@@ -34,6 +37,49 @@
         h1 {
             color: #1e2a3a;
             font-size: 28px;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .status-dot.online {
+            background-color: #10b981;
+        }
+
+        .status-dot.offline {
+            background-color: #ef4444;
+        }
+
+        .status-dot.error {
+            background-color: #f59e0b;
+        }
+
+        .status-text {
+            color: #475569;
+            font-weight: 500;
         }
 
         .back-btn, .add-btn {
@@ -165,6 +211,41 @@
             display: block;
         }
 
+        /* Динамические поля для параметров команд */
+        .param-field {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .param-field.show {
+            display: block;
+        }
+
+        .param-field label {
+            display: block;
+            margin-bottom: 6px;
+            color: #334155;
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .param-field input,
+        .param-field select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .param-field input[type="color"] {
+            height: 40px;
+            padding: 2px;
+        }
+
         .triggers-list table {
             width: 100%;
             border-collapse: collapse;
@@ -257,6 +338,17 @@
             overflow-y: auto;
         }
 
+        .server-badge {
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -271,8 +363,12 @@
     <div class="container">
         <div class="header">
             <h1>⚡ Управление сценариями</h1>
-            <div>
-                <button class="back-btn" onclick="goBack()">← На главную</button>
+            <div class="header-buttons">
+                <div class="connection-status">
+                    <span class="status-dot offline" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Отключено</span>
+                </div>
+                <button class="back-btn" onclick="window.location.href='/'">← На главную</button>
                 <button class="add-btn" onclick="showCreateModal()">+ Создать сценарий</button>
             </div>
         </div>
@@ -319,7 +415,9 @@
 
             <div class="form-group">
                 <label>Контроллер-приемник (куда отправлять команду)</label>
-                <select id="dstController" onchange="onDstControllerChange()"></select>
+                <select id="dstController" onchange="onDstControllerChange()">
+                    <option value="">Выберите контроллер</option>
+                </select>
             </div>
 
             <h4>📊 Условия (что должно произойти)</h4>
@@ -337,7 +435,7 @@
         </div>
     </div>
 
-    <div id="toastMsg" class="toast-msg"></div>
+    <script src="/static/js/notifications.js"></script>
 
     <script>
         let currentEditId = null;
@@ -345,6 +443,9 @@
         let devicesCache = {};
         let commandsCache = {};
         let deviceTypesList = [];
+        const SERVER_ID = -1;
+        const SERVER_NAME = 'Сервер';
+        const SERVER_MAC = 'serv';
 
         // ============ ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ ============
 
@@ -356,7 +457,14 @@
             } else {
                 document.querySelectorAll('.mode-btn')[1].classList.add('active');
                 document.querySelectorAll('.mode-btn')[0].classList.remove('active');
-                showToast('⚠️ Режим "Сценарии управления" в разработке');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'warning',
+                        message: '⚠️ Режим "Сценарии управления" в разработке'
+                    });
+                } else {
+                    showToast('⚠️ Режим "Сценарии управления" в разработке');
+                }
             }
         }
 
@@ -389,13 +497,14 @@
             return type?.name || 'Unknown';
         }
 
-        // ============ ЗАГРУЗКА КОНТРОЛЛЕРОВ ============
+        // ============ ЗАГРУЗКА КОНТРОЛЛЕРОВ (С СЕРВЕРОМ) ============
 
         async function loadControllers() {
             try {
                 const response = await fetch('/api/controllers');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                controllersList = await response.json();
+                const controllers = await response.json();
+                controllersList = controllers;
                 console.log('[Triggers] Controllers loaded:', controllersList.length);
 
                 const srcSelect = document.getElementById('srcController');
@@ -403,6 +512,13 @@
 
                 srcSelect.innerHTML = '<option value="">Выберите контроллер</option>';
                 dstSelect.innerHTML = '<option value="">Выберите контроллер</option>';
+
+                // Добавляем "Сервер" в список приемников
+                const serverOption = document.createElement('option');
+                serverOption.value = SERVER_ID;
+                serverOption.textContent = `${SERVER_NAME} 🖥️`;
+                serverOption.dataset.isServer = 'true';
+                dstSelect.appendChild(serverOption);
 
                 controllersList.forEach(ctrl => {
                     const optionSrc = document.createElement('option');
@@ -417,7 +533,14 @@
                 });
             } catch (error) {
                 console.error('Error loading controllers:', error);
-                showToast('❌ Ошибка загрузки контроллеров');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Ошибка загрузки контроллеров'
+                    });
+                } else {
+                    showToast('❌ Ошибка загрузки контроллеров');
+                }
             }
         }
 
@@ -425,6 +548,18 @@
 
         async function loadDevicesForController(controllerId) {
             if (!controllerId || controllerId === '') return [];
+
+            // Если выбран Сервер - возвращаем виртуальное устройство
+            if (parseInt(controllerId) === SERVER_ID) {
+                return [{
+                    id: -1,
+                    name: 'Числовое значение',
+                    type_id: -1,
+                    type_name: 'server_value',
+                    port: 'value',
+                    params: '{}'
+                }];
+            }
 
             if (devicesCache[controllerId]) {
                 return devicesCache[controllerId];
@@ -454,19 +589,129 @@
             const devices = await loadDevicesForController(controllerId);
             selectElement.innerHTML = '<option value="">Выберите устройство</option>';
 
+            const isServer = parseInt(controllerId) === SERVER_ID;
+
             devices.forEach(device => {
                 const option = document.createElement('option');
                 option.value = device.id;
 
-                // Получаем display_name из param_names
-                const typeDisplayName = getTypeDisplayName(device.type_id);
-                const deviceLabel = `${device.name} (${typeDisplayName}, порт: ${device.port || '—'})`;
-                option.textContent = deviceLabel;
+                if (isServer) {
+                    option.textContent = `${device.name} (числовое значение)`;
+                } else {
+                    const typeDisplayName = getTypeDisplayName(device.type_id);
+                    option.textContent = `${device.name} (${typeDisplayName}, порт: ${device.port || '—'})`;
+                }
 
                 if (selectedDeviceId && device.id == selectedDeviceId) {
                     option.selected = true;
                 }
                 selectElement.appendChild(option);
+            });
+        }
+
+        // ============ ПОЛУЧЕНИЕ ПАРАМЕТРОВ КОМАНДЫ ============
+
+        function getCommandParams(command, type) {
+            if (!type || !type.param_names || !type.param_names.sending_commands) {
+                return null;
+            }
+
+            const allCommands = [];
+            const sendingCommands = type.param_names.sending_commands;
+
+            // Ищем в binary
+            if (sendingCommands.binary) {
+                sendingCommands.binary.forEach(cmd => {
+                    if (cmd.sending_name === command || cmd.system_name === command) {
+                        allCommands.push(cmd);
+                    }
+                });
+            }
+
+            // Ищем в numeric
+            if (sendingCommands.numeric) {
+                sendingCommands.numeric.forEach(cmd => {
+                    if (cmd.sending_name === command || cmd.system_name === command) {
+                        allCommands.push(cmd);
+                    }
+                });
+            }
+
+            return allCommands.length > 0 ? allCommands[0] : null;
+        }
+
+        // ============ СОЗДАНИЕ ПОЛЕЙ ДЛЯ ПАРАМЕТРОВ КОМАНДЫ ============
+
+        function createParamFields(container, params) {
+            container.innerHTML = '';
+            container.classList.remove('show');
+
+            if (!params || !params.length) {
+                return;
+            }
+
+            params.forEach(param => {
+                const div = document.createElement('div');
+                div.className = 'param-field show';
+
+                const label = document.createElement('label');
+                label.textContent = param.display_name || param.name || 'Значение';
+                if (param.required) {
+                    label.innerHTML += ' <span class="field-required">*</span>';
+                }
+                div.appendChild(label);
+
+                let input;
+                if (param.type === 'select' && param.options) {
+                    input = document.createElement('select');
+                    input.className = 'param-input';
+                    input.dataset.paramName = param.name;
+
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = `Выберите ${param.display_name || param.name}`;
+                    input.appendChild(defaultOption);
+
+                    param.options.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.value;
+                        option.textContent = opt.label || opt.value;
+                        input.appendChild(option);
+                    });
+                } else if (param.type === 'color') {
+                    input = document.createElement('input');
+                    input.type = 'color';
+                    input.className = 'param-input';
+                    input.dataset.paramName = param.name;
+                    input.value = param.default || '#FFFFFF';
+                } else if (param.type === 'number') {
+                    input = document.createElement('input');
+                    input.type = 'number';
+                    input.className = 'param-input';
+                    input.dataset.paramName = param.name;
+                    input.placeholder = param.placeholder || '';
+                    if (param.min !== undefined) input.min = param.min;
+                    if (param.max !== undefined) input.max = param.max;
+                    if (param.step !== undefined) input.step = param.step;
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'param-input';
+                    input.dataset.paramName = param.name;
+                    input.placeholder = param.placeholder || '';
+                }
+
+                div.appendChild(input);
+
+                if (param.description) {
+                    const hint = document.createElement('small');
+                    hint.className = 'field-hint';
+                    hint.textContent = param.description;
+                    div.appendChild(hint);
+                }
+
+                container.appendChild(div);
+                container.classList.add('show');
             });
         }
 
@@ -559,7 +804,6 @@
                 return;
             }
 
-            // Для условий всегда показываем стандартные действия
             const standardCommands = [
                 { value: 'greater', label: '📈 Значение больше' },
                 { value: 'less', label: '📉 Значение меньше' },
@@ -626,6 +870,7 @@
                         <input type="text" class="action-value" placeholder="Введите значение">
                     </div>
                 </div>
+                <div class="param-field" id="action-params-${index}"></div>
             `;
 
             container.appendChild(div);
@@ -646,6 +891,17 @@
                     const valueInput = div.querySelector('.action-value');
                     valueInput.value = actionData.value;
                 }
+
+                // Восстанавливаем параметры если есть
+                if (actionData.params) {
+                    const paramsContainer = div.querySelector(`#action-params-${index}`);
+                    const params = Object.keys(actionData.params).map(key => ({
+                        name: key,
+                        display_name: key,
+                        value: actionData.params[key]
+                    }));
+                    createParamFields(paramsContainer, params);
+                }
             }
         }
 
@@ -655,20 +911,33 @@
             const block = selectElement.closest('.action-block');
             const deviceId = selectElement.value;
             const commandSelect = block.querySelector('.action-command');
+            const paramsContainer = block.querySelector('.param-field');
+
+            // Очищаем параметры
+            paramsContainer.innerHTML = '';
+            paramsContainer.classList.remove('show');
 
             if (!deviceId) {
                 commandSelect.innerHTML = '<option value="">Выберите устройство</option>';
                 return;
             }
 
-            // Находим тип устройства, чтобы получить команды
             const device = await findDeviceInCache(deviceId);
             if (!device) {
                 commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>';
                 return;
             }
 
-            // Получаем команды из param_names
+            // Для серверного устройства
+            if (deviceId == -1) {
+                commandSelect.innerHTML = `
+                    <option value="">Выберите действие</option>
+                    <option value="addOne">➕ Прибавить 1</option>
+                    <option value="minusOne">➖ Вычесть 1</option>
+                `;
+                return;
+            }
+
             const type = findTypeById(device.type_id);
             if (!type || !type.param_names || !type.param_names.sending_commands) {
                 commandSelect.innerHTML = '<option value="">Команды не найдены</option>';
@@ -678,19 +947,17 @@
             const sendingCommands = type.param_names.sending_commands;
             const allCommands = [];
 
-            // Добавляем binary команды
             if (sendingCommands.binary && sendingCommands.binary.length > 0) {
                 sendingCommands.binary.forEach(cmd => {
                     const displayName = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName });
+                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName, data: cmd });
                 });
             }
 
-            // Добавляем numeric команды
             if (sendingCommands.numeric && sendingCommands.numeric.length > 0) {
                 sendingCommands.numeric.forEach(cmd => {
                     const displayName = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName });
+                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName, data: cmd });
                 });
             }
 
@@ -699,7 +966,82 @@
                 const option = document.createElement('option');
                 option.value = cmd.value;
                 option.textContent = cmd.label;
+                option.dataset.cmdData = JSON.stringify(cmd.data || {});
                 commandSelect.appendChild(option);
+            });
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В ДЕЙСТВИИ ============
+
+        function onActionCommandChange(selectElement) {
+            const block = selectElement.closest('.action-block');
+            const valueField = block.querySelector('.value-field');
+            const paramsContainer = block.querySelector('.param-field');
+            const command = selectElement.value;
+            const deviceId = block.querySelector('.action-device').value;
+
+            // Очищаем параметры
+            paramsContainer.innerHTML = '';
+            paramsContainer.classList.remove('show');
+
+            if (!command) {
+                valueField.classList.remove('show');
+                return;
+            }
+
+            // Для серверных команд (addOne, minusOne)
+            if (command === 'addOne' || command === 'minusOne') {
+                valueField.classList.remove('show');
+                return;
+            }
+
+            // Проверяем, есть ли параметры у команды
+            const device = findDeviceInCache(deviceId).then(dev => {
+                if (!dev) return;
+
+                const type = findTypeById(dev.type_id);
+                if (!type) return;
+
+                const cmdInfo = getCommandParams(command, type);
+                if (cmdInfo) {
+                    // Проверяем, есть ли параметры
+                    const hasParams = cmdInfo.params && cmdInfo.params.length > 0;
+
+                    // Проверяем dataType
+                    const dataType = cmdInfo.dataType;
+
+                    if (dataType === 'boolT') {
+                        // Булево значение - не показываем поле
+                        valueField.classList.remove('show');
+                        return;
+                    }
+
+                    if (hasParams) {
+                        // Создаем поля для параметров
+                        createParamFields(paramsContainer, cmdInfo.params);
+                        valueField.classList.remove('show');
+                    } else {
+                        // Нет параметров - показываем стандартное поле значения
+                        const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
+                        const needsValue = command && !commandsWithoutValue.includes(command);
+
+                        if (needsValue) {
+                            valueField.classList.add('show');
+                        } else {
+                            valueField.classList.remove('show');
+                        }
+                    }
+                } else {
+                    // Если команда не найдена - показываем стандартное поле
+                    const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
+                    const needsValue = command && !commandsWithoutValue.includes(command);
+
+                    if (needsValue) {
+                        valueField.classList.add('show');
+                    } else {
+                        valueField.classList.remove('show');
+                    }
+                }
             });
         }
 
@@ -711,23 +1053,6 @@
                 if (device) return device;
             }
             return null;
-        }
-
-        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В ДЕЙСТВИИ ============
-
-        function onActionCommandChange(selectElement) {
-            const block = selectElement.closest('.action-block');
-            const valueField = block.querySelector('.value-field');
-            const command = selectElement.value;
-
-            const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
-            const needsValue = command && !commandsWithoutValue.includes(command);
-
-            if (needsValue) {
-                valueField.classList.add('show');
-            } else {
-                valueField.classList.remove('show');
-            }
         }
 
         // ============ ЗАГРУЗКА ТРИГГЕРОВ ============
@@ -749,8 +1074,16 @@
                     const row = tbody.insertRow();
                     row.insertCell(0).innerText = trigger.id;
                     row.insertCell(1).innerText = trigger.name;
-                    row.insertCell(2).innerText = trigger.src_controller_name;
-                    row.insertCell(3).innerText = trigger.dst_controller_name;
+
+                    // Проверяем, является ли источник сервером
+                    const isSrcServer = trigger.src_controller_name === 'Сервер' || trigger.src_controller_mac === 'serv';
+                    const srcDisplay = isSrcServer ? `${trigger.src_controller_name} 🖥️` : trigger.src_controller_name;
+                    row.insertCell(2).innerText = srcDisplay;
+
+                    // Проверяем, является ли приемник сервером
+                    const isDstServer = trigger.dst_controller_name === 'Сервер' || trigger.dst_controller_mac === 'serv';
+                    const dstDisplay = isDstServer ? `${trigger.dst_controller_name} 🖥️` : trigger.dst_controller_name;
+                    row.insertCell(3).innerText = dstDisplay;
 
                     const conditionsCell = row.insertCell(4);
                     if (trigger.conditions.length > 0) {
@@ -778,9 +1111,11 @@
                             const subRow = subTable.insertRow();
                             const typeDisplayName = getTypeDisplayName(resp.device_type_id);
                             const deviceLabel = `${resp.device_name} (${typeDisplayName})`;
+                            const isServerAction = resp.command === 'serv' || resp.controller_mac === 'serv';
+                            const actionDisplay = isServerAction ? `🖥️ ${resp.command}` : `⚡ ${resp.command}`;
                             subRow.insertCell(0).innerHTML = `
                                 <strong>${deviceLabel}</strong><br>
-                                <small>⚡ ${resp.command}: ${resp.value || '—'}</small>
+                                <small>${actionDisplay}: ${resp.value || '—'}</small>
                             `;
                         });
                         actionsCell.appendChild(subTable);
@@ -805,7 +1140,14 @@
                 });
             } catch (error) {
                 console.error('Error loading triggers:', error);
-                showToast('❌ Ошибка загрузки сценариев');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Ошибка загрузки сценариев'
+                    });
+                } else {
+                    showToast('❌ Ошибка загрузки сценариев');
+                }
             }
         }
 
@@ -843,8 +1185,17 @@
             document.getElementById('srcController').onchange = onSrcControllerChange;
             document.getElementById('dstController').onchange = onDstControllerChange;
 
-            document.getElementById('srcController').value = trigger.src_controller_id;
-            document.getElementById('dstController').value = trigger.dst_controller_id;
+            // Устанавливаем контроллеры
+            const srcController = controllersList.find(c => c.name === trigger.src_controller_name);
+            const dstController = controllersList.find(c => c.name === trigger.dst_controller_name) ||
+                (trigger.dst_controller_name === 'Сервер' ? { id: SERVER_ID } : null);
+
+            if (srcController) {
+                document.getElementById('srcController').value = srcController.id;
+            }
+            if (dstController) {
+                document.getElementById('dstController').value = dstController.id;
+            }
 
             await onSrcControllerChange();
             await onDstControllerChange();
@@ -870,7 +1221,14 @@
             const dstControllerId = document.getElementById('dstController').value;
 
             if (!name || !srcControllerId || !dstControllerId) {
-                showToast('❌ Заполните все обязательные поля');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'warning',
+                        message: '❌ Заполните все обязательные поля'
+                    });
+                } else {
+                    showToast('❌ Заполните все обязательные поля');
+                }
                 return;
             }
 
@@ -897,22 +1255,58 @@
                 const valueInput = block.querySelector('.action-value');
                 const value = valueInput ? valueInput.value : '';
 
+                // Собираем параметры
+                const paramsContainer = block.querySelector('.param-field');
+                const params = {};
+                if (paramsContainer) {
+                    const inputs = paramsContainer.querySelectorAll('.param-input');
+                    inputs.forEach(input => {
+                        const name = input.dataset.paramName || 'value';
+                        params[name] = input.value || '';
+                    });
+                }
+
+                const paramsStr = Object.keys(params).length > 0 ? JSON.stringify(params) : '';
+
+                // Если выбран Сервер - используем serv вместо MAC
+                const isServer = parseInt(dstControllerId) === SERVER_ID;
+                let finalCommand = command;
+
+                if (isServer && command && command !== 'addOne' && command !== 'minusOne') {
+                    // Для сервера команда должна быть 'serv'
+                    finalCommand = 'serv';
+                }
+
                 if (deviceId && command) {
                     responses.push({
                         device_id: parseInt(deviceId),
-                        command: command,
-                        value: value
+                        command: finalCommand,
+                        value: value || paramsStr
                     });
                 }
             });
 
             if (conditions.length === 0) {
-                showToast('❌ Добавьте хотя бы одно условие');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'warning',
+                        message: '❌ Добавьте хотя бы одно условие'
+                    });
+                } else {
+                    showToast('❌ Добавьте хотя бы одно условие');
+                }
                 return;
             }
 
             if (responses.length === 0) {
-                showToast('❌ Добавьте хотя бы одно действие');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'warning',
+                        message: '❌ Добавьте хотя бы одно действие'
+                    });
+                } else {
+                    showToast('❌ Добавьте хотя бы одно действие');
+                }
                 return;
             }
 
@@ -935,17 +1329,38 @@
                 });
 
                 if (response.ok) {
-                    showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан');
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'ok',
+                            message: currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан'
+                        });
+                    } else {
+                        showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан');
+                    }
                     closeModal();
                     loadTriggers();
                     devicesCache = {};
                 } else {
                     const error = await response.json();
-                    showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'error',
+                            message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
+                        });
+                    } else {
+                        showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                    }
                 }
             } catch (error) {
                 console.error('Error saving trigger:', error);
-                showToast('❌ Ошибка сохранения сценария');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Ошибка сохранения сценария'
+                    });
+                } else {
+                    showToast('❌ Ошибка сохранения сценария');
+                }
             }
         }
 
@@ -957,22 +1372,39 @@
             try {
                 const response = await fetch(`/api/triggers/${triggerId}`, { method: 'DELETE' });
                 if (response.ok) {
-                    showToast('✅ Сценарий удален');
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'ok',
+                            message: '✅ Сценарий удален'
+                        });
+                    } else {
+                        showToast('✅ Сценарий удален');
+                    }
                     loadTriggers();
                 } else {
-                    showToast('❌ Ошибка удаления');
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'error',
+                            message: '❌ Ошибка удаления'
+                        });
+                    } else {
+                        showToast('❌ Ошибка удаления');
+                    }
                 }
             } catch (error) {
                 console.error('Error deleting trigger:', error);
-                showToast('❌ Ошибка удаления сценария');
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Ошибка удаления сценария'
+                    });
+                } else {
+                    showToast('❌ Ошибка удаления сценария');
+                }
             }
         }
 
         // ============ ВСПОМОГАТЕЛЬНЫЕ ============
-
-        function goBack() {
-            window.location.href = '/';
-        }
 
         function closeModal() {
             document.getElementById('triggerModal').classList.remove('active');
@@ -984,6 +1416,40 @@
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
+
+        // ============ ПОДПИСКА НА УВЕДОМЛЕНИЯ ============
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.notificationManager) {
+                window.notificationManager.addListener('notification', function(data) {
+                    console.log('[Triggers] Уведомление:', data);
+                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS' ||
+                        data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE' ||
+                        data.type === 'TRIGGER_CREATED' || data.type === 'TRIGGER_DELETED') {
+                        loadTriggers();
+                    }
+                });
+
+                window.notificationManager.addListener('device_status_update', function(data) {
+                    console.log('[Triggers] Обновление статуса устройства:', data);
+                    loadTriggers();
+                });
+
+                window.notificationManager.addListener('connection_status', function(status) {
+                    const dot = document.getElementById('statusDot');
+                    const text = document.getElementById('statusText');
+                    if (dot && text) {
+                        dot.className = `status-dot ${status}`;
+                        const statusMap = {
+                            'online': 'Подключено',
+                            'offline': 'Отключено',
+                            'error': 'Ошибка'
+                        };
+                        text.textContent = statusMap[status] || 'Неизвестно';
+                    }
+                });
+            }
+        });
 
         // ============ ИНИЦИАЛИЗАЦИЯ ============
 

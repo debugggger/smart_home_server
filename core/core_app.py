@@ -175,7 +175,8 @@ class Core:
             req_parts.append("next")
 
         req = "/".join(req_parts)
-        self.mqtt_client.publish(parts[0], req)
+        if len(parts) > 1:
+            self.mqtt_client.publish(parts[0], req)
 
     def parse_states(self, parts):
         #mac/type1/port/val_type1/val/next/type1/port/val_type2/val/next
