@@ -202,6 +202,22 @@
             font-size: 14px;
         }
 
+        .trigger-type-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .trigger-type-selector label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+            color: #334155;
+            cursor: pointer;
+        }
+
         .value-field {
             margin-top: 10px;
             display: none;
@@ -211,7 +227,6 @@
             display: block;
         }
 
-        /* Динамические поля для параметров команд */
         .param-field {
             margin-top: 10px;
             padding: 10px;
@@ -338,17 +353,6 @@
             overflow-y: auto;
         }
 
-        .server-badge {
-            display: inline-block;
-            background: #fef3c7;
-            color: #92400e;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            margin-left: 8px;
-        }
-
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -441,8 +445,8 @@
         let currentEditId = null;
         let controllersList = [];
         let devicesCache = {};
-        let commandsCache = {};
-        let deviceTypesList = [];
+        let deviceTypesMap = {};
+        let serverCommands = [];
         const SERVER_ID = -1;
         const SERVER_NAME = 'Сервер';
         const SERVER_MAC = 'serv';
@@ -474,17 +478,35 @@
             try {
                 const response = await fetch('/api/device-types');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                deviceTypesList = await response.json();
-                console.log('[Triggers] Device types loaded:', deviceTypesList.length);
+                const types = await response.json();
+                deviceTypesMap = {};
+                types.forEach(type => {
+                    deviceTypesMap[type.id] = type;
+                });
+                console.log('[Triggers] Device types loaded:', types.length);
             } catch (error) {
                 console.error('Error loading device types:', error);
+            }
+        }
+
+        // ============ ЗАГРУЗКА КОМАНД СЕРВЕРА ============
+
+        async function loadServerCommands() {
+            try {
+                const response = await fetch('/api/device-types/server-commands');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                serverCommands = await response.json();
+                console.log('[Triggers] Server commands loaded:', serverCommands.length);
+            } catch (error) {
+                console.error('Error loading server commands:', error);
+                serverCommands = [];
             }
         }
 
         // ============ ПОИСК ТИПА ПО ID ============
 
         function findTypeById(typeId) {
-            return deviceTypesList.find(t => t.id == typeId);
+            return deviceTypesMap[typeId] || null;
         }
 
         // ============ ПОЛУЧЕНИЕ DISPLAY_NAME ТИПА ============
@@ -513,7 +535,6 @@
                 srcSelect.innerHTML = '<option value="">Выберите контроллер</option>';
                 dstSelect.innerHTML = '<option value="">Выберите контроллер</option>';
 
-                // Добавляем "Сервер" в список приемников
                 const serverOption = document.createElement('option');
                 serverOption.value = SERVER_ID;
                 serverOption.textContent = `${SERVER_NAME} 🖥️`;
@@ -549,16 +570,8 @@
         async function loadDevicesForController(controllerId) {
             if (!controllerId || controllerId === '') return [];
 
-            // Если выбран Сервер - возвращаем виртуальное устройство
             if (parseInt(controllerId) === SERVER_ID) {
-                return [{
-                    id: -1,
-                    name: 'Числовое значение',
-                    type_id: -1,
-                    type_name: 'server_value',
-                    port: 'value',
-                    params: '{}'
-                }];
+                return [];
             }
 
             if (devicesCache[controllerId]) {
@@ -570,7 +583,6 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const devices = await response.json();
                 devicesCache[controllerId] = devices;
-                console.log(`[Triggers] Devices loaded for controller ${controllerId}:`, devices.length);
                 return devices;
             } catch (error) {
                 console.error('Error loading devices:', error);
@@ -586,21 +598,20 @@
                 return;
             }
 
+            if (parseInt(controllerId) === SERVER_ID) {
+                selectElement.innerHTML = '<option value="">Сервер не имеет устройств</option>';
+                return;
+            }
+
             const devices = await loadDevicesForController(controllerId);
             selectElement.innerHTML = '<option value="">Выберите устройство</option>';
-
-            const isServer = parseInt(controllerId) === SERVER_ID;
 
             devices.forEach(device => {
                 const option = document.createElement('option');
                 option.value = device.id;
 
-                if (isServer) {
-                    option.textContent = `${device.name} (числовое значение)`;
-                } else {
-                    const typeDisplayName = getTypeDisplayName(device.type_id);
-                    option.textContent = `${device.name} (${typeDisplayName}, порт: ${device.port || '—'})`;
-                }
+                const typeDisplayName = getTypeDisplayName(device.type_id);
+                option.textContent = `${device.name} (${typeDisplayName}, порт: ${device.port || '—'})`;
 
                 if (selectedDeviceId && device.id == selectedDeviceId) {
                     option.selected = true;
@@ -609,35 +620,611 @@
             });
         }
 
-        // ============ ПОЛУЧЕНИЕ ПАРАМЕТРОВ КОМАНДЫ ============
+        // ============ ПОЛУЧЕНИЕ ДАННЫХ О ЧТЕНИИ УСТРОЙСТВА ============
 
-        function getCommandParams(command, type) {
-            if (!type || !type.param_names || !type.param_names.sending_commands) {
-                return null;
+        function getDeviceReadingCommands(deviceId) {
+            for (const controllerId in devicesCache) {
+                const device = devicesCache[controllerId].find(d => d.id == deviceId);
+                if (device) {
+                    const type = findTypeById(device.type_id);
+                    if (type && type.param_names && type.param_names.reading_commands) {
+                        return type.param_names.reading_commands;
+                    }
+                    return [];
+                }
+            }
+            return [];
+        }
+
+        function getDeviceReadingCommandBySystemName(deviceId, systemName) {
+            const commands = getDeviceReadingCommands(deviceId);
+            return commands.find(cmd => cmd.system_name === systemName) || null;
+        }
+
+        // ============ ПОЛУЧЕНИЕ КОМАНД УПРАВЛЕНИЯ УСТРОЙСТВА ============
+
+        function getDeviceSendingCommands(deviceId) {
+            for (const controllerId in devicesCache) {
+                const device = devicesCache[controllerId].find(d => d.id == deviceId);
+                if (device) {
+                    const type = findTypeById(device.type_id);
+                    if (type && type.param_names && type.param_names.sending_commands) {
+                        return type.param_names.sending_commands;
+                    }
+                    return { binary: [], numeric: [] };
+                }
+            }
+            return { binary: [], numeric: [] };
+        }
+
+        // ============ ОБРАБОТЧИКИ СМЕНЫ КОНТРОЛЛЕРА ============
+
+        async function onSrcControllerChange() {
+            const srcControllerId = document.getElementById('srcController').value;
+            const conditionBlocks = document.querySelectorAll('.condition-block');
+
+            for (const block of conditionBlocks) {
+                const deviceSelect = block.querySelector('.condition-device');
+                await populateDeviceSelect(deviceSelect, srcControllerId);
+                const readingSelect = block.querySelector('.condition-reading-command');
+                readingSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
+                const compareSelect = block.querySelector('.condition-compare');
+                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
+                const valueSelect = block.querySelector('.condition-value-select');
+                valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+                const valueInput = block.querySelector('.condition-value-input');
+                if (valueInput) valueInput.value = '';
+                const valueField = block.querySelector('.condition-value-field');
+                if (valueField) valueField.classList.remove('show');
+            }
+        }
+
+        async function onDstControllerChange() {
+            const dstControllerId = document.getElementById('dstController').value;
+            const actionBlocks = document.querySelectorAll('.action-block');
+
+            if (parseInt(dstControllerId) === SERVER_ID) {
+                for (const block of actionBlocks) {
+                    const deviceSelect = block.querySelector('.action-device');
+                    deviceSelect.innerHTML = '<option value="-1">Сервер (без устройства)</option>';
+
+                    const commandSelect = block.querySelector('.action-command');
+                    commandSelect.innerHTML = '<option value="">Выберите команду</option>';
+                    serverCommands.forEach(cmd => {
+                        const option = document.createElement('option');
+                        option.value = cmd.sending_name || cmd.system_name;
+                        option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
+                        if (cmd.dataType) {
+                            option.dataset.dataType = cmd.dataType;
+                        }
+                        if (cmd.params) {
+                            option.dataset.params = JSON.stringify(cmd.params);
+                        }
+                        commandSelect.appendChild(option);
+                    });
+                }
+                return;
             }
 
+            for (const block of actionBlocks) {
+                const deviceSelect = block.querySelector('.action-device');
+                await populateDeviceSelect(deviceSelect, dstControllerId);
+                const commandSelect = block.querySelector('.action-command');
+                commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
+                const valueField = block.querySelector('.action-value');
+                if (valueField) valueField.classList.remove('show');
+                const paramsField = block.querySelector('.action-params');
+                if (paramsField) {
+                    paramsField.innerHTML = '';
+                    paramsField.classList.remove('show');
+                }
+            }
+        }
+
+        // ============ ДОБАВЛЕНИЕ УСЛОВИЯ ============
+
+        async function addCondition(conditionData = null) {
+            const container = document.getElementById('conditionsContainer');
+            const index = container.children.length;
+            const div = document.createElement('div');
+            div.className = 'condition-block';
+            div.dataset.index = index;
+
+            div.innerHTML = `
+                <div class="block-header">
+                    <span>Условие ${index + 1}</span>
+                    <button class="remove-btn" onclick="this.closest('.condition-block').remove()">Удалить</button>
+                </div>
+                <div class="form-group">
+                    <label>Устройство (датчик)</label>
+                    <select class="condition-device" data-index="${index}" onchange="onConditionDeviceChange(this)">
+                        <option value="">Выберите устройство</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Параметр для чтения</label>
+                    <select class="condition-reading-command" data-index="${index}" onchange="onConditionReadingCommandChange(this)">
+                        <option value="">Сначала выберите устройство</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Тип триггера</label>
+                    <div class="trigger-type-selector">
+                        <label>
+                            <input type="radio" name="trigger-type-${index}" value="value" checked onchange="onTriggerTypeChange(this)">
+                            По значению
+                        </label>
+                        <label>
+                            <input type="radio" name="trigger-type-${index}" value="time" onchange="onTriggerTypeChange(this)">
+                            По времени
+                        </label>
+                        <label>
+                            <input type="radio" name="trigger-type-${index}" value="changed" onchange="onTriggerTypeChange(this)">
+                            По изменению
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group trigger-compare-group">
+                    <label>Сравнение</label>
+                    <select class="condition-compare" data-index="${index}">
+                        <option value="">Выберите сравнение</option>
+                    </select>
+                </div>
+                <div class="form-group trigger-value-group">
+                    <label>Значение</label>
+                    <select class="condition-value-select" data-index="${index}">
+                        <option value="">Выберите значение</option>
+                    </select>
+                </div>
+                <div class="value-field condition-value-field" id="condition-value-${index}">
+                    <div class="form-group">
+                        <label>Числовое значение</label>
+                        <input type="number" class="condition-value-input" placeholder="Введите число">
+                    </div>
+                </div>
+                <div class="value-field condition-time-field" id="condition-time-${index}" style="display: none;">
+                    <div class="form-group">
+                        <label>Время (секунды)</label>
+                        <input type="number" class="condition-time-input" placeholder="Введите время в секундах">
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(div);
+
+            const srcControllerId = document.getElementById('srcController').value;
+            const deviceSelect = div.querySelector('.condition-device');
+            await populateDeviceSelect(deviceSelect, srcControllerId);
+
+            if (conditionData) {
+                deviceSelect.value = conditionData.device_id;
+                await onConditionDeviceChange(deviceSelect);
+
+                const readingSelect = div.querySelector('.condition-reading-command');
+                readingSelect.value = conditionData.command;
+                await onConditionReadingCommandChange(readingSelect);
+
+                const triggerType = conditionData.trigger_type || 'value';
+                const radio = div.querySelector(`input[name="trigger-type-${index}"][value="${triggerType}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    onTriggerTypeChange(radio);
+                }
+
+                if (conditionData.compare) {
+                    const compareSelect = div.querySelector('.condition-compare');
+                    compareSelect.value = conditionData.compare;
+                }
+
+                if (conditionData.value) {
+                    const valueSelect = div.querySelector('.condition-value-select');
+                    const options = valueSelect.options;
+                    let found = false;
+                    for (let i = 0; i < options.length; i++) {
+                        if (options[i].value === conditionData.value) {
+                            options[i].selected = true;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        const valueField = div.querySelector('.condition-value-field');
+                        const input = div.querySelector('.condition-value-input');
+                        if (valueField) valueField.classList.add('show');
+                        if (input) input.value = conditionData.value;
+                    }
+                }
+
+                if (conditionData.time) {
+                    const timeField = div.querySelector('.condition-time-field');
+                    const input = div.querySelector('.condition-time-input');
+                    if (timeField) timeField.style.display = 'block';
+                    if (input) input.value = conditionData.time / 1000;
+                }
+            } else {
+                // По умолчанию показываем поле для числового значения
+                const valueField = div.querySelector('.condition-value-field');
+                if (valueField) valueField.classList.add('show');
+            }
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В УСЛОВИИ ============
+
+        async function onConditionDeviceChange(selectElement) {
+            const block = selectElement.closest('.condition-block');
+            const deviceId = selectElement.value;
+            const readingSelect = block.querySelector('.condition-reading-command');
+            const compareSelect = block.querySelector('.condition-compare');
+            const valueSelect = block.querySelector('.condition-value-select');
+            const valueField = block.querySelector('.condition-value-field');
+
+            if (!deviceId) {
+                readingSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
+                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
+                valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+                if (valueField) valueField.classList.remove('show');
+                return;
+            }
+
+            const readingCommands = getDeviceReadingCommands(parseInt(deviceId));
+
+            readingSelect.innerHTML = '<option value="">Выберите параметр</option>';
+            readingCommands.forEach(cmd => {
+                const option = document.createElement('option');
+                option.value = cmd.system_name;
+                option.textContent = cmd.display_name || cmd.system_name;
+                if (cmd.parameter_number !== undefined) {
+                    option.dataset.parameterNumber = cmd.parameter_number;
+                }
+                if (cmd.returning_values) {
+                    option.dataset.returningValues = JSON.stringify(cmd.returning_values);
+                }
+                if (cmd.dataType) {
+                    option.dataset.dataType = cmd.dataType;
+                }
+                readingSelect.appendChild(option);
+            });
+
+            if (readingCommands.length === 1) {
+                readingSelect.value = readingCommands[0].system_name;
+                await onConditionReadingCommandChange(readingSelect);
+            } else {
+                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
+                valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+                if (valueField) valueField.classList.remove('show');
+            }
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ ПАРАМЕТРА ЧТЕНИЯ ============
+
+        function onConditionReadingCommandChange(selectElement) {
+            const block = selectElement.closest('.condition-block');
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const compareSelect = block.querySelector('.condition-compare');
+            const valueSelect = block.querySelector('.condition-value-select');
+            const valueField = block.querySelector('.condition-value-field');
+
+            compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
+            valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+            if (valueField) valueField.classList.remove('show');
+
+            if (!selectedOption || !selectedOption.value) {
+                return;
+            }
+
+            const dataType = selectedOption.dataset.dataType || 'intT';
+            const returningValuesData = selectedOption.dataset.returningValues;
+
+            // Настройка сравнений
+            if (dataType === 'boolT') {
+                // Для bool только "равно"
+                const option = document.createElement('option');
+                option.value = 'equal';
+                option.textContent = 'равно';
+                compareSelect.appendChild(option);
+            } else {
+                // Для int: равно, больше, меньше
+                const options = [
+                    { value: 'equal', label: 'равно' },
+                    { value: 'more', label: 'больше' },
+                    { value: 'less', label: 'меньше' }
+                ];
+                options.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    compareSelect.appendChild(option);
+                });
+            }
+
+            // Настройка значений
+            if (returningValuesData) {
+                try {
+                    const returningValues = JSON.parse(returningValuesData);
+                    if (returningValues && returningValues.length > 0 && returningValues[0]) {
+                        valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+                        const returnMap = returningValues[0];
+                        Object.keys(returnMap).forEach(key => {
+                            const option = document.createElement('option');
+                            option.value = key;
+                            const desc = returnMap[key];
+                            option.textContent = desc.description || desc || key;
+                            valueSelect.appendChild(option);
+                        });
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Error parsing returning_values:', e);
+                }
+            }
+
+            // Если нет returning_values, показываем поле ввода
+            if (valueField) {
+                valueField.classList.add('show');
+                const input = block.querySelector('.condition-value-input');
+                if (input) input.value = '';
+            }
+            valueSelect.innerHTML = '<option value="">Введите число в поле ниже</option>';
+        }
+
+        // ============ ОБРАБОТЧИК СМЕНЫ ТИПА ТРИГГЕРА ============
+
+        function onTriggerTypeChange(radioElement) {
+            const block = radioElement.closest('.condition-block');
+            const valueField = block.querySelector('.condition-value-field');
+            const timeField = block.querySelector('.condition-time-field');
+            const compareGroup = block.querySelector('.trigger-compare-group');
+            const valueGroup = block.querySelector('.trigger-value-group');
+
+            const triggerType = radioElement.value;
+
+            // Скрываем все
+            if (valueField) valueField.classList.remove('show');
+            if (timeField) timeField.style.display = 'none';
+            if (compareGroup) compareGroup.style.display = 'block';
+            if (valueGroup) valueGroup.style.display = 'block';
+
+            if (triggerType === 'time') {
+                if (timeField) timeField.style.display = 'block';
+                if (compareGroup) compareGroup.style.display = 'none';
+                if (valueGroup) valueGroup.style.display = 'none';
+            } else if (triggerType === 'changed') {
+                if (compareGroup) compareGroup.style.display = 'none';
+                if (valueGroup) valueGroup.style.display = 'none';
+            } else {
+                // По значению - показываем сравнение и значение
+                if (valueField) {
+                    // Проверяем, есть ли returning_values у выбранного параметра
+                    const readingSelect = block.querySelector('.condition-reading-command');
+                    const selectedOption = readingSelect.options[readingSelect.selectedIndex];
+                    const returningValuesData = selectedOption?.dataset?.returningValues;
+
+                    if (!returningValuesData) {
+                        valueField.classList.add('show');
+                    }
+                }
+            }
+        }
+
+        // ============ ДОБАВЛЕНИЕ ДЕЙСТВИЯ ============
+
+        async function addAction(actionData = null) {
+            const container = document.getElementById('actionsContainer');
+            const index = container.children.length;
+            const div = document.createElement('div');
+            div.className = 'action-block';
+            div.dataset.index = index;
+
+            div.innerHTML = `
+                <div class="block-header">
+                    <span>Действие ${index + 1}</span>
+                    <button class="remove-btn" onclick="this.closest('.action-block').remove()">Удалить</button>
+                </div>
+                <div class="form-group">
+                    <label>Устройство (исполнитель)</label>
+                    <select class="action-device" data-index="${index}" onchange="onActionDeviceChange(this)">
+                        <option value="">Выберите устройство</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Команда</label>
+                    <select class="action-command" data-index="${index}" onchange="onActionCommandChange(this)">
+                        <option value="">Сначала выберите устройство</option>
+                    </select>
+                </div>
+                <div class="value-field" id="action-value-${index}">
+                    <div class="form-group">
+                        <label>Значение</label>
+                        <input type="text" class="action-value-input" placeholder="Введите значение">
+                    </div>
+                </div>
+                <div class="param-field" id="action-params-${index}"></div>
+            `;
+
+            container.appendChild(div);
+
+            const dstControllerId = document.getElementById('dstController').value;
+            const deviceSelect = div.querySelector('.action-device');
+
+            if (parseInt(dstControllerId) === SERVER_ID) {
+                deviceSelect.innerHTML = '<option value="-1">Сервер (без устройства)</option>';
+                const commandSelect = div.querySelector('.action-command');
+                commandSelect.innerHTML = '<option value="">Выберите команду</option>';
+                serverCommands.forEach(cmd => {
+                    const option = document.createElement('option');
+                    option.value = cmd.sending_name || cmd.system_name;
+                    option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
+                    if (cmd.dataType) {
+                        option.dataset.dataType = cmd.dataType;
+                    }
+                    if (cmd.params) {
+                        option.dataset.params = JSON.stringify(cmd.params);
+                    }
+                    commandSelect.appendChild(option);
+                });
+            } else {
+                await populateDeviceSelect(deviceSelect, dstControllerId);
+            }
+
+            if (actionData) {
+                deviceSelect.value = actionData.device_id;
+                await onActionDeviceChange(deviceSelect);
+
+                const commandSelect = div.querySelector('.action-command');
+                commandSelect.value = actionData.command;
+                await onActionCommandChange(commandSelect);
+
+                if (actionData.value) {
+                    const valueInput = div.querySelector('.action-value-input');
+                    valueInput.value = actionData.value;
+                }
+
+                if (actionData.params) {
+                    const paramsContainer = div.querySelector(`#action-params-${index}`);
+                    const params = Object.keys(actionData.params).map(key => ({
+                        name: key,
+                        display_name: key,
+                        value: actionData.params[key]
+                    }));
+                    createParamFields(paramsContainer, params);
+                }
+            }
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В ДЕЙСТВИИ ============
+
+        async function onActionDeviceChange(selectElement) {
+            const block = selectElement.closest('.action-block');
+            const deviceId = selectElement.value;
+            const commandSelect = block.querySelector('.action-command');
+            const paramsContainer = block.querySelector('.param-field');
+
+            paramsContainer.innerHTML = '';
+            paramsContainer.classList.remove('show');
+
+            if (!deviceId) {
+                commandSelect.innerHTML = '<option value="">Выберите устройство</option>';
+                return;
+            }
+
+            const dstControllerId = document.getElementById('dstController').value;
+
+            if (parseInt(dstControllerId) === SERVER_ID) {
+                commandSelect.innerHTML = '<option value="">Выберите команду</option>';
+                serverCommands.forEach(cmd => {
+                    const option = document.createElement('option');
+                    option.value = cmd.sending_name || cmd.system_name;
+                    option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
+                    if (cmd.dataType) {
+                        option.dataset.dataType = cmd.dataType;
+                    }
+                    if (cmd.params) {
+                        option.dataset.params = JSON.stringify(cmd.params);
+                    }
+                    commandSelect.appendChild(option);
+                });
+                return;
+            }
+
+            const device = await findDeviceInCache(parseInt(deviceId));
+            if (!device) {
+                commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>';
+                return;
+            }
+
+            const sendingCommands = getDeviceSendingCommands(parseInt(deviceId));
             const allCommands = [];
-            const sendingCommands = type.param_names.sending_commands;
 
-            // Ищем в binary
-            if (sendingCommands.binary) {
+            if (sendingCommands.binary && sendingCommands.binary.length > 0) {
                 sendingCommands.binary.forEach(cmd => {
-                    if (cmd.sending_name === command || cmd.system_name === command) {
-                        allCommands.push(cmd);
-                    }
+                    allCommands.push({
+                        value: cmd.sending_name || cmd.system_name,
+                        label: cmd.display_name || cmd.sending_name || cmd.system_name,
+                        data: cmd,
+                        type: 'binary'
+                    });
                 });
             }
 
-            // Ищем в numeric
-            if (sendingCommands.numeric) {
+            if (sendingCommands.numeric && sendingCommands.numeric.length > 0) {
                 sendingCommands.numeric.forEach(cmd => {
-                    if (cmd.sending_name === command || cmd.system_name === command) {
-                        allCommands.push(cmd);
-                    }
+                    allCommands.push({
+                        value: cmd.sending_name || cmd.system_name,
+                        label: cmd.display_name || cmd.sending_name || cmd.system_name,
+                        data: cmd,
+                        type: 'numeric'
+                    });
                 });
             }
 
-            return allCommands.length > 0 ? allCommands[0] : null;
+            commandSelect.innerHTML = '<option value="">Выберите команду</option>';
+            allCommands.forEach(cmd => {
+                const option = document.createElement('option');
+                option.value = cmd.value;
+                option.textContent = cmd.label;
+                option.dataset.cmdData = JSON.stringify(cmd.data || {});
+                option.dataset.cmdType = cmd.type;
+                commandSelect.appendChild(option);
+            });
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В ДЕЙСТВИИ ============
+
+        function onActionCommandChange(selectElement) {
+            const block = selectElement.closest('.action-block');
+            const valueField = block.querySelector('.value-field');
+            const paramsContainer = block.querySelector('.param-field');
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const command = selectElement.value;
+            const deviceId = block.querySelector('.action-device').value;
+            const dstControllerId = document.getElementById('dstController').value;
+
+            paramsContainer.innerHTML = '';
+            paramsContainer.classList.remove('show');
+            valueField.classList.remove('show');
+
+            if (!command) return;
+
+            if (parseInt(dstControllerId) === SERVER_ID) {
+                const dataType = selectedOption?.dataset?.dataType;
+                if (dataType === 'boolT') {
+                    return;
+                }
+                valueField.classList.add('show');
+                return;
+            }
+
+            const cmdType = selectedOption?.dataset?.cmdType;
+            const cmdData = selectedOption?.dataset?.cmdData ? JSON.parse(selectedOption.dataset.cmdData) : {};
+
+            if (cmdType === 'binary') {
+                valueField.classList.remove('show');
+                return;
+            }
+
+            if (cmdType === 'numeric') {
+                valueField.classList.add('show');
+
+                if (cmdData.params && cmdData.params.length > 0) {
+                    createParamFields(paramsContainer, cmdData.params);
+                }
+                return;
+            }
+
+            const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
+            if (!commandsWithoutValue.includes(command)) {
+                valueField.classList.add('show');
+            }
+        }
+
+        // ============ ПОИСК УСТРОЙСТВА В КЕШЕ ============
+
+        async function findDeviceInCache(deviceId) {
+            for (const controllerId in devicesCache) {
+                const device = devicesCache[controllerId].find(d => d.id == deviceId);
+                if (device) return device;
+            }
+            return null;
         }
 
         // ============ СОЗДАНИЕ ПОЛЕЙ ДЛЯ ПАРАМЕТРОВ КОМАНДЫ ============
@@ -715,346 +1302,6 @@
             });
         }
 
-        // ============ ОБРАБОТЧИКИ СМЕНЫ КОНТРОЛЛЕРА ============
-
-        async function onSrcControllerChange() {
-            const srcControllerId = document.getElementById('srcController').value;
-            const conditionBlocks = document.querySelectorAll('.condition-block');
-
-            for (const block of conditionBlocks) {
-                const deviceSelect = block.querySelector('.condition-device');
-                await populateDeviceSelect(deviceSelect, srcControllerId);
-            }
-        }
-
-        async function onDstControllerChange() {
-            const dstControllerId = document.getElementById('dstController').value;
-            const actionBlocks = document.querySelectorAll('.action-block');
-
-            for (const block of actionBlocks) {
-                const deviceSelect = block.querySelector('.action-device');
-                await populateDeviceSelect(deviceSelect, dstControllerId);
-            }
-        }
-
-        // ============ ДОБАВЛЕНИЕ УСЛОВИЯ ============
-
-        async function addCondition(conditionData = null) {
-            const container = document.getElementById('conditionsContainer');
-            const index = container.children.length;
-            const div = document.createElement('div');
-            div.className = 'condition-block';
-            div.dataset.index = index;
-
-            div.innerHTML = `
-                <div class="block-header">
-                    <span>Условие ${index + 1}</span>
-                    <button class="remove-btn" onclick="this.closest('.condition-block').remove()">Удалить</button>
-                </div>
-                <div class="form-group">
-                    <label>Устройство (датчик)</label>
-                    <select class="condition-device" data-index="${index}" onchange="onConditionDeviceChange(this)">
-                        <option value="">Выберите устройство</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Действие (условие)</label>
-                    <select class="condition-command" data-index="${index}" onchange="onConditionCommandChange(this)">
-                        <option value="">Сначала выберите устройство</option>
-                    </select>
-                </div>
-                <div class="value-field" id="condition-value-${index}">
-                    <div class="form-group">
-                        <label>Значение</label>
-                        <input type="number" class="condition-value" placeholder="Введите число">
-                    </div>
-                </div>
-            `;
-
-            container.appendChild(div);
-
-            const srcControllerId = document.getElementById('srcController').value;
-            const deviceSelect = div.querySelector('.condition-device');
-            await populateDeviceSelect(deviceSelect, srcControllerId);
-
-            if (conditionData) {
-                deviceSelect.value = conditionData.device_id;
-                await onConditionDeviceChange(deviceSelect);
-
-                const commandSelect = div.querySelector('.condition-command');
-                commandSelect.value = conditionData.command;
-                await onConditionCommandChange(commandSelect);
-
-                if (conditionData.value) {
-                    const valueInput = div.querySelector('.condition-value');
-                    valueInput.value = conditionData.value;
-                }
-            }
-        }
-
-        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В УСЛОВИИ ============
-
-        async function onConditionDeviceChange(selectElement) {
-            const block = selectElement.closest('.condition-block');
-            const deviceId = selectElement.value;
-            const commandSelect = block.querySelector('.condition-command');
-
-            if (!deviceId) {
-                commandSelect.innerHTML = '<option value="">Выберите устройство</option>';
-                return;
-            }
-
-            const standardCommands = [
-                { value: 'greater', label: '📈 Значение больше' },
-                { value: 'less', label: '📉 Значение меньше' },
-                { value: 'equal', label: '📊 Значение равно' },
-                { value: 'changed', label: '🔄 Значение сменилось' },
-                { value: 'timer', label: '⏱️ Таймер' }
-            ];
-
-            commandSelect.innerHTML = '<option value="">Выберите условие</option>';
-            standardCommands.forEach(cmd => {
-                const option = document.createElement('option');
-                option.value = cmd.value;
-                option.textContent = cmd.label;
-                commandSelect.appendChild(option);
-            });
-        }
-
-        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В УСЛОВИИ ============
-
-        function onConditionCommandChange(selectElement) {
-            const block = selectElement.closest('.condition-block');
-            const valueField = block.querySelector('.value-field');
-            const command = selectElement.value;
-
-            const commandsWithoutValue = ['changed'];
-            const needsValue = command && !commandsWithoutValue.includes(command);
-
-            if (needsValue) {
-                valueField.classList.add('show');
-            } else {
-                valueField.classList.remove('show');
-            }
-        }
-
-        // ============ ДОБАВЛЕНИЕ ДЕЙСТВИЯ ============
-
-        async function addAction(actionData = null) {
-            const container = document.getElementById('actionsContainer');
-            const index = container.children.length;
-            const div = document.createElement('div');
-            div.className = 'action-block';
-            div.dataset.index = index;
-
-            div.innerHTML = `
-                <div class="block-header">
-                    <span>Действие ${index + 1}</span>
-                    <button class="remove-btn" onclick="this.closest('.action-block').remove()">Удалить</button>
-                </div>
-                <div class="form-group">
-                    <label>Устройство (исполнитель)</label>
-                    <select class="action-device" data-index="${index}" onchange="onActionDeviceChange(this)">
-                        <option value="">Выберите устройство</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Команда</label>
-                    <select class="action-command" data-index="${index}" onchange="onActionCommandChange(this)">
-                        <option value="">Сначала выберите устройство</option>
-                    </select>
-                </div>
-                <div class="value-field" id="action-value-${index}">
-                    <div class="form-group">
-                        <label>Значение</label>
-                        <input type="text" class="action-value" placeholder="Введите значение">
-                    </div>
-                </div>
-                <div class="param-field" id="action-params-${index}"></div>
-            `;
-
-            container.appendChild(div);
-
-            const dstControllerId = document.getElementById('dstController').value;
-            const deviceSelect = div.querySelector('.action-device');
-            await populateDeviceSelect(deviceSelect, dstControllerId);
-
-            if (actionData) {
-                deviceSelect.value = actionData.device_id;
-                await onActionDeviceChange(deviceSelect);
-
-                const commandSelect = div.querySelector('.action-command');
-                commandSelect.value = actionData.command;
-                await onActionCommandChange(commandSelect);
-
-                if (actionData.value) {
-                    const valueInput = div.querySelector('.action-value');
-                    valueInput.value = actionData.value;
-                }
-
-                // Восстанавливаем параметры если есть
-                if (actionData.params) {
-                    const paramsContainer = div.querySelector(`#action-params-${index}`);
-                    const params = Object.keys(actionData.params).map(key => ({
-                        name: key,
-                        display_name: key,
-                        value: actionData.params[key]
-                    }));
-                    createParamFields(paramsContainer, params);
-                }
-            }
-        }
-
-        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В ДЕЙСТВИИ ============
-
-        async function onActionDeviceChange(selectElement) {
-            const block = selectElement.closest('.action-block');
-            const deviceId = selectElement.value;
-            const commandSelect = block.querySelector('.action-command');
-            const paramsContainer = block.querySelector('.param-field');
-
-            // Очищаем параметры
-            paramsContainer.innerHTML = '';
-            paramsContainer.classList.remove('show');
-
-            if (!deviceId) {
-                commandSelect.innerHTML = '<option value="">Выберите устройство</option>';
-                return;
-            }
-
-            const device = await findDeviceInCache(deviceId);
-            if (!device) {
-                commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>';
-                return;
-            }
-
-            // Для серверного устройства
-            if (deviceId == -1) {
-                commandSelect.innerHTML = `
-                    <option value="">Выберите действие</option>
-                    <option value="addOne">➕ Прибавить 1</option>
-                    <option value="minusOne">➖ Вычесть 1</option>
-                `;
-                return;
-            }
-
-            const type = findTypeById(device.type_id);
-            if (!type || !type.param_names || !type.param_names.sending_commands) {
-                commandSelect.innerHTML = '<option value="">Команды не найдены</option>';
-                return;
-            }
-
-            const sendingCommands = type.param_names.sending_commands;
-            const allCommands = [];
-
-            if (sendingCommands.binary && sendingCommands.binary.length > 0) {
-                sendingCommands.binary.forEach(cmd => {
-                    const displayName = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName, data: cmd });
-                });
-            }
-
-            if (sendingCommands.numeric && sendingCommands.numeric.length > 0) {
-                sendingCommands.numeric.forEach(cmd => {
-                    const displayName = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: displayName, data: cmd });
-                });
-            }
-
-            commandSelect.innerHTML = '<option value="">Выберите команду</option>';
-            allCommands.forEach(cmd => {
-                const option = document.createElement('option');
-                option.value = cmd.value;
-                option.textContent = cmd.label;
-                option.dataset.cmdData = JSON.stringify(cmd.data || {});
-                commandSelect.appendChild(option);
-            });
-        }
-
-        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОМАНДЫ В ДЕЙСТВИИ ============
-
-        function onActionCommandChange(selectElement) {
-            const block = selectElement.closest('.action-block');
-            const valueField = block.querySelector('.value-field');
-            const paramsContainer = block.querySelector('.param-field');
-            const command = selectElement.value;
-            const deviceId = block.querySelector('.action-device').value;
-
-            // Очищаем параметры
-            paramsContainer.innerHTML = '';
-            paramsContainer.classList.remove('show');
-
-            if (!command) {
-                valueField.classList.remove('show');
-                return;
-            }
-
-            // Для серверных команд (addOne, minusOne)
-            if (command === 'addOne' || command === 'minusOne') {
-                valueField.classList.remove('show');
-                return;
-            }
-
-            // Проверяем, есть ли параметры у команды
-            const device = findDeviceInCache(deviceId).then(dev => {
-                if (!dev) return;
-
-                const type = findTypeById(dev.type_id);
-                if (!type) return;
-
-                const cmdInfo = getCommandParams(command, type);
-                if (cmdInfo) {
-                    // Проверяем, есть ли параметры
-                    const hasParams = cmdInfo.params && cmdInfo.params.length > 0;
-
-                    // Проверяем dataType
-                    const dataType = cmdInfo.dataType;
-
-                    if (dataType === 'boolT') {
-                        // Булево значение - не показываем поле
-                        valueField.classList.remove('show');
-                        return;
-                    }
-
-                    if (hasParams) {
-                        // Создаем поля для параметров
-                        createParamFields(paramsContainer, cmdInfo.params);
-                        valueField.classList.remove('show');
-                    } else {
-                        // Нет параметров - показываем стандартное поле значения
-                        const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
-                        const needsValue = command && !commandsWithoutValue.includes(command);
-
-                        if (needsValue) {
-                            valueField.classList.add('show');
-                        } else {
-                            valueField.classList.remove('show');
-                        }
-                    }
-                } else {
-                    // Если команда не найдена - показываем стандартное поле
-                    const commandsWithoutValue = ['toggle', 'turnOn', 'turnOff', 'startInf', 'stop'];
-                    const needsValue = command && !commandsWithoutValue.includes(command);
-
-                    if (needsValue) {
-                        valueField.classList.add('show');
-                    } else {
-                        valueField.classList.remove('show');
-                    }
-                }
-            });
-        }
-
-        // ============ ПОИСК УСТРОЙСТВА В КЕШЕ ============
-
-        async function findDeviceInCache(deviceId) {
-            for (const controllerId in devicesCache) {
-                const device = devicesCache[controllerId].find(d => d.id == deviceId);
-                if (device) return device;
-            }
-            return null;
-        }
-
         // ============ ЗАГРУЗКА ТРИГГЕРОВ ============
 
         async function loadTriggers() {
@@ -1075,27 +1322,33 @@
                     row.insertCell(0).innerText = trigger.id;
                     row.insertCell(1).innerText = trigger.name;
 
-                    // Проверяем, является ли источник сервером
                     const isSrcServer = trigger.src_controller_name === 'Сервер' || trigger.src_controller_mac === 'serv';
                     const srcDisplay = isSrcServer ? `${trigger.src_controller_name} 🖥️` : trigger.src_controller_name;
                     row.insertCell(2).innerText = srcDisplay;
 
-                    // Проверяем, является ли приемник сервером
                     const isDstServer = trigger.dst_controller_name === 'Сервер' || trigger.dst_controller_mac === 'serv';
                     const dstDisplay = isDstServer ? `${trigger.dst_controller_name} 🖥️` : trigger.dst_controller_name;
                     row.insertCell(3).innerText = dstDisplay;
 
                     const conditionsCell = row.insertCell(4);
-                    if (trigger.conditions.length > 0) {
+                    if (trigger.conditions && trigger.conditions.length > 0) {
                         const subTable = document.createElement('table');
                         subTable.className = 'sub-table';
                         trigger.conditions.forEach(cond => {
                             const subRow = subTable.insertRow();
                             const typeDisplayName = getTypeDisplayName(cond.device_type_id);
                             const deviceLabel = `${cond.device_name} (${typeDisplayName})`;
+                            let triggerTypeStr = cond.trigger_type || 'value';
+                            if (triggerTypeStr === 'time') {
+                                triggerTypeStr = `⏱️ ${cond.time ? cond.time/1000 + 'с' : ''}`;
+                            } else if (triggerTypeStr === 'changed') {
+                                triggerTypeStr = '🔄 changed';
+                            } else {
+                                triggerTypeStr = `📊 ${cond.compare || 'equal'} ${cond.value || ''}`;
+                            }
                             subRow.insertCell(0).innerHTML = `
                                 <strong>${deviceLabel}</strong><br>
-                                <small>📊 ${cond.command}: ${cond.value || '—'}</small>
+                                <small>${triggerTypeStr}</small>
                             `;
                         });
                         conditionsCell.appendChild(subTable);
@@ -1104,7 +1357,7 @@
                     }
 
                     const actionsCell = row.insertCell(5);
-                    if (trigger.responses.length > 0) {
+                    if (trigger.responses && trigger.responses.length > 0) {
                         const subTable = document.createElement('table');
                         subTable.className = 'sub-table';
                         trigger.responses.forEach(resp => {
@@ -1151,6 +1404,28 @@
             }
         }
 
+        // ============ ФОРМИРОВАНИЕ ПРАВИЛЬНОЙ СТРОКИ УСЛОВИЯ ============
+
+        function buildConditionString(device, readingCmd, triggerType, compare, value, time) {
+            // Формат: deviceType/port/value/paramNumber/compare/value
+            // или: deviceType/port/time/timeMs
+            // или: deviceType/port/value/paramNumber/onChange
+
+            const deviceType = device.type_name || 'unknown';
+            const port = device.port || '0';
+            const paramNumber = readingCmd.parameter_number || 0;
+
+            if (triggerType === 'time') {
+                const timeMs = parseInt(time) * 1000;
+                return `${deviceType}/${port}/time/${timeMs}`;
+            } else if (triggerType === 'changed') {
+                return `${deviceType}/${port}/value/${paramNumber}/onChange`;
+            } else {
+                // По значению: deviceType/port/value/paramNumber/compare/value
+                return `${deviceType}/${port}/value/${paramNumber}/${compare}/${value}`;
+            }
+        }
+
         // ============ СОЗДАНИЕ И РЕДАКТИРОВАНИЕ ============
 
         async function showCreateModal() {
@@ -1163,6 +1438,7 @@
             document.getElementById('actionsContainer').innerHTML = '';
 
             await loadDeviceTypes();
+            await loadServerCommands();
             await loadControllers();
 
             document.getElementById('srcController').onchange = onSrcControllerChange;
@@ -1180,12 +1456,12 @@
             document.getElementById('triggerName').value = trigger.name;
 
             await loadDeviceTypes();
+            await loadServerCommands();
             await loadControllers();
 
             document.getElementById('srcController').onchange = onSrcControllerChange;
             document.getElementById('dstController').onchange = onDstControllerChange;
 
-            // Устанавливаем контроллеры
             const srcController = controllersList.find(c => c.name === trigger.src_controller_name);
             const dstController = controllersList.find(c => c.name === trigger.dst_controller_name) ||
                 (trigger.dst_controller_name === 'Сервер' ? { id: SERVER_ID } : null);
@@ -1201,12 +1477,12 @@
             await onDstControllerChange();
 
             document.getElementById('conditionsContainer').innerHTML = '';
-            for (const cond of trigger.conditions) {
+            for (const cond of trigger.conditions || []) {
                 await addCondition(cond);
             }
 
             document.getElementById('actionsContainer').innerHTML = '';
-            for (const resp of trigger.responses) {
+            for (const resp of trigger.responses || []) {
                 await addAction(resp);
             }
 
@@ -1232,19 +1508,63 @@
                 return;
             }
 
+            if (parseInt(srcControllerId) === SERVER_ID) {
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Сервер не может быть источником сигнала'
+                    });
+                } else {
+                    showToast('❌ Сервер не может быть источником сигнала');
+                }
+                return;
+            }
+
             const conditions = [];
             document.querySelectorAll('.condition-block').forEach(block => {
                 const deviceId = block.querySelector('.condition-device').value;
-                const command = block.querySelector('.condition-command').value;
-                const valueInput = block.querySelector('.condition-value');
-                const value = valueInput ? valueInput.value : '';
+                const readingCommand = block.querySelector('.condition-reading-command').value;
+                const compareSelect = block.querySelector('.condition-compare');
+                const compare = compareSelect ? compareSelect.value : 'equal';
+                const valueSelect = block.querySelector('.condition-value-select');
+                const valueInput = block.querySelector('.condition-value-input');
+                const timeInput = block.querySelector('.condition-time-input');
 
-                if (deviceId && command) {
-                    conditions.push({
-                        device_id: parseInt(deviceId),
-                        command: command,
-                        value: value
-                    });
+                const radio = block.querySelector('input[name^="trigger-type-"]:checked');
+                const triggerType = radio ? radio.value : 'value';
+
+                let value = '';
+                let time = 0;
+
+                if (triggerType === 'time') {
+                    time = timeInput ? parseFloat(timeInput.value) || 0 : 0;
+                } else if (triggerType === 'changed') {
+                    value = 'onChange';
+                } else {
+                    if (valueSelect && valueSelect.value) {
+                        value = valueSelect.value;
+                    } else if (valueInput && valueInput.value) {
+                        value = valueInput.value;
+                    }
+                }
+
+                if (deviceId && readingCommand) {
+                    const device = findDeviceInCache(parseInt(deviceId));
+                    const readingCmd = getDeviceReadingCommandBySystemName(parseInt(deviceId), readingCommand);
+
+                    if (device && readingCmd) {
+                        const conditionString = buildConditionString(device, readingCmd, triggerType, compare, value, time);
+
+                        conditions.push({
+                            device_id: parseInt(deviceId),
+                            command: readingCommand,
+                            value: value,
+                            time: time,
+                            trigger_type: triggerType,
+                            compare: compare,
+                            condition_string: conditionString
+                        });
+                    }
                 }
             });
 
@@ -1252,10 +1572,9 @@
             document.querySelectorAll('.action-block').forEach(block => {
                 const deviceId = block.querySelector('.action-device').value;
                 const command = block.querySelector('.action-command').value;
-                const valueInput = block.querySelector('.action-value');
-                const value = valueInput ? valueInput.value : '';
+                const valueInput = block.querySelector('.action-value-input');
+                let value = valueInput ? valueInput.value : '';
 
-                // Собираем параметры
                 const paramsContainer = block.querySelector('.param-field');
                 const params = {};
                 if (paramsContainer) {
@@ -1266,23 +1585,31 @@
                     });
                 }
 
-                const paramsStr = Object.keys(params).length > 0 ? JSON.stringify(params) : '';
+                if (Object.keys(params).length > 0) {
+                    value = JSON.stringify(params);
+                }
 
-                // Если выбран Сервер - используем serv вместо MAC
                 const isServer = parseInt(dstControllerId) === SERVER_ID;
                 let finalCommand = command;
 
-                if (isServer && command && command !== 'addOne' && command !== 'minusOne') {
-                    // Для сервера команда должна быть 'serv'
+                if (isServer) {
                     finalCommand = 'serv';
                 }
 
                 if (deviceId && command) {
-                    responses.push({
-                        device_id: parseInt(deviceId),
-                        command: finalCommand,
-                        value: value || paramsStr
-                    });
+                    const device = findDeviceInCache(parseInt(deviceId));
+                    if (device) {
+                        let actionStr = `${device.type_name}/${device.port}/${finalCommand}`;
+                        if (value) {
+                            actionStr += `/${value}`;
+                        }
+                        responses.push({
+                            device_id: parseInt(deviceId),
+                            command: finalCommand,
+                            value: value,
+                            action_string: actionStr
+                        });
+                    }
                 }
             });
 
@@ -1310,12 +1637,22 @@
                 return;
             }
 
+            // Формируем полную команду: условие/do/действие/next
+            const conditionStrings = conditions.map(c => c.condition_string);
+            const fullCondition = conditionStrings.join('/and/');
+
+            const actionStrings = responses.map(r => r.action_string);
+            const fullAction = actionStrings.join('/and/');
+
+            const fullCommand = `${fullCondition}/do/${fullAction}/next`;
+
             const data = {
                 name: name,
                 src_controller_id: parseInt(srcControllerId),
                 dst_controller_id: parseInt(dstControllerId),
                 conditions: conditions,
-                responses: responses
+                responses: responses,
+                command: fullCommand
             };
 
             const url = currentEditId ? `/api/triggers/${currentEditId}` : '/api/triggers';
@@ -1454,6 +1791,7 @@
         // ============ ИНИЦИАЛИЗАЦИЯ ============
 
         loadDeviceTypes();
+        loadServerCommands();
         loadTriggers();
     </script>
 </body>
