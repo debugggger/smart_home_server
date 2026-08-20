@@ -636,11 +636,6 @@
             return [];
         }
 
-        function getDeviceReadingCommandBySystemName(deviceId, systemName) {
-            const commands = getDeviceReadingCommands(deviceId);
-            return commands.find(cmd => cmd.system_name === systemName) || null;
-        }
-
         // ============ ПОЛУЧЕНИЕ КОМАНД УПРАВЛЕНИЯ УСТРОЙСТВА ============
 
         function getDeviceSendingCommands(deviceId) {
@@ -668,14 +663,12 @@
                 await populateDeviceSelect(deviceSelect, srcControllerId);
                 const readingSelect = block.querySelector('.condition-reading-command');
                 readingSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
-                const compareSelect = block.querySelector('.condition-compare');
-                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
                 const valueSelect = block.querySelector('.condition-value-select');
                 valueSelect.innerHTML = '<option value="">Выберите значение</option>';
-                const valueInput = block.querySelector('.condition-value-input');
-                if (valueInput) valueInput.value = '';
                 const valueField = block.querySelector('.condition-value-field');
                 if (valueField) valueField.classList.remove('show');
+                const compareSelect = block.querySelector('.condition-compare');
+                if (compareSelect) compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
             }
         }
 
@@ -766,7 +759,7 @@
                 </div>
                 <div class="form-group trigger-compare-group">
                     <label>Сравнение</label>
-                    <select class="condition-compare" data-index="${index}">
+                    <select class="condition-compare" data-index="${index}" onchange="onConditionCompareChange(this)">
                         <option value="">Выберите сравнение</option>
                     </select>
                 </div>
@@ -801,7 +794,7 @@
                 await onConditionDeviceChange(deviceSelect);
 
                 const readingSelect = div.querySelector('.condition-reading-command');
-                readingSelect.value = conditionData.command;
+                readingSelect.value = conditionData.reading_command || conditionData.command;
                 await onConditionReadingCommandChange(readingSelect);
 
                 const triggerType = conditionData.trigger_type || 'value';
@@ -841,10 +834,6 @@
                     if (timeField) timeField.style.display = 'block';
                     if (input) input.value = conditionData.time / 1000;
                 }
-            } else {
-                // По умолчанию показываем поле для числового значения
-                const valueField = div.querySelector('.condition-value-field');
-                if (valueField) valueField.classList.add('show');
             }
         }
 
@@ -854,15 +843,15 @@
             const block = selectElement.closest('.condition-block');
             const deviceId = selectElement.value;
             const readingSelect = block.querySelector('.condition-reading-command');
-            const compareSelect = block.querySelector('.condition-compare');
             const valueSelect = block.querySelector('.condition-value-select');
             const valueField = block.querySelector('.condition-value-field');
+            const compareSelect = block.querySelector('.condition-compare');
 
             if (!deviceId) {
                 readingSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
-                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
                 valueSelect.innerHTML = '<option value="">Выберите значение</option>';
                 if (valueField) valueField.classList.remove('show');
+                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
                 return;
             }
 
@@ -871,8 +860,8 @@
             readingSelect.innerHTML = '<option value="">Выберите параметр</option>';
             readingCommands.forEach(cmd => {
                 const option = document.createElement('option');
-                option.value = cmd.system_name;
-                option.textContent = cmd.display_name || cmd.system_name;
+                option.value = cmd.display_name;
+                option.textContent = cmd.display_name;
                 if (cmd.parameter_number !== undefined) {
                     option.dataset.parameterNumber = cmd.parameter_number;
                 }
@@ -886,12 +875,12 @@
             });
 
             if (readingCommands.length === 1) {
-                readingSelect.value = readingCommands[0].system_name;
+                readingSelect.value = readingCommands[0].display_name;
                 await onConditionReadingCommandChange(readingSelect);
             } else {
-                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
                 valueSelect.innerHTML = '<option value="">Выберите значение</option>';
                 if (valueField) valueField.classList.remove('show');
+                compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
             }
         }
 
@@ -900,30 +889,26 @@
         function onConditionReadingCommandChange(selectElement) {
             const block = selectElement.closest('.condition-block');
             const selectedOption = selectElement.options[selectElement.selectedIndex];
-            const compareSelect = block.querySelector('.condition-compare');
             const valueSelect = block.querySelector('.condition-value-select');
             const valueField = block.querySelector('.condition-value-field');
+            const compareSelect = block.querySelector('.condition-compare');
+            const dataType = selectedOption?.dataset?.dataType || 'intT';
+            const paramNumber = selectedOption?.dataset?.parameterNumber || 0;
 
-            compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
+            // Сохраняем parameter_number для использования при сохранении
+            selectElement.dataset.parameterNumber = paramNumber;
+
             valueSelect.innerHTML = '<option value="">Выберите значение</option>';
             if (valueField) valueField.classList.remove('show');
 
-            if (!selectedOption || !selectedOption.value) {
-                return;
-            }
+            compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
 
-            const dataType = selectedOption.dataset.dataType || 'intT';
-            const returningValuesData = selectedOption.dataset.returningValues;
-
-            // Настройка сравнений
             if (dataType === 'boolT') {
-                // Для bool только "равно"
                 const option = document.createElement('option');
                 option.value = 'equal';
                 option.textContent = 'равно';
                 compareSelect.appendChild(option);
             } else {
-                // Для int: равно, больше, меньше
                 const options = [
                     { value: 'equal', label: 'равно' },
                     { value: 'more', label: 'больше' },
@@ -937,7 +922,7 @@
                 });
             }
 
-            // Настройка значений
+            const returningValuesData = selectedOption?.dataset?.returningValues;
             if (returningValuesData) {
                 try {
                     const returningValues = JSON.parse(returningValuesData);
@@ -958,7 +943,6 @@
                 }
             }
 
-            // Если нет returning_values, показываем поле ввода
             if (valueField) {
                 valueField.classList.add('show');
                 const input = block.querySelector('.condition-value-input');
@@ -976,13 +960,12 @@
             const compareGroup = block.querySelector('.trigger-compare-group');
             const valueGroup = block.querySelector('.trigger-value-group');
 
-            const triggerType = radioElement.value;
-
-            // Скрываем все
             if (valueField) valueField.classList.remove('show');
             if (timeField) timeField.style.display = 'none';
             if (compareGroup) compareGroup.style.display = 'block';
             if (valueGroup) valueGroup.style.display = 'block';
+
+            const triggerType = radioElement.value;
 
             if (triggerType === 'time') {
                 if (timeField) timeField.style.display = 'block';
@@ -991,19 +974,46 @@
             } else if (triggerType === 'changed') {
                 if (compareGroup) compareGroup.style.display = 'none';
                 if (valueGroup) valueGroup.style.display = 'none';
-            } else {
-                // По значению - показываем сравнение и значение
-                if (valueField) {
-                    // Проверяем, есть ли returning_values у выбранного параметра
-                    const readingSelect = block.querySelector('.condition-reading-command');
-                    const selectedOption = readingSelect.options[readingSelect.selectedIndex];
-                    const returningValuesData = selectedOption?.dataset?.returningValues;
+            }
+        }
 
-                    if (!returningValuesData) {
-                        valueField.classList.add('show');
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ СРАВНЕНИЯ ============
+
+        function onConditionCompareChange(selectElement) {
+            const block = selectElement.closest('.condition-block');
+            const valueSelect = block.querySelector('.condition-value-select');
+            const valueField = block.querySelector('.condition-value-field');
+            const readingSelect = block.querySelector('.condition-reading-command');
+            const selectedOption = readingSelect.options[readingSelect.selectedIndex];
+
+            const returningValuesData = selectedOption?.dataset?.returningValues;
+            if (returningValuesData) {
+                try {
+                    const returningValues = JSON.parse(returningValuesData);
+                    if (returningValues && returningValues.length > 0 && returningValues[0]) {
+                        valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+                        const returnMap = returningValues[0];
+                        Object.keys(returnMap).forEach(key => {
+                            const option = document.createElement('option');
+                            option.value = key;
+                            const desc = returnMap[key];
+                            option.textContent = desc.description || desc || key;
+                            valueSelect.appendChild(option);
+                        });
+                        if (valueField) valueField.classList.remove('show');
+                        return;
                     }
+                } catch (e) {
+                    console.error('Error parsing returning_values:', e);
                 }
             }
+
+            if (valueField) {
+                valueField.classList.add('show');
+                const input = block.querySelector('.condition-value-input');
+                if (input) input.value = '';
+            }
+            valueSelect.innerHTML = '<option value="">Введите число в поле ниже</option>';
         }
 
         // ============ ДОБАВЛЕНИЕ ДЕЙСТВИЯ ============
@@ -1138,8 +1148,8 @@
             if (sendingCommands.binary && sendingCommands.binary.length > 0) {
                 sendingCommands.binary.forEach(cmd => {
                     allCommands.push({
-                        value: cmd.sending_name || cmd.system_name,
-                        label: cmd.display_name || cmd.sending_name || cmd.system_name,
+                        value: cmd.sending_name,
+                        label: cmd.display_name || cmd.sending_name,
                         data: cmd,
                         type: 'binary'
                     });
@@ -1149,8 +1159,8 @@
             if (sendingCommands.numeric && sendingCommands.numeric.length > 0) {
                 sendingCommands.numeric.forEach(cmd => {
                     allCommands.push({
-                        value: cmd.sending_name || cmd.system_name,
-                        label: cmd.display_name || cmd.sending_name || cmd.system_name,
+                        value: cmd.sending_name,
+                        label: cmd.display_name || cmd.sending_name,
                         data: cmd,
                         type: 'numeric'
                     });
@@ -1331,24 +1341,16 @@
                     row.insertCell(3).innerText = dstDisplay;
 
                     const conditionsCell = row.insertCell(4);
-                    if (trigger.conditions && trigger.conditions.length > 0) {
+                    if (trigger.conditions.length > 0) {
                         const subTable = document.createElement('table');
                         subTable.className = 'sub-table';
                         trigger.conditions.forEach(cond => {
                             const subRow = subTable.insertRow();
                             const typeDisplayName = getTypeDisplayName(cond.device_type_id);
                             const deviceLabel = `${cond.device_name} (${typeDisplayName})`;
-                            let triggerTypeStr = cond.trigger_type || 'value';
-                            if (triggerTypeStr === 'time') {
-                                triggerTypeStr = `⏱️ ${cond.time ? cond.time/1000 + 'с' : ''}`;
-                            } else if (triggerTypeStr === 'changed') {
-                                triggerTypeStr = '🔄 changed';
-                            } else {
-                                triggerTypeStr = `📊 ${cond.compare || 'equal'} ${cond.value || ''}`;
-                            }
                             subRow.insertCell(0).innerHTML = `
                                 <strong>${deviceLabel}</strong><br>
-                                <small>${triggerTypeStr}</small>
+                                <small>📊 ${cond.condition_string}</small>
                             `;
                         });
                         conditionsCell.appendChild(subTable);
@@ -1357,7 +1359,7 @@
                     }
 
                     const actionsCell = row.insertCell(5);
-                    if (trigger.responses && trigger.responses.length > 0) {
+                    if (trigger.responses.length > 0) {
                         const subTable = document.createElement('table');
                         subTable.className = 'sub-table';
                         trigger.responses.forEach(resp => {
@@ -1404,16 +1406,17 @@
             }
         }
 
-        // ============ ФОРМИРОВАНИЕ ПРАВИЛЬНОЙ СТРОКИ УСЛОВИЯ ============
+        // ============ ФОРМИРОВАНИЕ ПРАВИЛЬНОЙ СТРОКИ УСЛОВИЯ (ХАРДКОД) ============
 
-        function buildConditionString(device, readingCmd, triggerType, compare, value, time) {
-            // Формат: deviceType/port/value/paramNumber/compare/value
-            // или: deviceType/port/time/timeMs
-            // или: deviceType/port/value/paramNumber/onChange
+        function buildConditionString(device, paramNumber, triggerType, compare, value, time) {
+            // Правильный формат (хардкод):
+            // binOut/2/value/0/equal/0  - для двоичного выхода, параметр 0, равно 0
+            // aht/4/value/0/more/25    - для датчика, параметр 0, больше 25
+            // binOut/2/time/10000      - для времени
+            // btn/15/value/0/onChange  - для изменения
 
             const deviceType = device.type_name || 'unknown';
             const port = device.port || '0';
-            const paramNumber = readingCmd.parameter_number || 0;
 
             if (triggerType === 'time') {
                 const timeMs = parseInt(time) * 1000;
@@ -1477,12 +1480,12 @@
             await onDstControllerChange();
 
             document.getElementById('conditionsContainer').innerHTML = '';
-            for (const cond of trigger.conditions || []) {
+            for (const cond of trigger.conditions) {
                 await addCondition(cond);
             }
 
             document.getElementById('actionsContainer').innerHTML = '';
-            for (const resp of trigger.responses || []) {
+            for (const resp of trigger.responses) {
                 await addAction(resp);
             }
 
@@ -1523,7 +1526,8 @@
             const conditions = [];
             document.querySelectorAll('.condition-block').forEach(block => {
                 const deviceId = block.querySelector('.condition-device').value;
-                const readingCommand = block.querySelector('.condition-reading-command').value;
+                const readingSelect = block.querySelector('.condition-reading-command');
+                const readingCommand = readingSelect.value;
                 const compareSelect = block.querySelector('.condition-compare');
                 const compare = compareSelect ? compareSelect.value : 'equal';
                 const valueSelect = block.querySelector('.condition-value-select');
@@ -1550,10 +1554,14 @@
 
                 if (deviceId && readingCommand) {
                     const device = findDeviceInCache(parseInt(deviceId));
-                    const readingCmd = getDeviceReadingCommandBySystemName(parseInt(deviceId), readingCommand);
+                    // Получаем полную команду чтения по display_name
+                    const readingCommands = getDeviceReadingCommands(parseInt(deviceId));
+                    const readingCmd = readingCommands.find(c => c.display_name === readingCommand);
 
                     if (device && readingCmd) {
-                        const conditionString = buildConditionString(device, readingCmd, triggerType, compare, value, time);
+                        // Используем только parameter_number для формирования команды
+                        const paramNumber = readingCmd.parameter_number || 0;
+                        const conditionString = buildConditionString(device, paramNumber, triggerType, compare, value, time);
 
                         conditions.push({
                             device_id: parseInt(deviceId),
