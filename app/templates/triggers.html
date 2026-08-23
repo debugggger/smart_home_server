@@ -106,30 +106,6 @@
             transform: translateY(-2px);
         }
 
-        .mode-switch {
-            display: flex;
-            gap: 10px;
-            background: white;
-            padding: 5px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-
-        .mode-btn {
-            padding: 10px 20px;
-            border: none;
-            background: transparent;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: 0.2s;
-            font-weight: 500;
-        }
-
-        .mode-btn.active {
-            background: #4fc3f7;
-            color: white;
-        }
-
         .card {
             background: white;
             border-radius: 24px;
@@ -261,19 +237,19 @@
             padding: 2px;
         }
 
-        .triggers-list table {
+        .scenes-list table {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .triggers-list th,
-        .triggers-list td {
+        .scenes-list th,
+        .scenes-list td {
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid #e2e8f0;
         }
 
-        .triggers-list th {
+        .scenes-list th {
             background: #f8fafc;
             font-weight: 600;
         }
@@ -290,7 +266,7 @@
             font-size: 13px;
         }
 
-        .delete-trigger-btn {
+        .delete-scene-btn {
             background: #fee2e2;
             border: none;
             color: #b91c1c;
@@ -299,13 +275,58 @@
             cursor: pointer;
         }
 
-        .edit-trigger-btn {
+        .edit-scene-btn {
             background: #e2e8f0;
             border: none;
             padding: 5px 10px;
             border-radius: 8px;
             cursor: pointer;
             margin-right: 5px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #10b981;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
         }
 
         .toast-msg {
@@ -348,9 +369,45 @@
             padding: 24px;
             border-radius: 24px;
             width: 90%;
-            max-width: 600px;
+            max-width: 650px;
             max-height: 80vh;
             overflow-y: auto;
+        }
+
+        .controller-select {
+            margin-bottom: 15px;
+        }
+
+        .controller-select label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 13px;
+            color: #334155;
+        }
+
+        .controller-select select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .status-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .status-label .active {
+            color: #10b981;
+        }
+
+        .status-label .inactive {
+            color: #94a3b8;
         }
 
         @media (max-width: 768px) {
@@ -377,51 +434,33 @@
             </div>
         </div>
 
-        <div class="mode-switch">
-            <button class="mode-btn active" onclick="switchMode('controller')">Сценарии для контроллеров</button>
-            <button class="mode-btn" onclick="switchMode('management')">Сценарии управления</button>
-        </div>
-
         <div class="card">
             <h2>📋 Список сценариев</h2>
-            <div class="triggers-list">
-                <table id="triggersTable">
+            <div class="scenes-list">
+                <table id="scenesTable">
                     <thead>
                         <tr>
                             <th>ID</th>
                             <th>Название</th>
-                            <th>Контроллер-источник</th>
-                            <th>Контроллер-приемник</th>
                             <th>Условия</th>
                             <th>Действия</th>
+                            <th>Активен</th>
                             <th>Управление</th>
                         </tr>
                     </thead>
-                    <tbody id="triggersTableBody"></tbody>
+                    <tbody id="scenesTableBody"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <div id="triggerModal" class="modal">
+    <div id="sceneModal" class="modal">
         <div class="modal-content">
             <h3 id="modalTitle">➕ Создать сценарий</h3>
 
             <div class="form-group">
                 <label>Название сценария</label>
-                <input type="text" id="triggerName" placeholder="Например: Включить свет при движении">
-            </div>
-
-            <div class="form-group">
-                <label>Контроллер-источник (откуда идет сигнал)</label>
-                <select id="srcController" onchange="onSrcControllerChange()"></select>
-            </div>
-
-            <div class="form-group">
-                <label>Контроллер-приемник (куда отправлять команду)</label>
-                <select id="dstController" onchange="onDstControllerChange()">
-                    <option value="">Выберите контроллер</option>
-                </select>
+                <input type="text" id="sceneName" placeholder="Например: Включить свет при движении">
             </div>
 
             <h4>📊 Условия (что должно произойти)</h4>
@@ -433,7 +472,7 @@
             <button class="add-condition-btn" onclick="addAction()">+ Добавить действие</button>
 
             <div class="modal-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="add-btn" onclick="saveTrigger()" style="background: #10b981; color: white;">Сохранить</button>
+                <button class="add-btn" onclick="saveScene()" style="background: #10b981; color: white;">Сохранить</button>
                 <button class="back-btn" onclick="closeModal()">Отмена</button>
             </div>
         </div>
@@ -451,27 +490,6 @@
         const SERVER_NAME = 'Сервер';
         const SERVER_MAC = 'serv';
 
-        // ============ ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ ============
-
-        function switchMode(mode) {
-            if (mode === 'controller') {
-                document.querySelectorAll('.mode-btn')[0].classList.add('active');
-                document.querySelectorAll('.mode-btn')[1].classList.remove('active');
-                loadTriggers();
-            } else {
-                document.querySelectorAll('.mode-btn')[1].classList.add('active');
-                document.querySelectorAll('.mode-btn')[0].classList.remove('active');
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({
-                        type: 'warning',
-                        message: '⚠️ Режим "Сценарии управления" в разработке'
-                    });
-                } else {
-                    showToast('⚠️ Режим "Сценарии управления" в разработке');
-                }
-            }
-        }
-
         // ============ ЗАГРУЗКА ТИПОВ УСТРОЙСТВ ============
 
         async function loadDeviceTypes() {
@@ -483,7 +501,7 @@
                 types.forEach(type => {
                     deviceTypesMap[type.id] = type;
                 });
-                console.log('[Triggers] Device types loaded:', types.length);
+                console.log('[Scenes] Device types loaded:', types.length);
             } catch (error) {
                 console.error('Error loading device types:', error);
             }
@@ -496,7 +514,7 @@
                 const response = await fetch('/api/device-types/server-commands');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 serverCommands = await response.json();
-                console.log('[Triggers] Server commands loaded:', serverCommands.length);
+                console.log('[Scenes] Server commands loaded:', serverCommands.length);
             } catch (error) {
                 console.error('Error loading server commands:', error);
                 serverCommands = [];
@@ -519,7 +537,7 @@
             return type?.name || 'Unknown';
         }
 
-        // ============ ЗАГРУЗКА КОНТРОЛЛЕРОВ (С СЕРВЕРОМ) ============
+        // ============ ЗАГРУЗКА КОНТРОЛЛЕРОВ ============
 
         async function loadControllers() {
             try {
@@ -527,31 +545,7 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const controllers = await response.json();
                 controllersList = controllers;
-                console.log('[Triggers] Controllers loaded:', controllersList.length);
-
-                const srcSelect = document.getElementById('srcController');
-                const dstSelect = document.getElementById('dstController');
-
-                srcSelect.innerHTML = '<option value="">Выберите контроллер</option>';
-                dstSelect.innerHTML = '<option value="">Выберите контроллер</option>';
-
-                const serverOption = document.createElement('option');
-                serverOption.value = SERVER_ID;
-                serverOption.textContent = `${SERVER_NAME} 🖥️`;
-                serverOption.dataset.isServer = 'true';
-                dstSelect.appendChild(serverOption);
-
-                controllersList.forEach(ctrl => {
-                    const optionSrc = document.createElement('option');
-                    optionSrc.value = ctrl.id;
-                    optionSrc.textContent = `${ctrl.name} (${ctrl.room_name})`;
-                    srcSelect.appendChild(optionSrc);
-
-                    const optionDst = document.createElement('option');
-                    optionDst.value = ctrl.id;
-                    optionDst.textContent = `${ctrl.name} (${ctrl.room_name})`;
-                    dstSelect.appendChild(optionDst);
-                });
+                console.log('[Scenes] Controllers loaded:', controllersList.length);
             } catch (error) {
                 console.error('Error loading controllers:', error);
                 if (window.notificationManager) {
@@ -590,7 +584,7 @@
             }
         }
 
-        // ============ ЗАПОЛНЕНИЕ СПИСКА УСТРОЙСТВ ============
+        // ============ ЗАПОЛНЕНИЕ СПИСКА УСТРОЙСТВ ПО КОНТРОЛЛЕРУ ============
 
         async function populateDeviceSelect(selectElement, controllerId, selectedDeviceId = null) {
             if (!controllerId || controllerId === '') {
@@ -652,68 +646,6 @@
             return { binary: [], numeric: [] };
         }
 
-        // ============ ОБРАБОТЧИКИ СМЕНЫ КОНТРОЛЛЕРА ============
-
-        async function onSrcControllerChange() {
-            const srcControllerId = document.getElementById('srcController').value;
-            const conditionBlocks = document.querySelectorAll('.condition-block');
-
-            for (const block of conditionBlocks) {
-                const deviceSelect = block.querySelector('.condition-device');
-                await populateDeviceSelect(deviceSelect, srcControllerId);
-                const readingSelect = block.querySelector('.condition-reading-command');
-                readingSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
-                const valueSelect = block.querySelector('.condition-value-select');
-                valueSelect.innerHTML = '<option value="">Выберите значение</option>';
-                const valueField = block.querySelector('.condition-value-field');
-                if (valueField) valueField.classList.remove('show');
-                const compareSelect = block.querySelector('.condition-compare');
-                if (compareSelect) compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
-            }
-        }
-
-        async function onDstControllerChange() {
-            const dstControllerId = document.getElementById('dstController').value;
-            const actionBlocks = document.querySelectorAll('.action-block');
-
-            if (parseInt(dstControllerId) === SERVER_ID) {
-                for (const block of actionBlocks) {
-                    const deviceSelect = block.querySelector('.action-device');
-                    deviceSelect.innerHTML = '<option value="-1">Сервер (без устройства)</option>';
-
-                    const commandSelect = block.querySelector('.action-command');
-                    commandSelect.innerHTML = '<option value="">Выберите команду</option>';
-                    serverCommands.forEach(cmd => {
-                        const option = document.createElement('option');
-                        option.value = cmd.sending_name || cmd.system_name;
-                        option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
-                        if (cmd.dataType) {
-                            option.dataset.dataType = cmd.dataType;
-                        }
-                        if (cmd.params) {
-                            option.dataset.params = JSON.stringify(cmd.params);
-                        }
-                        commandSelect.appendChild(option);
-                    });
-                }
-                return;
-            }
-
-            for (const block of actionBlocks) {
-                const deviceSelect = block.querySelector('.action-device');
-                await populateDeviceSelect(deviceSelect, dstControllerId);
-                const commandSelect = block.querySelector('.action-command');
-                commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
-                const valueField = block.querySelector('.action-value');
-                if (valueField) valueField.classList.remove('show');
-                const paramsField = block.querySelector('.action-params');
-                if (paramsField) {
-                    paramsField.innerHTML = '';
-                    paramsField.classList.remove('show');
-                }
-            }
-        }
-
         // ============ ДОБАВЛЕНИЕ УСЛОВИЯ ============
 
         async function addCondition(conditionData = null) {
@@ -728,10 +660,16 @@
                     <span>Условие ${index + 1}</span>
                     <button class="remove-btn" onclick="this.closest('.condition-block').remove()">Удалить</button>
                 </div>
+                <div class="controller-select">
+                    <label>Контроллер-источник</label>
+                    <select class="condition-controller" data-index="${index}" onchange="onConditionControllerChange(this)">
+                        <option value="">Выберите контроллер</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Устройство (датчик)</label>
                     <select class="condition-device" data-index="${index}" onchange="onConditionDeviceChange(this)">
-                        <option value="">Выберите устройство</option>
+                        <option value="">Сначала выберите контроллер</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -785,17 +723,38 @@
 
             container.appendChild(div);
 
-            const srcControllerId = document.getElementById('srcController').value;
-            const deviceSelect = div.querySelector('.condition-device');
-            await populateDeviceSelect(deviceSelect, srcControllerId);
+            // Заполняем список контроллеров
+            const controllerSelect = div.querySelector('.condition-controller');
+            controllerSelect.innerHTML = '<option value="">Выберите контроллер</option>';
+            controllersList.forEach(ctrl => {
+                const option = document.createElement('option');
+                option.value = ctrl.id;
+                option.textContent = `${ctrl.name} (${ctrl.room_name})`;
+                controllerSelect.appendChild(option);
+            });
+
+            // Добавляем Сервер в список контроллеров для условий (не должен быть доступен)
+            // Пропускаем, так как сервер не может быть источником
 
             if (conditionData) {
-                deviceSelect.value = conditionData.device_id;
-                await onConditionDeviceChange(deviceSelect);
+                // Восстанавливаем данные при редактировании
+                const controllerId = conditionData.src_controller_id || conditionData.controller_id;
+                if (controllerId) {
+                    controllerSelect.value = controllerId;
+                    await onConditionControllerChange(controllerSelect);
+                }
+
+                const deviceSelect = div.querySelector('.condition-device');
+                if (conditionData.device_id) {
+                    deviceSelect.value = conditionData.device_id;
+                    await onConditionDeviceChange(deviceSelect);
+                }
 
                 const readingSelect = div.querySelector('.condition-reading-command');
-                readingSelect.value = conditionData.reading_command || conditionData.command;
-                await onConditionReadingCommandChange(readingSelect);
+                if (conditionData.command) {
+                    readingSelect.value = conditionData.command;
+                    await onConditionReadingCommandChange(readingSelect);
+                }
 
                 const triggerType = conditionData.trigger_type || 'value';
                 const radio = div.querySelector(`input[name="trigger-type-${index}"][value="${triggerType}"]`);
@@ -835,6 +794,34 @@
                     if (input) input.value = conditionData.time / 1000;
                 }
             }
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОНТРОЛЛЕРА В УСЛОВИИ ============
+
+        async function onConditionControllerChange(selectElement) {
+            const block = selectElement.closest('.condition-block');
+            const controllerId = selectElement.value;
+            const deviceSelect = block.querySelector('.condition-device');
+
+            if (!controllerId) {
+                deviceSelect.innerHTML = '<option value="">Сначала выберите контроллер</option>';
+                return;
+            }
+
+            await populateDeviceSelect(deviceSelect, controllerId);
+
+            // Очищаем остальные поля
+            const readingSelect = block.querySelector('.condition-reading-command');
+            readingSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
+
+            const valueSelect = block.querySelector('.condition-value-select');
+            valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+
+            const valueField = block.querySelector('.condition-value-field');
+            if (valueField) valueField.classList.remove('show');
+
+            const compareSelect = block.querySelector('.condition-compare');
+            if (compareSelect) compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
         }
 
         // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ УСТРОЙСТВА В УСЛОВИИ ============
@@ -895,7 +882,6 @@
             const dataType = selectedOption?.dataset?.dataType || 'intT';
             const paramNumber = selectedOption?.dataset?.parameterNumber || 0;
 
-            // Сохраняем parameter_number для использования при сохранении
             selectElement.dataset.parameterNumber = paramNumber;
 
             valueSelect.innerHTML = '<option value="">Выберите значение</option>';
@@ -1030,10 +1016,16 @@
                     <span>Действие ${index + 1}</span>
                     <button class="remove-btn" onclick="this.closest('.action-block').remove()">Удалить</button>
                 </div>
+                <div class="controller-select">
+                    <label>Контроллер-приемник</label>
+                    <select class="action-controller" data-index="${index}" onchange="onActionControllerChange(this)">
+                        <option value="">Выберите контроллер</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Устройство (исполнитель)</label>
                     <select class="action-device" data-index="${index}" onchange="onActionDeviceChange(this)">
-                        <option value="">Выберите устройство</option>
+                        <option value="">Сначала выберите контроллер</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1053,36 +1045,42 @@
 
             container.appendChild(div);
 
-            const dstControllerId = document.getElementById('dstController').value;
-            const deviceSelect = div.querySelector('.action-device');
+            // Заполняем список контроллеров для действия
+            const controllerSelect = div.querySelector('.action-controller');
+            controllerSelect.innerHTML = '<option value="">Выберите контроллер</option>';
 
-            if (parseInt(dstControllerId) === SERVER_ID) {
-                deviceSelect.innerHTML = '<option value="-1">Сервер (без устройства)</option>';
-                const commandSelect = div.querySelector('.action-command');
-                commandSelect.innerHTML = '<option value="">Выберите команду</option>';
-                serverCommands.forEach(cmd => {
-                    const option = document.createElement('option');
-                    option.value = cmd.sending_name || cmd.system_name;
-                    option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    if (cmd.dataType) {
-                        option.dataset.dataType = cmd.dataType;
-                    }
-                    if (cmd.params) {
-                        option.dataset.params = JSON.stringify(cmd.params);
-                    }
-                    commandSelect.appendChild(option);
-                });
-            } else {
-                await populateDeviceSelect(deviceSelect, dstControllerId);
-            }
+            // Добавляем Сервер в список контроллеров для действий
+            const serverOption = document.createElement('option');
+            serverOption.value = SERVER_ID;
+            serverOption.textContent = `${SERVER_NAME} 🖥️`;
+            serverOption.dataset.isServer = 'true';
+            controllerSelect.appendChild(serverOption);
+
+            controllersList.forEach(ctrl => {
+                const option = document.createElement('option');
+                option.value = ctrl.id;
+                option.textContent = `${ctrl.name} (${ctrl.room_name})`;
+                controllerSelect.appendChild(option);
+            });
 
             if (actionData) {
-                deviceSelect.value = actionData.device_id;
-                await onActionDeviceChange(deviceSelect);
+                const controllerId = actionData.dst_controller_id || actionData.controller_id;
+                if (controllerId) {
+                    controllerSelect.value = controllerId;
+                    await onActionControllerChange(controllerSelect);
+                }
+
+                const deviceSelect = div.querySelector('.action-device');
+                if (actionData.device_id) {
+                    deviceSelect.value = actionData.device_id;
+                    await onActionDeviceChange(deviceSelect);
+                }
 
                 const commandSelect = div.querySelector('.action-command');
-                commandSelect.value = actionData.command;
-                await onActionCommandChange(commandSelect);
+                if (actionData.command) {
+                    commandSelect.value = actionData.command;
+                    await onActionCommandChange(commandSelect);
+                }
 
                 if (actionData.value) {
                     const valueInput = div.querySelector('.action-value-input');
@@ -1098,6 +1096,33 @@
                     }));
                     createParamFields(paramsContainer, params);
                 }
+            }
+        }
+
+        // ============ ОБРАБОТЧИК ИЗМЕНЕНИЯ КОНТРОЛЛЕРА В ДЕЙСТВИИ ============
+
+        async function onActionControllerChange(selectElement) {
+            const block = selectElement.closest('.action-block');
+            const controllerId = selectElement.value;
+            const deviceSelect = block.querySelector('.action-device');
+
+            if (!controllerId) {
+                deviceSelect.innerHTML = '<option value="">Сначала выберите контроллер</option>';
+                return;
+            }
+
+            await populateDeviceSelect(deviceSelect, controllerId);
+
+            const commandSelect = block.querySelector('.action-command');
+            commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
+
+            const valueField = block.querySelector('.value-field');
+            if (valueField) valueField.classList.remove('show');
+
+            const paramsField = block.querySelector('.param-field');
+            if (paramsField) {
+                paramsField.innerHTML = '';
+                paramsField.classList.remove('show');
             }
         }
 
@@ -1117,9 +1142,10 @@
                 return;
             }
 
-            const dstControllerId = document.getElementById('dstController').value;
+            const controllerSelect = block.querySelector('.action-controller');
+            const controllerId = controllerSelect.value;
 
-            if (parseInt(dstControllerId) === SERVER_ID) {
+            if (parseInt(controllerId) === SERVER_ID) {
                 commandSelect.innerHTML = '<option value="">Выберите команду</option>';
                 serverCommands.forEach(cmd => {
                     const option = document.createElement('option');
@@ -1186,8 +1212,8 @@
             const paramsContainer = block.querySelector('.param-field');
             const selectedOption = selectElement.options[selectElement.selectedIndex];
             const command = selectElement.value;
-            const deviceId = block.querySelector('.action-device').value;
-            const dstControllerId = document.getElementById('dstController').value;
+            const controllerSelect = block.querySelector('.action-controller');
+            const controllerId = controllerSelect.value;
 
             paramsContainer.innerHTML = '';
             paramsContainer.classList.remove('show');
@@ -1195,7 +1221,7 @@
 
             if (!command) return;
 
-            if (parseInt(dstControllerId) === SERVER_ID) {
+            if (parseInt(controllerId) === SERVER_ID) {
                 const dataType = selectedOption?.dataset?.dataType;
                 if (dataType === 'boolT') {
                     return;
@@ -1312,89 +1338,104 @@
             });
         }
 
-        // ============ ЗАГРУЗКА ТРИГГЕРОВ ============
+        // ============ ФОРМИРОВАНИЕ СТРОКИ УСЛОВИЯ ============
 
-        async function loadTriggers() {
-            try {
-                const response = await fetch('/api/triggers');
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const triggers = await response.json();
-                const tbody = document.getElementById('triggersTableBody');
-                tbody.innerHTML = '';
+        function buildConditionString(deviceType, port, paramNumber, triggerType, compare, value, time) {
+            // Правильный формат:
+            // aht/2/value/1/more/12  - для датчика, параметр 1 (влажность), больше 12
+            // binOut/2/value/0/equal/0  - для двоичного выхода, параметр 0, равно 0
+            // binOut/2/time/10000      - для времени
+            // btn/15/value/0/onChange  - для изменения
 
-                if (triggers.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">📭 Нет созданных сценариев</td></tr>';
-                    return;
+
+
+            if (triggerType === 'time') {
+                const timeMs = parseInt(time) * 1000;
+                return `${deviceType}/${port}/time/${timeMs}`;
+            } else if (triggerType === 'changed') {
+                return `${deviceType}/${port}/value/${paramNumber}/onChange`;
+            } else {
+                // По значению: deviceType/port/value/paramNumber/compare/value
+                return `${deviceType}/${port}/value/${paramNumber}/${compare}/${value}`;
+            }
+
+        }
+
+        // ============ ОПРЕДЕЛЕНИЕ ТИПА СЦЕНАРИЯ ============
+
+        function determineSceneType(conditions, responses) {
+            // Собираем уникальные контроллеры-источники из условий
+            const srcControllers = new Set();
+            conditions.forEach(cond => {
+                // Получаем контроллер из условия
+                const block = document.querySelector(`.condition-block[data-index="${cond.blockIndex}"]`);
+                if (block) {
+                    const controllerSelect = block.querySelector('.condition-controller');
+                    if (controllerSelect && controllerSelect.value) {
+                        srcControllers.add(parseInt(controllerSelect.value));
+                    }
                 }
+            });
+
+            // Собираем уникальные контроллеры-приемники из действий
+            const dstControllers = new Set();
+            responses.forEach(resp => {
+                const block = document.querySelector(`.action-block[data-index="${resp.blockIndex}"]`);
+                if (block) {
+                    const controllerSelect = block.querySelector('.action-controller');
+                    if (controllerSelect && controllerSelect.value) {
+                        dstControllers.add(parseInt(controllerSelect.value));
+                    }
+                }
+            });
+
+            // Сценарий считается сложным если:
+            // 1. Больше одного контроллера-источника
+            // 2. Или больше одного контроллера-приемника
+            // 3. Или если есть сервер в приемниках (сервер всегда делает сценарий сложным)
+            const hasServer = dstControllers.has(SERVER_ID);
+            const isComplex = srcControllers.size > 1 || dstControllers.size > 1 || hasServer;
+
+            return isComplex ? 'complex' : 'simple';
+        }
+
+        // ============ ЗАГРУЗКА ВСЕХ СЦЕНАРИЕВ ============
+
+        async function loadScenes() {
+            try {
+                const triggersResponse = await fetch('/api/triggers');
+                const triggers = await triggersResponse.json();
+
+                const scenesResponse = await fetch('/api/scenes');
+                const scenes = await scenesResponse.json();
+
+                const allScenes = [];
 
                 triggers.forEach(trigger => {
-                    const row = tbody.insertRow();
-                    row.insertCell(0).innerText = trigger.id;
-                    row.insertCell(1).innerText = trigger.name;
-
-                    const isSrcServer = trigger.src_controller_name === 'Сервер' || trigger.src_controller_mac === 'serv';
-                    const srcDisplay = isSrcServer ? `${trigger.src_controller_name} 🖥️` : trigger.src_controller_name;
-                    row.insertCell(2).innerText = srcDisplay;
-
-                    const isDstServer = trigger.dst_controller_name === 'Сервер' || trigger.dst_controller_mac === 'serv';
-                    const dstDisplay = isDstServer ? `${trigger.dst_controller_name} 🖥️` : trigger.dst_controller_name;
-                    row.insertCell(3).innerText = dstDisplay;
-
-                    const conditionsCell = row.insertCell(4);
-                    if (trigger.conditions.length > 0) {
-                        const subTable = document.createElement('table');
-                        subTable.className = 'sub-table';
-                        trigger.conditions.forEach(cond => {
-                            const subRow = subTable.insertRow();
-                            const typeDisplayName = getTypeDisplayName(cond.device_type_id);
-                            const deviceLabel = `${cond.device_name} (${typeDisplayName})`;
-                            subRow.insertCell(0).innerHTML = `
-                                <strong>${deviceLabel}</strong><br>
-                                <small>📊 ${cond.condition_string}</small>
-                            `;
-                        });
-                        conditionsCell.appendChild(subTable);
-                    } else {
-                        conditionsCell.innerText = '—';
-                    }
-
-                    const actionsCell = row.insertCell(5);
-                    if (trigger.responses.length > 0) {
-                        const subTable = document.createElement('table');
-                        subTable.className = 'sub-table';
-                        trigger.responses.forEach(resp => {
-                            const subRow = subTable.insertRow();
-                            const typeDisplayName = getTypeDisplayName(resp.device_type_id);
-                            const deviceLabel = `${resp.device_name} (${typeDisplayName})`;
-                            const isServerAction = resp.command === 'serv' || resp.controller_mac === 'serv';
-                            const actionDisplay = isServerAction ? `🖥️ ${resp.command}` : `⚡ ${resp.command}`;
-                            subRow.insertCell(0).innerHTML = `
-                                <strong>${deviceLabel}</strong><br>
-                                <small>${actionDisplay}: ${resp.value || '—'}</small>
-                            `;
-                        });
-                        actionsCell.appendChild(subTable);
-                    } else {
-                        actionsCell.innerText = '—';
-                    }
-
-                    const actionCell = row.insertCell(6);
-                    const editBtn = document.createElement('button');
-                    editBtn.innerText = '✏️';
-                    editBtn.className = 'edit-trigger-btn';
-                    editBtn.title = 'Редактировать';
-                    editBtn.onclick = () => editTrigger(trigger);
-                    actionCell.appendChild(editBtn);
-
-                    const delBtn = document.createElement('button');
-                    delBtn.innerText = '🗑️';
-                    delBtn.className = 'delete-trigger-btn';
-                    delBtn.title = 'Удалить';
-                    delBtn.onclick = () => deleteTrigger(trigger.id);
-                    actionCell.appendChild(delBtn);
+                    allScenes.push({
+                        id: trigger.id,
+                        name: trigger.name,
+                        is_active: trigger.is_active !== undefined ? trigger.is_active : true,
+                        conditions: trigger.conditions || [],
+                        responses: trigger.responses || [],
+                        type: 'simple'
+                    });
                 });
+
+                scenes.forEach(scene => {
+                    allScenes.push({
+                        id: scene.id,
+                        name: scene.name,
+                        is_active: scene.is_active !== undefined ? scene.is_active : true,
+                        conditions: scene.conditions || [],
+                        responses: scene.responses || [],
+                        type: 'complex'
+                    });
+                });
+
+                renderScenesTable(allScenes);
             } catch (error) {
-                console.error('Error loading triggers:', error);
+                console.error('Error loading scenes:', error);
                 if (window.notificationManager) {
                     window.notificationManager.showToast({
                         type: 'error',
@@ -1406,26 +1447,140 @@
             }
         }
 
-        // ============ ФОРМИРОВАНИЕ ПРАВИЛЬНОЙ СТРОКИ УСЛОВИЯ (ХАРДКОД) ============
+        // ============ ОТОБРАЖЕНИЕ ТАБЛИЦЫ СЦЕНАРИЕВ ============
 
-        function buildConditionString(device, paramNumber, triggerType, compare, value, time) {
-            // Правильный формат (хардкод):
-            // binOut/2/value/0/equal/0  - для двоичного выхода, параметр 0, равно 0
-            // aht/4/value/0/more/25    - для датчика, параметр 0, больше 25
-            // binOut/2/time/10000      - для времени
-            // btn/15/value/0/onChange  - для изменения
+        function renderScenesTable(scenes) {
+            const tbody = document.getElementById('scenesTableBody');
+            tbody.innerHTML = '';
 
-            const deviceType = device.type_name || 'unknown';
-            const port = device.port || '0';
+            if (scenes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">📭 Нет созданных сценариев</td></tr>';
+                return;
+            }
 
-            if (triggerType === 'time') {
-                const timeMs = parseInt(time) * 1000;
-                return `${deviceType}/${port}/time/${timeMs}`;
-            } else if (triggerType === 'changed') {
-                return `${deviceType}/${port}/value/${paramNumber}/onChange`;
-            } else {
-                // По значению: deviceType/port/value/paramNumber/compare/value
-                return `${deviceType}/${port}/value/${paramNumber}/${compare}/${value}`;
+            scenes.forEach(scene => {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = scene.id;
+                row.insertCell(1).innerText = scene.name;
+
+                // Условия (список устройств-триггеров)
+                const conditionsCell = row.insertCell(2);
+                if (scene.conditions.length > 0) {
+                    const subTable = document.createElement('table');
+                    subTable.className = 'sub-table';
+                    scene.conditions.forEach(cond => {
+                        const device = findDeviceInCache(cond.device_id);
+                        if (device) {
+                            const subRow = subTable.insertRow();
+                            const typeDisplayName = getTypeDisplayName(device.type_id);
+                            subRow.insertCell(0).innerHTML = `
+                                <strong>${device.name}</strong>
+                                <small style="color: #64748b;"> (${typeDisplayName})</small>
+                            `;
+                        }
+                    });
+                    conditionsCell.appendChild(subTable);
+                } else {
+                    conditionsCell.innerText = '—';
+                }
+
+                // Действия (список устройств-исполнителей)
+                const actionsCell = row.insertCell(3);
+                if (scene.responses.length > 0) {
+                    const subTable = document.createElement('table');
+                    subTable.className = 'sub-table';
+                    scene.responses.forEach(resp => {
+                        const device = findDeviceInCache(resp.device_id);
+                        if (device) {
+                            const subRow = subTable.insertRow();
+                            const typeDisplayName = getTypeDisplayName(device.type_id);
+                            subRow.insertCell(0).innerHTML = `
+                                <strong>${device.name}</strong>
+                                <small style="color: #64748b;"> (${typeDisplayName})</small>
+                            `;
+                        }
+                    });
+                    actionsCell.appendChild(subTable);
+                } else {
+                    actionsCell.innerText = '—';
+                }
+
+                // Активен (переключатель)
+                const statusCell = row.insertCell(4);
+                const isActive = scene.is_active !== undefined ? scene.is_active : true;
+                statusCell.innerHTML = `
+                    <div class="status-label">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleScene(${scene.id}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="${isActive ? 'active' : 'inactive'}">${isActive ? 'Включен' : 'Выключен'}</span>
+                    </div>
+                `;
+
+                // Управление
+                const actionCell = row.insertCell(5);
+                const editBtn = document.createElement('button');
+                editBtn.innerText = '✏️';
+                editBtn.className = 'edit-scene-btn';
+                editBtn.title = 'Редактировать';
+                editBtn.onclick = () => editScene(scene);
+                actionCell.appendChild(editBtn);
+
+                const delBtn = document.createElement('button');
+                delBtn.innerText = '🗑️';
+                delBtn.className = 'delete-scene-btn';
+                delBtn.title = 'Удалить';
+                delBtn.onclick = () => deleteScene(scene.id);
+                actionCell.appendChild(delBtn);
+            });
+        }
+
+        // ============ ПЕРЕКЛЮЧЕНИЕ СТАТУСА СЦЕНАРИЯ ============
+
+        async function toggleScene(sceneId, isActive) {
+            try {
+                let endpoint = `/api/scenes/${sceneId}/toggle`;
+
+                let response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: isActive })
+                });
+
+                if (!response.ok) {
+                    endpoint = `/api/triggers/${sceneId}/toggle`;
+                    response = await fetch(endpoint, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ is_active: isActive })
+                    });
+                }
+
+                if (response.ok) {
+                    if (window.notificationManager) {
+                        window.notificationManager.showToast({
+                            type: 'ok',
+                            message: `Сценарий ${isActive ? 'активирован' : 'деактивирован'}`
+                        });
+                    } else {
+                        showToast(`✅ Сценарий ${isActive ? 'активирован' : 'деактивирован'}`);
+                    }
+                    loadScenes();
+                } else {
+                    throw new Error('Failed to toggle scene');
+                }
+            } catch (error) {
+                console.error('Error toggling scene:', error);
+                if (window.notificationManager) {
+                    window.notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Ошибка изменения статуса'
+                    });
+                } else {
+                    showToast('❌ Ошибка изменения статуса');
+                }
+                loadScenes();
             }
         }
 
@@ -1434,98 +1589,71 @@
         async function showCreateModal() {
             currentEditId = null;
             document.getElementById('modalTitle').innerText = '➕ Создать сценарий';
-            document.getElementById('triggerName').value = '';
-            document.getElementById('srcController').value = '';
-            document.getElementById('dstController').value = '';
+            document.getElementById('sceneName').value = '';
             document.getElementById('conditionsContainer').innerHTML = '';
             document.getElementById('actionsContainer').innerHTML = '';
 
             await loadDeviceTypes();
             await loadServerCommands();
             await loadControllers();
-
-            document.getElementById('srcController').onchange = onSrcControllerChange;
-            document.getElementById('dstController').onchange = onDstControllerChange;
 
             await addCondition();
             await addAction();
 
-            document.getElementById('triggerModal').classList.add('active');
+            document.getElementById('sceneModal').classList.add('active');
         }
 
-        async function editTrigger(trigger) {
-            currentEditId = trigger.id;
+        async function editScene(scene) {
+            currentEditId = scene.id;
             document.getElementById('modalTitle').innerText = '✏️ Редактировать сценарий';
-            document.getElementById('triggerName').value = trigger.name;
+            document.getElementById('sceneName').value = scene.name;
 
             await loadDeviceTypes();
             await loadServerCommands();
             await loadControllers();
 
-            document.getElementById('srcController').onchange = onSrcControllerChange;
-            document.getElementById('dstController').onchange = onDstControllerChange;
-
-            const srcController = controllersList.find(c => c.name === trigger.src_controller_name);
-            const dstController = controllersList.find(c => c.name === trigger.dst_controller_name) ||
-                (trigger.dst_controller_name === 'Сервер' ? { id: SERVER_ID } : null);
-
-            if (srcController) {
-                document.getElementById('srcController').value = srcController.id;
-            }
-            if (dstController) {
-                document.getElementById('dstController').value = dstController.id;
-            }
-
-            await onSrcControllerChange();
-            await onDstControllerChange();
-
             document.getElementById('conditionsContainer').innerHTML = '';
-            for (const cond of trigger.conditions) {
-                await addCondition(cond);
+            for (const cond of scene.conditions) {
+                await addCondition({
+                    ...cond,
+                    src_controller_id: cond.src_controller_id || cond.controller_id
+                });
             }
 
             document.getElementById('actionsContainer').innerHTML = '';
-            for (const resp of trigger.responses) {
-                await addAction(resp);
+            for (const resp of scene.responses) {
+                await addAction({
+                    ...resp,
+                    dst_controller_id: resp.dst_controller_id || resp.controller_id
+                });
             }
 
-            document.getElementById('triggerModal').classList.add('active');
+            document.getElementById('sceneModal').classList.add('active');
         }
 
-        // ============ СОХРАНЕНИЕ ТРИГГЕРА ============
+        // ============ СОХРАНЕНИЕ СЦЕНАРИЯ ============
 
-        async function saveTrigger() {
-            const name = document.getElementById('triggerName').value;
-            const srcControllerId = document.getElementById('srcController').value;
-            const dstControllerId = document.getElementById('dstController').value;
+        async function saveScene() {
+            const name = document.getElementById('sceneName').value;
 
-            if (!name || !srcControllerId || !dstControllerId) {
+            if (!name) {
                 if (window.notificationManager) {
                     window.notificationManager.showToast({
                         type: 'warning',
-                        message: '❌ Заполните все обязательные поля'
+                        message: '❌ Введите название сценария'
                     });
                 } else {
-                    showToast('❌ Заполните все обязательные поля');
+                    showToast('❌ Введите название сценария');
                 }
                 return;
             }
 
-            if (parseInt(srcControllerId) === SERVER_ID) {
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({
-                        type: 'error',
-                        message: '❌ Сервер не может быть источником сигнала'
-                    });
-                } else {
-                    showToast('❌ Сервер не может быть источником сигнала');
-                }
-                return;
-            }
-
+            // Собираем условия с контроллерами
             const conditions = [];
-            document.querySelectorAll('.condition-block').forEach(block => {
-                const deviceId = block.querySelector('.condition-device').value;
+            const conditionBlocks = document.querySelectorAll('.condition-block');
+            conditionBlocks.forEach((block, index) => {
+                const controllerSelect = block.querySelector('.condition-controller');
+                const deviceSelect = block.querySelector('.condition-device');
                 const readingSelect = block.querySelector('.condition-reading-command');
                 const readingCommand = readingSelect.value;
                 const compareSelect = block.querySelector('.condition-compare');
@@ -1552,36 +1680,45 @@
                     }
                 }
 
-                if (deviceId && readingCommand) {
+                const deviceId = deviceSelect.value;
+                const srcControllerId = controllerSelect.value;
+
+                if (deviceId && readingCommand && srcControllerId) {
                     const device = findDeviceInCache(parseInt(deviceId));
-                    // Получаем полную команду чтения по display_name
                     const readingCommands = getDeviceReadingCommands(parseInt(deviceId));
                     const readingCmd = readingCommands.find(c => c.display_name === readingCommand);
 
                     if (device && readingCmd) {
-                        // Используем только parameter_number для формирования команды
                         const paramNumber = readingCmd.parameter_number || 0;
                         const conditionString = buildConditionString(device, paramNumber, triggerType, compare, value, time);
 
                         conditions.push({
                             device_id: parseInt(deviceId),
+                            src_controller_id: parseInt(srcControllerId),
                             command: readingCommand,
                             value: value,
                             time: time,
                             trigger_type: triggerType,
                             compare: compare,
-                            condition_string: conditionString
+                            condition_string: conditionString,
+                            blockIndex: index
                         });
                     }
                 }
             });
 
+            // Собираем действия с контроллерами
             const responses = [];
-            document.querySelectorAll('.action-block').forEach(block => {
-                const deviceId = block.querySelector('.action-device').value;
-                const command = block.querySelector('.action-command').value;
+            const actionBlocks = document.querySelectorAll('.action-block');
+            actionBlocks.forEach((block, index) => {
+                const controllerSelect = block.querySelector('.action-controller');
+                const deviceSelect = block.querySelector('.action-device');
+                const commandSelect = block.querySelector('.action-command');
+                const command = commandSelect.value;
                 const valueInput = block.querySelector('.action-value-input');
                 let value = valueInput ? valueInput.value : '';
+
+                const dstControllerId = controllerSelect.value;
 
                 const paramsContainer = block.querySelector('.param-field');
                 const params = {};
@@ -1597,25 +1734,30 @@
                     value = JSON.stringify(params);
                 }
 
-                const isServer = parseInt(dstControllerId) === SERVER_ID;
-                let finalCommand = command;
+                const deviceId = deviceSelect.value;
 
-                if (isServer) {
-                    finalCommand = 'serv';
-                }
-
-                if (deviceId && command) {
+                if (deviceId && command && dstControllerId) {
                     const device = findDeviceInCache(parseInt(deviceId));
                     if (device) {
+                        const isServer = parseInt(dstControllerId) === SERVER_ID;
+                        let finalCommand = command;
+
+                        if (isServer) {
+                            finalCommand = 'serv';
+                        }
+
                         let actionStr = `${device.type_name}/${device.port}/${finalCommand}`;
                         if (value) {
                             actionStr += `/${value}`;
                         }
+
                         responses.push({
                             device_id: parseInt(deviceId),
+                            dst_controller_id: parseInt(dstControllerId),
                             command: finalCommand,
                             value: value,
-                            action_string: actionStr
+                            action_string: actionStr,
+                            blockIndex: index
                         });
                     }
                 }
@@ -1645,26 +1787,34 @@
                 return;
             }
 
-            // Формируем полную команду: условие/do/действие/next
-            const conditionStrings = conditions.map(c => c.condition_string);
-            const fullCondition = conditionStrings.join('/and/');
+            // Определяем тип сценария
+            const sceneType = determineSceneType(conditions, responses);
 
-            const actionStrings = responses.map(r => r.action_string);
-            const fullAction = actionStrings.join('/and/');
-
-            const fullCommand = `${fullCondition}/do/${fullAction}/next`;
-
+            // Формируем данные для сохранения
             const data = {
                 name: name,
-                src_controller_id: parseInt(srcControllerId),
-                dst_controller_id: parseInt(dstControllerId),
                 conditions: conditions,
                 responses: responses,
-                command: fullCommand
+                type: sceneType
             };
 
-            const url = currentEditId ? `/api/triggers/${currentEditId}` : '/api/triggers';
-            const method = currentEditId ? 'PUT' : 'POST';
+            // Добавляем общие контроллеры для простых сценариев
+            if (sceneType === 'simple') {
+                // Для простых сценариев берем первый контроллер из условий и действий
+                const srcControllerId = conditions[0]?.src_controller_id;
+                const dstControllerId = responses[0]?.dst_controller_id;
+                data.src_controller_id = srcControllerId;
+                data.dst_controller_id = dstControllerId;
+            }
+
+            let url, method;
+            if (sceneType === 'simple') {
+                url = currentEditId ? `/api/triggers/${currentEditId}` : '/api/triggers';
+                method = currentEditId ? 'PUT' : 'POST';
+            } else {
+                url = currentEditId ? `/api/scenes/${currentEditId}` : '/api/scenes';
+                method = currentEditId ? 'PUT' : 'POST';
+            }
 
             try {
                 const response = await fetch(url, {
@@ -1683,7 +1833,7 @@
                         showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан');
                     }
                     closeModal();
-                    loadTriggers();
+                    loadScenes();
                     devicesCache = {};
                 } else {
                     const error = await response.json();
@@ -1697,7 +1847,7 @@
                     }
                 }
             } catch (error) {
-                console.error('Error saving trigger:', error);
+                console.error('Error saving scene:', error);
                 if (window.notificationManager) {
                     window.notificationManager.showToast({
                         type: 'error',
@@ -1709,13 +1859,18 @@
             }
         }
 
-        // ============ УДАЛЕНИЕ ТРИГГЕРА ============
+        // ============ УДАЛЕНИЕ СЦЕНАРИЯ ============
 
-        async function deleteTrigger(triggerId) {
+        async function deleteScene(sceneId) {
             if (!confirm('Удалить сценарий? Это действие нельзя отменить.')) return;
 
             try {
-                const response = await fetch(`/api/triggers/${triggerId}`, { method: 'DELETE' });
+                let response = await fetch(`/api/scenes/${sceneId}`, { method: 'DELETE' });
+
+                if (!response.ok) {
+                    response = await fetch(`/api/triggers/${sceneId}`, { method: 'DELETE' });
+                }
+
                 if (response.ok) {
                     if (window.notificationManager) {
                         window.notificationManager.showToast({
@@ -1725,7 +1880,7 @@
                     } else {
                         showToast('✅ Сценарий удален');
                     }
-                    loadTriggers();
+                    loadScenes();
                 } else {
                     if (window.notificationManager) {
                         window.notificationManager.showToast({
@@ -1737,7 +1892,7 @@
                     }
                 }
             } catch (error) {
-                console.error('Error deleting trigger:', error);
+                console.error('Error deleting scene:', error);
                 if (window.notificationManager) {
                     window.notificationManager.showToast({
                         type: 'error',
@@ -1752,7 +1907,7 @@
         // ============ ВСПОМОГАТЕЛЬНЫЕ ============
 
         function closeModal() {
-            document.getElementById('triggerModal').classList.remove('active');
+            document.getElementById('sceneModal').classList.remove('active');
         }
 
         function showToast(msg) {
@@ -1767,17 +1922,17 @@
         document.addEventListener('DOMContentLoaded', function() {
             if (window.notificationManager) {
                 window.notificationManager.addListener('notification', function(data) {
-                    console.log('[Triggers] Уведомление:', data);
+                    console.log('[Scenes] Уведомление:', data);
                     if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS' ||
                         data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE' ||
                         data.type === 'TRIGGER_CREATED' || data.type === 'TRIGGER_DELETED') {
-                        loadTriggers();
+                        loadScenes();
                     }
                 });
 
                 window.notificationManager.addListener('device_status_update', function(data) {
-                    console.log('[Triggers] Обновление статуса устройства:', data);
-                    loadTriggers();
+                    console.log('[Scenes] Обновление статуса устройства:', data);
+                    loadScenes();
                 });
 
                 window.notificationManager.addListener('connection_status', function(status) {
@@ -1800,7 +1955,7 @@
 
         loadDeviceTypes();
         loadServerCommands();
-        loadTriggers();
+        loadScenes();
     </script>
 </body>
 </html>

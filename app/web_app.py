@@ -9,6 +9,7 @@ from flask_cors import CORS
 #from flask_socketio import SocketIO
 
 from api.api_sse_routes import register_sse_routes
+from api.api_scene_routes import register_scene_routes
 from database import Database
 
 from api.api_base_routes import register_base_routes
@@ -55,6 +56,7 @@ class WebInterface:
         register_controller_routes(app, self.db, self.kafkaHandler)
         register_room_routes(app, self.db, self.kafkaHandler)
         register_trigger_routes(app, self.db, self.kafkaHandler)
+        register_scene_routes(app, self.db, self.kafkaHandler)
         register_firmware_routes(app, self.db, self.kafkaHandler)
         register_sse_routes(app, self.db, self.kafkaHandler)
 

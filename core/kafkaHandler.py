@@ -218,6 +218,8 @@ class CoreKafkaHandler:
             if data.get('command_type') == 'DELETE':
                 id=data.get('id')
                 self.db.delete_trigger(id)
+            elif data.get('command_type') == 'UPD_STATUS':
+                self.db.update_trig_status(data.get('id'), data.get('status'))
             else:
                 trig = Trigger(
                     id=data.get('id'),

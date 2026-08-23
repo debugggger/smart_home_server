@@ -18,6 +18,7 @@ class Trigger:
     id: Optional[int] = None
     controller_mac: str = None
     trig: str = None
+    is_active: bool = False
 
 class Database:
     def __init__(self, host='127.0.0.1', port=443, name='sh_core', user='postgres', password=''):
@@ -110,11 +111,11 @@ class Database:
             self.delete_trigger(trigger.id)
 
         query = """
-            INSERT INTO triggers (id, controller_mac, trig) 
-            VALUES ( %s, %s, %s) 
+            INSERT INTO triggers (id, controller_mac, trig, is_active) 
+            VALUES ( %s, %s, %s, %s) 
             RETURNING id
         """
-        result = self._execute_query(query, (trigger.id, trigger.controller_mac, trigger.trig),
+        result = self._execute_query(query, (trigger.id, trigger.controller_mac, trigger.trig, trigger.is_active),
                                      fetch_one=True)
         if result:
             trigger.id = result[0]
@@ -125,22 +126,32 @@ class Database:
         query = "SELECT * FROM triggers WHERE id = %s"
         result = self._execute_query(query, (trigger_id,), fetch_one=True)
         if result:
-            return Trigger(id=result[0], controller_mac=result[1], trig=result[2])
+            return Trigger(id=result[0], controller_mac=result[1], trig=result[2], is_active=result[3])
         return None
 
     def get_triggers_by_controller(self, controller_mac: int) -> List[Trigger]:
         query = "SELECT * FROM triggers WHERE controller_mac = %s ORDER BY id"
         results = self._execute_query(query, (controller_mac,), fetch_all=True)
-        return [Trigger(id=r[0], controller_mac=r[1], trig=r[2]) for r in
+        return [Trigger(id=r[0], controller_mac=r[1], trig=r[2], is_active=r[3]) for r in
                 results] if results else []
 
     def get_all_triggers(self) -> List[Trigger]:
         query = "SELECT * FROM triggers ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
-        return [Trigger(id=r[0], controller_mac=r[1], trig=r[2]) for r in
+        return [Trigger(id=r[0], controller_mac=r[1], trig=r[2], is_active=r[3]) for r in
                 results] if results else []
 
     def delete_trigger(self, trigger_id: int) -> bool:
         query = "DELETE FROM triggers WHERE id = %s"
         self._execute_query(query, (trigger_id,))
         return True
+
+
+    def update_trig_status(self, trigger_id: int, is_active: bool):
+        query = """
+            UPDATE triggers 
+            SET is_active = %s 
+            WHERE trigger_id = %s
+        """
+        result = self._execute_query(query, (is_active, trigger_id))
+        return result is not None

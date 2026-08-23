@@ -65,6 +65,27 @@ class Trigger:
     controller_id: int = None
     controller_resp_id: int = None
     name: str = None
+    is_active: bool = False
+
+@dataclass
+class SceneCondition:
+    id: Optional[int] = None
+    device_id: int = None
+    condition: str = None
+    scene_id: int = None
+
+@dataclass
+class SceneResponse:
+    id: Optional[int] = None
+    device_id: int = None
+    resp: str = None
+    scene_id: int = None
+
+@dataclass
+class Scene:
+    id: Optional[int] = None
+    name: str = None
+    is_active: bool = False
 
 class Database:
     def __init__(self, host='127.0.0.1', port=443, name='sh', user='postgres', password=''):
@@ -314,11 +335,11 @@ class Database:
 
     def add_trigger(self, trigger: Trigger) -> Optional[int]:
         query = """
-            INSERT INTO triggers (controller_id, controller_resp_id, name) 
-            VALUES (%s, %s, %s) 
+            INSERT INTO triggers (controller_id, controller_resp_id, name, is_active) 
+            VALUES (%s, %s, %s, %s) 
             RETURNING id
         """
-        result = self._execute_query(query, (trigger.controller_id, trigger.controller_resp_id, trigger.name),
+        result = self._execute_query(query, (trigger.controller_id, trigger.controller_resp_id, trigger.name, trigger.is_active),
                                      fetch_one=True)
         if result:
             trigger.id = result[0]
@@ -329,32 +350,41 @@ class Database:
         query = "SELECT * FROM triggers WHERE id = %s"
         result = self._execute_query(query, (trigger_id,), fetch_one=True)
         if result:
-            return Trigger(id=result[0], controller_id=result[1], controller_resp_id=result[2], name=result[3])
+            return Trigger(id=result[0], controller_id=result[1], controller_resp_id=result[2], name=result[3], is_active=result[4])
         return None
 
     def get_triggers_by_controller(self, controller_id: int) -> List[Trigger]:
         query = "SELECT * FROM triggers WHERE controller_id = %s ORDER BY id"
         results = self._execute_query(query, (controller_id,), fetch_all=True)
-        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3]) for r in
+        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3], is_active=r[4]) for r in
                 results] if results else []
 
     def get_triggers_by_resp_controller(self, controller_resp_id: int) -> List[Trigger]:
         query = "SELECT * FROM triggers WHERE controller_resp_id = %s ORDER BY id"
         results = self._execute_query(query, (controller_resp_id,), fetch_all=True)
-        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3]) for r in
+        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3], is_active=r[4]) for r in
                 results] if results else []
 
     def get_triggers_by_name(self, name: str) -> List[Trigger]:
         query = "SELECT * FROM triggers WHERE name = %s ORDER BY id"
         results = self._execute_query(query, (name,), fetch_all=True)
-        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3]) for r in
+        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3], is_active=r[4]) for r in
                 results] if results else []
 
     def get_all_triggers(self) -> List[Trigger]:
         query = "SELECT * FROM triggers ORDER BY id"
         results = self._execute_query(query, fetch_all=True)
-        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3]) for r in
+        return [Trigger(id=r[0], controller_id=r[1], controller_resp_id=r[2], name=r[3], is_active=r[4]) for r in
                 results] if results else []
+
+    def update_trig_status(self, trigger_id: int, is_active: bool):
+        query = """
+            UPDATE triggers 
+            SET is_active = %s 
+            WHERE trigger_id = %s
+        """
+        result = self._execute_query(query, (is_active, trigger_id))
+        return result is not None
 
     def delete_trigger(self, trigger_id: int, kafkaHandler) -> bool:
 
@@ -459,4 +489,250 @@ class Database:
         query = "DELETE FROM trig_responses WHERE id = %s"
         self._execute_query(query, (response_id,))
         return True
+
+    # ============= МЕТОДЫ ДЛЯ SCENES =============
+
+    def add_scene(self, scene: Scene) -> Optional[int]:
+        """Добавление сценария"""
+        query = """
+            INSERT INTO scenes (name, is_active) 
+            VALUES (%s, %s) 
+            RETURNING id
+        """
+        result = self._execute_query(query, (scene.name, scene.is_active), fetch_one=True)
+        if result:
+            scene.id = result[0]
+            return result[0]
+        return None
+
+    def get_scene_by_id(self, scene_id: int) -> Optional[Scene]:
+        """Получение сценария по ID"""
+        query = "SELECT id, name, is_active FROM scenes WHERE id = %s"
+        result = self._execute_query(query, (scene_id,), fetch_one=True)
+        if result:
+            return Scene(id=result[0], name=result[1], is_active=result[2])
+        return None
+
+    def get_scenes_by_name(self, name: str) -> List[Scene]:
+        """Получение сценариев по имени"""
+        query = "SELECT id, name, is_active FROM scenes WHERE name = %s ORDER BY id"
+        results = self._execute_query(query, (name,), fetch_all=True)
+        return [Scene(id=r[0], name=r[1], is_active=r[2]) for r in results] if results else []
+
+    def get_all_scenes(self) -> List[Scene]:
+        """Получение всех сценариев"""
+        query = "SELECT id, name, is_active FROM scenes ORDER BY id"
+        results = self._execute_query(query, fetch_all=True)
+        return [Scene(id=r[0], name=r[1], is_active=r[2]) for r in results] if results else []
+
+    def update_scene_status(self, scene_id: int, is_active: bool) -> bool:
+        """Обновление статуса сценария"""
+        query = """
+            UPDATE scenes 
+            SET is_active = %s 
+            WHERE id = %s
+        """
+        self._execute_query(query, (is_active, scene_id))
+        return True
+
+    def update_scene_name(self, scene_id: int, name: str) -> bool:
+        """Обновление имени сценария"""
+        query = """
+            UPDATE scenes 
+            SET name = %s 
+            WHERE id = %s
+        """
+        self._execute_query(query, (name, scene_id))
+        return True
+
+    def delete_scene(self, scene_id: int) -> bool:
+        """Удаление сценария по ID"""
+        query = "DELETE FROM scenes WHERE id = %s"
+        self._execute_query(query, (scene_id,))
+        return True
+
+    # ============= МЕТОДЫ ДЛЯ SCENE_CONDITIONS =============
+
+    def add_scene_condition(self, condition: SceneCondition) -> Optional[int]:
+        """Добавление условия сценария"""
+        query = """
+            INSERT INTO scene_conditions (device_id, condition, scene_id) 
+            VALUES (%s, %s, %s) 
+            RETURNING id
+        """
+        result = self._execute_query(
+            query,
+            (condition.device_id, condition.condition, condition.scene_id),
+            fetch_one=True
+        )
+        if result:
+            condition.id = result[0]
+            return result[0]
+        return None
+
+    def get_scene_condition_by_id(self, condition_id: int) -> Optional[SceneCondition]:
+        """Получение условия сценария по ID"""
+        query = "SELECT id, device_id, condition, scene_id FROM scene_conditions WHERE id = %s"
+        result = self._execute_query(query, (condition_id,), fetch_one=True)
+        if result:
+            return SceneCondition(
+                id=result[0],
+                device_id=result[1],
+                condition=result[2],
+                scene_id=result[3]
+            )
+        return None
+
+    def get_scene_conditions_by_device(self, device_id: int) -> List[SceneCondition]:
+        """Получение условий по устройству"""
+        query = "SELECT id, device_id, condition, scene_id FROM scene_conditions WHERE device_id = %s ORDER BY id"
+        results = self._execute_query(query, (device_id,), fetch_all=True)
+        return [
+            SceneCondition(id=r[0], device_id=r[1], condition=r[2], scene_id=r[3])
+            for r in results
+        ] if results else []
+
+    def get_scene_conditions_by_scene(self, scene_id: int) -> List[SceneCondition]:
+        """Получение условий по сценарию"""
+        query = "SELECT id, device_id, condition, scene_id FROM scene_conditions WHERE scene_id = %s ORDER BY id"
+        results = self._execute_query(query, (scene_id,), fetch_all=True)
+        return [
+            SceneCondition(id=r[0], device_id=r[1], condition=r[2], scene_id=r[3])
+            for r in results
+        ] if results else []
+
+    def get_all_scene_conditions(self) -> List[SceneCondition]:
+        """Получение всех условий сценариев"""
+        query = "SELECT id, device_id, condition, scene_id FROM scene_conditions ORDER BY id"
+        results = self._execute_query(query, fetch_all=True)
+        return [
+            SceneCondition(id=r[0], device_id=r[1], condition=r[2], scene_id=r[3])
+            for r in results
+        ] if results else []
+
+    def delete_scene_condition(self, condition_id: int) -> bool:
+        """Удаление условия сценария по ID"""
+        query = "DELETE FROM scene_conditions WHERE id = %s"
+        self._execute_query(query, (condition_id,))
+        return True
+
+    def delete_scene_conditions_by_scene(self, scene_id: int) -> bool:
+        """Удаление всех условий сценария"""
+        query = "DELETE FROM scene_conditions WHERE scene_id = %s"
+        self._execute_query(query, (scene_id,))
+        return True
+
+    # ============= МЕТОДЫ ДЛЯ SCENE_RESPONSES =============
+
+    def add_scene_response(self, response: SceneResponse) -> Optional[int]:
+        """Добавление ответа сценария"""
+        query = """
+            INSERT INTO scene_responses (device_id, resp, scene_id) 
+            VALUES (%s, %s, %s) 
+            RETURNING id
+        """
+        result = self._execute_query(
+            query,
+            (response.device_id, response.resp, response.scene_id),
+            fetch_one=True
+        )
+        if result:
+            response.id = result[0]
+            return result[0]
+        return None
+
+    def get_scene_response_by_id(self, response_id: int) -> Optional[SceneResponse]:
+        """Получение ответа сценария по ID"""
+        query = "SELECT id, device_id, resp, scene_id FROM scene_responses WHERE id = %s"
+        result = self._execute_query(query, (response_id,), fetch_one=True)
+        if result:
+            return SceneResponse(
+                id=result[0],
+                device_id=result[1],
+                resp=result[2],
+                scene_id=result[3]
+            )
+        return None
+
+    def get_scene_responses_by_device(self, device_id: int) -> List[SceneResponse]:
+        """Получение ответов по устройству"""
+        query = "SELECT id, device_id, resp, scene_id FROM scene_responses WHERE device_id = %s ORDER BY id"
+        results = self._execute_query(query, (device_id,), fetch_all=True)
+        return [
+            SceneResponse(id=r[0], device_id=r[1], resp=r[2], scene_id=r[3])
+            for r in results
+        ] if results else []
+
+    def get_scene_responses_by_scene(self, scene_id: int) -> List[SceneResponse]:
+        """Получение ответов по сценарию"""
+        query = "SELECT id, device_id, resp, scene_id FROM scene_responses WHERE scene_id = %s ORDER BY id"
+        results = self._execute_query(query, (scene_id,), fetch_all=True)
+        return [
+            SceneResponse(id=r[0], device_id=r[1], resp=r[2], scene_id=r[3])
+            for r in results
+        ] if results else []
+
+    def get_all_scene_responses(self) -> List[SceneResponse]:
+        """Получение всех ответов сценариев"""
+        query = "SELECT id, device_id, resp, scene_id FROM scene_responses ORDER BY id"
+        results = self._execute_query(query, fetch_all=True)
+        return [
+            SceneResponse(id=r[0], device_id=r[1], resp=r[2], scene_id=r[3])
+            for r in results
+        ] if results else []
+
+    def delete_scene_response(self, response_id: int) -> bool:
+        """Удаление ответа сценария по ID"""
+        query = "DELETE FROM scene_responses WHERE id = %s"
+        self._execute_query(query, (response_id,))
+        return True
+
+    def delete_scene_responses_by_scene(self, scene_id: int) -> bool:
+        """Удаление всех ответов сценария"""
+        query = "DELETE FROM scene_responses WHERE scene_id = %s"
+        self._execute_query(query, (scene_id,))
+        return True
+
+    # ============= ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ =============
+
+    def get_scene_with_details(self, scene_id: int) -> Optional[dict]:
+        """Получение сценария со всеми условиями и ответами"""
+        scene = self.get_scene_by_id(scene_id)
+        if not scene:
+            return None
+
+        conditions = self.get_scene_conditions_by_scene(scene_id)
+        responses = self.get_scene_responses_by_scene(scene_id)
+
+        return {
+            'id': scene.id,
+            'name': scene.name,
+            'is_active': scene.is_active,
+            'conditions': [
+                {'id': c.id, 'device_id': c.device_id, 'condition': c.condition}
+                for c in conditions
+            ],
+            'responses': [
+                {'id': r.id, 'device_id': r.device_id, 'resp': r.resp}
+                for r in responses
+            ]
+        }
+
+    def delete_scene_with_all_relations(self, scene_id: int) -> bool:
+        """
+        Удаление сценария со всеми связанными данными
+        (условия и ответы)
+        """
+        # Удаляем условия
+        conditions = self.get_scene_conditions_by_scene(scene_id)
+        for cond in conditions:
+            self.delete_scene_condition(cond.id)
+
+        # Удаляем ответы
+        responses = self.get_scene_responses_by_scene(scene_id)
+        for resp in responses:
+            self.delete_scene_response(resp.id)
+
+        # Удаляем сам сценарий
+        return self.delete_scene(scene_id)
 

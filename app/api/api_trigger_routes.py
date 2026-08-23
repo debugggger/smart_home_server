@@ -1,7 +1,9 @@
+import json
 import logging
 from flask import request, jsonify
 
 from .api_utils import handle_api_errors
+
 from database import TrigResponse
 
 logger = logging.getLogger(__name__)
@@ -210,7 +212,28 @@ def register_trigger_routes(app, db, kafkaHandler):
 
         return jsonify({'success': True})
 
+    @app.route('/api/triggers/<int:trigger_id>/toggle', methods=['PUT'])
+    def toggle_trigger(trigger_id):
+        try:
+            data = request.json
+            is_active = data.get('is_active', True)
 
+            db.update_trig_status(trigger_id, is_active)
+
+            if kafkaHandler:
+                trigger_data = {
+                    'command_type': 'UPD_STATUS',
+                    'trigger_id': trigger_id,
+                    'is_active': is_active
+                }
+                kafkaHandler.update_trig_table(trigger_data)
+
+            return jsonify({'success': True})
+
+        except Exception as e:
+            logger.error(f"Error toggling trigger: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+        
     def get_trig_data_for_core(trigger):
 
         req_parts = []
