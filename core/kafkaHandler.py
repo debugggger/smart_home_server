@@ -3,7 +3,7 @@ from datetime import datetime
 import uuid
 from kafka.errors import KafkaError
 
-from core.database import Device, Trigger
+from core.database import Device, Trigger, Scene
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 class CoreKafkaHandler:
@@ -31,7 +31,8 @@ class CoreKafkaHandler:
             TOPICS['LOAD_FILE'],
             TOPICS['START_UPD_CONTROLLER'],
             TOPICS['UPD_DEVICE_TABLE'],
-            TOPICS['UPD_TRIG_TABLE']
+            TOPICS['UPD_TRIG_TABLE'],
+            TOPICS['UPD_SCENE_TABLE']
         ]
 
         self.consumer = create_kafka_consumer(
@@ -87,6 +88,8 @@ class CoreKafkaHandler:
                 self._handle_update_device_table(event_data)
             elif topic == TOPICS['UPD_TRIG_TABLE']:
                 self._handle_update_trig_table(event_data)
+            elif topic == TOPICS['UPD_SCENE_TABLE']:
+                self._handle_update_scene_table(event_data)
 
 
     def _handle_send_command(self, message):
@@ -224,7 +227,8 @@ class CoreKafkaHandler:
                 trig = Trigger(
                     id=data.get('id'),
                     controller_mac=data.get('controller_mac'),
-                    trig=data.get('trig')
+                    trig=data.get('trig'),
+                    is_active=data.get('is_active')
                 )
                 self.db.add_trigger(trig)
                 pass
@@ -232,6 +236,30 @@ class CoreKafkaHandler:
             print(f"[Core Kafka] Trigger table updated successfully")
         except Exception as e:
             print(f"[Core Kafka] Error updating trigger table: {e}")
+
+    def _handle_update_scene_table(self, message):
+        data = message.get('data', {})
+        print(f"[Core Kafka] Updating scene table with data: {data}")
+
+        try:
+            if data.get('command_type') == 'DELETE':
+                id=data.get('id')
+                self.db.delete_scene(id)
+            elif data.get('command_type') == 'UPD_STATUS':
+                self.db.update_scene_status(data.get('id'), data.get('status'))
+            else:
+                scene = Scene(
+                    id=data.get('id'),
+                    conditions=data.get('conditions'),
+                    responses=data.get('responses'),
+                    is_active=data.get('is_active')
+                )
+                self.db.add_scene(scene)
+                pass
+
+            print(f"[Core Kafka] Scene table updated successfully")
+        except Exception as e:
+            print(f"[Core Kafka] Error updating scene table: {e}")
 
     def send_device_value_update(self, device_id, value, metadata=None):
         data = {

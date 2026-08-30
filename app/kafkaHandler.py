@@ -152,6 +152,10 @@ class AppKafkaHandler:
         message = self._kafka_handler_create_message('UPD_TRIG_TABLE', trigger_data)
         return self._kafka_handler_send_message(TOPICS['UPD_TRIG_TABLE'], 'trigger_data', message)
 
+    def update_scene_table(self, scene_data):
+        message = self._kafka_handler_create_message('UPD_SCENE_TABLE', scene_data)
+        return self._kafka_handler_send_message(TOPICS['UPD_SCENE_TABLE'], 'scene_data', message)
+
     def _handle_notification(self, message):
         data = message.get('data', {})
         notification_type = data.get('type')

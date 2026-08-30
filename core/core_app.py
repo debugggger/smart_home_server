@@ -1,3 +1,4 @@
+import json
 import threading
 import time
 from datetime import datetime
@@ -194,6 +195,7 @@ class Core:
         for device in dev_with_values.values():
             self.db.update_device_current_values(device.id, device.current_values)
             self.kafka_handler.send_device_value_update(device.id, device.current_values)
+            self.check_scene(device.id)
 
             if device.id in self.device_failure_counters:
                 self.device_failure_counters[device.id] = 0
@@ -297,3 +299,238 @@ class Core:
                 unique_mac.append(device.controller_mac)
                 self.parse_init([device.controller_mac])
                 #self.parse_triggers([device.controller_mac])
+
+    # core/core_app.py
+
+    def check_scene(self, device_id: int):
+        """
+        Проверка всех сценариев при обновлении устройства
+
+        Args:
+            device_id: ID устройства, которое обновилось
+        """
+        try:
+            # Получаем устройство со всеми его значениями
+            device = self.db.get_device_by_id(device_id)
+            if not device:
+                return
+
+            # Получаем все параметры устройства
+            current_values = device.current_values
+            if not current_values:
+                return
+
+            # Получаем все активные сценарии
+            scenes = self.db.get_all_scenes()
+            active_scenes = [s for s in scenes if s.is_active]
+
+            if not active_scenes:
+                return
+
+            # Для каждого активного сценария проверяем условия
+            for scene in active_scenes:
+                # Парсим условия из JSON
+                conditions = self._parse_scene_conditions(scene.conditions)
+                if not conditions:
+                    continue
+
+                # Проверяем все ли условия выполнены
+                all_conditions_met = True
+
+                for condition in conditions:
+                    cond_device_id = condition.get('device_id')
+                    param_num = condition.get('param_num')
+                    is_execute = condition.get('is_execute', True)
+
+                    # Если is_execute = False, пропускаем это условие
+                    if not is_execute:
+                        continue
+
+                    # Получаем значение для проверки
+                    check_value = None
+
+                    # Если условие относится к текущему устройству
+                    if cond_device_id == device_id:
+                        if param_num is not None and param_num < len(current_values):
+                            check_value = current_values[param_num]
+                    else:
+                        # Получаем значение из БД для другого устройства
+                        check_value = self._get_device_parameter_value(cond_device_id, param_num)
+
+                    # Проверяем условие
+                    if not self._check_condition_value(condition, check_value):
+                        all_conditions_met = False
+                        break
+
+                # Если все условия выполнены
+                if all_conditions_met:
+                    if not scene.executed:
+                        # Выполняем действия сценария
+                        self._execute_scene_actions(scene)
+                        # Отмечаем сценарий как выполненный
+                        self.db.update_scene_executed(scene.id, True)
+                        print(f"[Core] Scene {scene.id} executed successfully")
+                        # Отправляем уведомление о выполнении
+                        self.kafka_handler.send_notification(
+                            'SCENE_EXECUTED',
+                            f'Сценарий "{scene.name}" выполнен',
+                            {'scene_id': scene.id}
+                        )
+                else:
+                    # Если условия не выполнены, сбрасываем флаг выполнения
+                    if scene.executed:
+                        self.db.update_scene_executed(scene.id, False)
+
+        except Exception as e:
+            print(f"[Core] Error checking scenes: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _parse_scene_conditions(self, conditions_json):
+        """Парсинг условий сценария из JSON"""
+        try:
+            if isinstance(conditions_json, str):
+                return json.loads(conditions_json)
+            elif isinstance(conditions_json, list):
+                return conditions_json
+            return []
+        except:
+            return []
+
+    def _check_condition_value(self, condition, current_value):
+        """
+        Проверка значения по условию
+
+        Args:
+            condition: словарь с условием
+            current_value: текущее значение для проверки
+
+        Returns:
+            bool: True если условие выполнено
+        """
+        compare_type = condition.get('compare_type')
+        value = condition.get('value')
+        is_execute = condition.get('is_execute', False)
+
+        # Если is_execute = True, то это условие должно быть выполнено для активации сценария
+        # Если is_execute = False, то это условие игнорируется при проверке
+
+        if not is_execute:
+            # Если is_execute = False, условие не проверяется
+            return True
+
+        if compare_type == 'changed':
+            # Для changed проверяем, изменилось ли значение
+            return True  # Значение уже изменилось, так как мы получили новое
+
+        if current_value is None:
+            return False
+
+        try:
+            current_val = float(current_value)
+            check_val = float(value) if value else 0
+
+            if compare_type == 'equal':
+                return current_val == check_val
+            elif compare_type == 'more':
+                return current_val > check_val
+            elif compare_type == 'less':
+                return current_val < check_val
+            elif compare_type == 'time':
+                # Для времени проверяем, прошло ли заданное время
+                return current_val >= check_val
+        except:
+            # Если не число - сравниваем как строки
+            if compare_type == 'equal':
+                return str(current_value) == str(value)
+            elif compare_type == 'more':
+                return str(current_value) > str(value)
+            elif compare_type == 'less':
+                return str(current_value) < str(value)
+
+        return False
+
+    def _get_device_current_value(self, device_id):
+        """Получение текущего значения устройства из БД"""
+        if device_id is None:
+            return None
+
+        device = self.db.get_device_by_id(device_id)
+        if device and device.current_values:
+            try:
+                values = json.loads(device.current_values)
+                if values and len(values) > 0:
+                    return values[0]  # Берем первое значение
+            except:
+                pass
+        return None
+
+    def _get_device_parameter_value(self, device_id: int, param_num: int):
+        """
+        Получение значения конкретного параметра устройства из БД
+
+        Args:
+            device_id: ID устройства
+            param_num: номер параметра (parameter_number)
+
+        Returns:
+            значение параметра или None
+        """
+        if device_id is None or param_num is None:
+            return None
+
+        device = self.db.get_device_by_id(device_id)
+        if device and device.current_values:
+            try:
+                if isinstance(device.current_values, str):
+                    values = json.loads(device.current_values)
+                else:
+                    values = device.current_values
+
+                if values and param_num < len(values):
+                    return values[param_num]
+            except:
+                pass
+        return None
+
+    def _execute_scene_actions(self, scene):
+        """Выполнение действий сценария"""
+        try:
+            # Парсим ответы из JSON
+            responses = self._parse_scene_responses(scene.responses)
+            if not responses:
+                return
+
+            for response in responses:
+                mac = response.get('mac')
+                device_type = response.get('device_type')
+                device_port = response.get('device_port')
+                command = response.get('command')
+                value = response.get('value')
+
+                # Формируем команду для отправки через MQTT
+                if mac and command:
+                    # Формируем сообщение: device_type/port/command/value
+                    cmd_parts = [device_type, device_port, command]
+                    if value:
+                        cmd_parts.append(value)
+                    cmd_str = "/".join(cmd_parts)
+
+                    # Отправляем через MQTT
+                    self.mqtt_client.publish(mac, cmd_str)
+                    print(f"[Core] Executed action: {cmd_str} -> {mac}")
+
+        except Exception as e:
+            print(f"[Core] Error executing scene actions: {e}")
+
+    def _parse_scene_responses(self, responses_json):
+        """Парсинг ответов сценария из JSON"""
+        try:
+            if isinstance(responses_json, str):
+                return json.loads(responses_json)
+            elif isinstance(responses_json, list):
+                return responses_json
+            return []
+        except:
+            return []
+

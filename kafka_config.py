@@ -10,6 +10,8 @@ TOPICS = {
     'UPD_DEVICE_TABLE': 'upd_device_table_db',
     'UPD_TRIG_TABLE': 'upd_trig_table_db',
     'INIT_CONTROLLER': 'init_controller_app',
+    'UPD_SCENE_TABLE': 'upd_scene_table_db',
+
 
     #core -> app
     'NOTIFICATION': 'notifications_app',
