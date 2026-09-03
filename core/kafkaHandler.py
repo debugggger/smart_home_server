@@ -255,16 +255,16 @@ class CoreKafkaHandler:
 
         try:
             if data.get('command_type') == 'DELETE':
-                id=data.get('id')
+                id=data.get('scene_id')
                 self.db.delete_scene(id)
             elif data.get('command_type') == 'UPD_STATUS':
-                self.db.update_scene_status(data.get('id'), data.get('status'))
+                self.db.update_scene_status(data.get('scene_id'), data.get('status'))
             else:
                 scene = Scene(
-                    id=data.get('id'),
+                    id=data.get('scene_id'),
                     conditions=data.get('conditions'),
                     responses=data.get('responses'),
-                    is_active=data.get('is_active')
+                    is_active=data.get('is_active', True)
                 )
                 self.db.add_scene(scene)
                 pass

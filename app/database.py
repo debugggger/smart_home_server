@@ -30,7 +30,7 @@ class Device:
     type_id: int = None
     port: str = None
     params: json = None
-    current_values: Optional[List[str]] = None
+    current_values: json = None
     is_online: bool = False
 
 @dataclass

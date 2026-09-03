@@ -59,7 +59,7 @@ class Core:
         self.mac_wait_request_update = []  # Список устройств ожидающих update
 
         # Настройки
-        self.TIMEOUT_SECONDS = 3
+        self.TIMEOUT_SECONDS = 10
         self.GET_VALUES_DELAY = 60
         self.MAX_FAILURES = 3
 
@@ -339,7 +339,8 @@ class Core:
             req_parts.append(device.type)
             if device.port:
                 req_parts.append(device.port)
-            if device.params:
+            if device.params and isinstance(device.params, dict):
+
                 params = '/'.join(device.params.values())
                 req_parts.append(params)
             req_parts.append("next")
@@ -367,7 +368,7 @@ class Core:
             req_parts.append("next")
 
         req = "/".join(req_parts)
-        if len(parts) > 1:
+        if len(parts) > 2:
             self.mqtt_client.publish(mac, req)
 
     def parse_states(self, parts):
@@ -520,7 +521,7 @@ class Core:
                     if ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
                         # Отправляем запрос состояния для всех устройств контроллера
                         if not dev_state.is_waiting_confirm and dev_state.is_active:
-                            message = f'{device.type}/{device.port}/getValue'
+                            message = f'exec/{device.type}/{device.port}/getValue/0'
                             self.mqtt_client.publish(mac, message)
 
                             dev_state.is_waiting_confirm = True

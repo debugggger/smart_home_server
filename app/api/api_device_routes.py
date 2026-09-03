@@ -102,7 +102,8 @@ def register_device_routes(app, db, kafkaHandler):
             controller_id=data['controller_id'],
             type_id=data['type_id'],
             port=data.get('port', ''),
-            params=data.get('params', '{}')
+            params=data.get('params', '{}'),
+            current_values=data.get('current_values', [])
         )
         device_id = db.add_device(device)
 
@@ -189,6 +190,9 @@ def register_device_routes(app, db, kafkaHandler):
 
         controller_mac = db.get_controller_by_id(device.controller_id).mac
         device_type = db.get_device_type_by_id(device.type_id).name
+
+
+
 
         device_data_for_core = {
             'command_type': 'ADD',
