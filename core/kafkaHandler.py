@@ -99,6 +99,8 @@ class CoreKafkaHandler:
         command = data.get('command')
         value = data.get('value')
 
+        #TODO добавить поддержку нескольких команд для одного контроллера в одном сообщении
+
         print(f"[Core Kafka] Processing command: {command} for device {device_id}")
 
         try:
@@ -118,8 +120,18 @@ class CoreKafkaHandler:
                 req_parts.append(str(value))
             req = "/".join(req_parts)
 
+
+
+            # controller = self.db.get_controller_by_mac(controller_mac)
+            # controller.waiting_confirm_list.append(req)
+            # controller.prev_query_time = datetime.now()
+
+            self.db.set_device_waiting(device_id)
+
             self.mqtt_client.publish(controller_mac, req)
             print(f"[Core Kafka] MQTT command sent to {controller_mac}: {req}")
+
+
 
         except Exception as e:
             print(f"[Core Kafka] Error processing command: {e}")

@@ -1,42 +1,46 @@
 # core/database.py
 import json
-import psycopg2
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
+import psycopg2
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class Device:
-    id: Optional[int] = None
-    controller_mac: str = None
-    port: str = None
-    params: json = None
-    current_values: Optional[List[str]] = None
+    """Только данные из БД, без состояний"""
+    id: int
+    controller_mac: str
+    port: str
+    params: dict = None
+    current_values: List[str] = field(default_factory=list)
     type: str = None
+
 
 @dataclass
 class Trigger:
-    id: Optional[int] = None
-    controller_mac: str = None
-    trig: str = None
+    """Только данные из БД"""
+    id: int
+    controller_mac: str
+    trig: str
     is_active: bool = False
 
 
 @dataclass
 class Scene:
-    id: Optional[int] = None
-    conditions: List[str] = None
-    responses: List[str] = None
+    """Только данные из БД"""
+    id: int
+    conditions: List[dict] = field(default_factory=list)
+    responses: List[dict] = field(default_factory=list)
     is_active: bool = False
     is_executed: bool = False
 
 
 class Database:
     def __init__(self, host='', port=443, name='', user='', password=''):
-        # Подключение к БД
         self.connection = psycopg2.connect(
             host=host,
             user=user,
@@ -49,19 +53,19 @@ class Database:
             cur.execute("select version();")
             print(f"server vers:  {cur.fetchone()}")
 
-        # Инициализация кешей
-        self._devices_cache = {}  # id -> Device
-        self._triggers_cache = {}  # id -> Trigger
-        self._scenes_cache = {}  # id -> Scene
+        # Кеши только с данными из БД
+        self._devices_cache: Dict[int, Device] = {}
+        self._triggers_cache: Dict[int, Trigger] = {}
+        self._scenes_cache: Dict[int, Scene] = {}
 
         # Индексы для быстрого поиска
-        self._devices_by_controller = {}  # controller_mac -> [device_ids]
-        self._devices_by_type = {}  # type -> [device_ids]
-        self._triggers_by_controller = {}  # controller_mac -> [trigger_ids]
+        self._devices_by_controller: Dict[str, List[int]] = {}
+        self._devices_by_type: Dict[str, List[int]] = {}
+        self._triggers_by_controller: Dict[str, List[int]] = {}
 
-        # Загружаем все данные в кеш при инициализации
+        # Загружаем все данные в кеш
         self._load_all_cache()
-        logger.info("Core Database cache initialized successfully")
+        logger.info("Database cache initialized successfully")
 
     # ============= ЗАГРУЗКА КЕША =============
 
@@ -85,8 +89,8 @@ class Database:
                 id=r[0],
                 controller_mac=r[1],
                 port=r[2],
-                params=r[3],
-                current_values=r[4],
+                params=r[3] if r[3] else {},
+                current_values=r[4] if r[4] else [],
                 type=r[5]
             )
             self._devices_cache[r[0]] = device
@@ -117,7 +121,6 @@ class Database:
             )
             self._triggers_cache[r[0]] = trigger
 
-            # Индекс по контроллеру
             if r[1] not in self._triggers_by_controller:
                 self._triggers_by_controller[r[1]] = []
             self._triggers_by_controller[r[1]].append(r[0])
@@ -134,9 +137,7 @@ class Database:
                 conditions=r[1] if r[1] else [],
                 responses=r[2] if r[2] else [],
                 is_active=r[3],
-                is_executed = r[4]
-
-
+                is_executed=r[4] if len(r) > 4 else False
             )
             self._scenes_cache[r[0]] = scene
 
@@ -157,42 +158,12 @@ class Database:
             self.connection.close()
             print("[INFO] Close connection with DB")
 
-    # ============= МЕТОДЫ ДЛЯ УСТРОЙСТВ (кешированные) =============
-
-    def add_device(self, device: Device) -> Optional[int]:
-        """Добавление устройства"""
-        query = """
-            INSERT INTO devices (id, controller_mac, port, params, current_values, type) 
-            VALUES (%s, %s, %s, %s, %s, %s) 
-            RETURNING id
-        """
-        result = self._execute_query(
-            query,
-            (device.id, device.controller_mac, device.port, device.params, device.current_values, device.type),
-            fetch_one=True
-        )
-        if result:
-            device.id = result[0]
-            self._devices_cache[device.id] = device
-
-            # Обновляем индексы
-            if device.controller_mac not in self._devices_by_controller:
-                self._devices_by_controller[device.controller_mac] = []
-            self._devices_by_controller[device.controller_mac].append(device.id)
-
-            if device.type not in self._devices_by_type:
-                self._devices_by_type[device.type] = []
-            self._devices_by_type[device.type].append(device.id)
-
-            return result[0]
-        return None
+    # ============= МЕТОДЫ ДЛЯ УСТРОЙСТВ =============
 
     def get_device_by_id(self, device_id: int) -> Optional[Device]:
-        """Получение устройства по ID из кеша"""
         return self._devices_cache.get(device_id)
 
     def get_devices_by_controller(self, controller_mac: str) -> List[Device]:
-        """Получение устройств по MAC контроллера из кеша"""
         result = []
         for did in self._devices_by_controller.get(controller_mac, []):
             device = self._devices_cache.get(did)
@@ -201,7 +172,6 @@ class Database:
         return result
 
     def get_devices_by_type(self, type_name: str) -> List[Device]:
-        """Получение устройств по типу из кеша"""
         result = []
         for did in self._devices_by_type.get(type_name, []):
             device = self._devices_cache.get(did)
@@ -210,68 +180,50 @@ class Database:
         return result
 
     def get_all_devices(self) -> List[Device]:
-        """Получение всех устройств из кеша"""
         return list(self._devices_cache.values())
 
-    def update_device_current_values(self, device_id: int, current_values: str) -> bool:
-        """Обновление текущих значений устройства"""
+    def get_device_by_controller_and_port(self, controller_mac: str, port: str) -> Optional[Device]:
+        for device in self._devices_cache.values():
+            if device.controller_mac == controller_mac and device.port == port:
+                return device
+        return None
+
+    def update_device_current_values(self, device_id: int, current_values: List[str]) -> bool:
+        """Обновление текущих значений устройства в БД и кеше"""
         query = """
             UPDATE devices 
             SET current_values = %s 
             WHERE id = %s
         """
-        result = self._execute_query(query, (current_values, device_id))
+        self._execute_query(query, (json.dumps(current_values), device_id))
 
         device = self._devices_cache.get(device_id)
         if device:
             device.current_values = current_values
             return True
-        return result is not None
+        return False
 
-    def delete_device(self, device_id: int) -> bool:
-        """Удаление устройства по ID"""
-        query = "DELETE FROM devices WHERE id = %s"
-        self._execute_query(query, (device_id,))
-        if device_id in self._devices_cache:
-            del self._devices_cache[device_id]
-        return True
+    # def update_device_active_status(self, device_id: int, is_active: bool) -> bool:
+    #     """Обновление статуса активности устройства"""
+    #     query = """
+    #         UPDATE devices
+    #         SET is_active = %s
+    #         WHERE id = %s
+    #     """
+    #     self._execute_query(query, (is_active, device_id))
+    #
+    #     device = self._devices_cache.get(device_id)
+    #     if device:
+    #         device.is_active = is_active
+    #         return True
+    #     return False
 
-    # ============= МЕТОДЫ ДЛЯ ТРИГГЕРОВ (кешированные) =============
-
-    def add_trigger(self, trigger: Trigger) -> Optional[int]:
-        """Добавление или обновление триггера"""
-        # Если триггер с таким ID уже существует - удаляем старый
-        if trigger.id and self.get_trigger_by_id(trigger.id):
-            self.delete_trigger(trigger.id)
-
-        query = """
-            INSERT INTO triggers (id, controller_mac, trig, is_active) 
-            VALUES (%s, %s, %s, %s) 
-            RETURNING id
-        """
-        result = self._execute_query(
-            query,
-            (trigger.id, trigger.controller_mac, trigger.trig, trigger.is_active),
-            fetch_one=True
-        )
-        if result:
-            trigger.id = result[0]
-            self._triggers_cache[trigger.id] = trigger
-
-            # Обновляем индекс по контроллеру
-            if trigger.controller_mac not in self._triggers_by_controller:
-                self._triggers_by_controller[trigger.controller_mac] = []
-            self._triggers_by_controller[trigger.controller_mac].append(trigger.id)
-
-            return result[0]
-        return None
+    # ============= МЕТОДЫ ДЛЯ ТРИГГЕРОВ =============
 
     def get_trigger_by_id(self, trigger_id: int) -> Optional[Trigger]:
-        """Получение триггера по ID из кеша"""
         return self._triggers_cache.get(trigger_id)
 
     def get_triggers_by_controller(self, controller_mac: str) -> List[Trigger]:
-        """Получение триггеров по MAC контроллера из кеша"""
         result = []
         for tid in self._triggers_by_controller.get(controller_mac, []):
             trigger = self._triggers_cache.get(tid)
@@ -280,134 +232,9 @@ class Database:
         return result
 
     def get_all_triggers(self) -> List[Trigger]:
-        """Получение всех триггеров из кеша"""
         return list(self._triggers_cache.values())
 
-    def update_trig_status(self, trigger_id: int, is_active: bool) -> bool:
-        """Обновление статуса триггера"""
-        query = """
-            UPDATE triggers 
-            SET is_active = %s 
-            WHERE id = %s
-        """
-        result = self._execute_query(query, (is_active, trigger_id))
-
-        trigger = self._triggers_cache.get(trigger_id)
-        if trigger:
-            trigger.is_active = is_active
-            return True
-        return result is not None
-
-    def delete_trigger(self, trigger_id: int) -> bool:
-        """Удаление триггера по ID"""
-        query = "DELETE FROM triggers WHERE id = %s"
-        self._execute_query(query, (trigger_id,))
-        if trigger_id in self._triggers_cache:
-            del self._triggers_cache[trigger_id]
-        return True
-
-    # ============= МЕТОДЫ ДЛЯ СЦЕНАРИЕВ (кешированные) =============
-
-    def add_scene(self, scene: Scene) -> Optional[int]:
-        """Добавление сценария"""
-        query = """
-            INSERT INTO scenes (id, conditions, responses, is_active, is_executed) 
-            VALUES (%s, %s, %s, %s, %s) 
-            RETURNING id
-        """
-        # Преобразуем списки в JSON строки для хранения в БД
-        conditions_json = json.dumps(scene.conditions) if scene.conditions else '[]'
-        responses_json = json.dumps(scene.responses) if scene.responses else '[]'
-
-        result = self._execute_query(
-            query,
-            (scene.id, conditions_json, responses_json, scene.is_active, False),
-            fetch_one=True
-        )
-        if result:
-            scene.id = result[0]
-            self._scenes_cache[scene.id] = scene
-            return result[0]
-        return None
-
-    def get_scene_by_id(self, scene_id: int) -> Optional[Scene]:
-        """Получение сценария по ID из кеша"""
-        return self._scenes_cache.get(scene_id)
-
-    def get_all_scenes(self) -> List[Scene]:
-        """Получение всех сценариев из кеша"""
-        return list(self._scenes_cache.values())
-
-    def update_scene(self, scene: Scene) -> bool:
-        """Обновление сценария"""
-        query = """
-            UPDATE scenes 
-            SET conditions = %s, responses = %s, is_active = %s , is_executed = %s
-            WHERE id = %s
-        """
-        conditions_json = json.dumps(scene.conditions) if scene.conditions else '[]'
-        responses_json = json.dumps(scene.responses) if scene.responses else '[]'
-
-        result = self._execute_query(
-            query,
-            (conditions_json, responses_json, scene.is_active, scene.is_executed, scene.id)
-        )
-
-        if scene.id in self._scenes_cache:
-            self._scenes_cache[scene.id] = scene
-            return True
-        return result is not None
-
-    def update_scene_status(self, scene_id: int, is_active: bool) -> bool:
-        """Обновление статуса сценария"""
-        query = """
-            UPDATE scenes 
-            SET is_active = %s 
-            WHERE id = %s
-        """
-        result = self._execute_query(query, (is_active, scene_id))
-
-        scene = self._scenes_cache.get(scene_id)
-        if scene:
-            scene.is_active = is_active
-            return True
-        return result is not None
-
-    def delete_scene(self, scene_id: int) -> bool:
-        """Удаление сценария по ID"""
-        query = "DELETE FROM scenes WHERE id = %s"
-        self._execute_query(query, (scene_id,))
-        if scene_id in self._scenes_cache:
-            del self._scenes_cache[scene_id]
-        return True
-
-    # ============= ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ =============
-
-    def refresh_cache(self):
-        """Принудительное обновление всего кеша из БД"""
-        self._load_all_cache()
-        logger.info("Cache refreshed from database")
-
-    def get_cache_stats(self) -> dict:
-        """Получить статистику кеша"""
-        return {
-            'devices': len(self._devices_cache),
-            'triggers': len(self._triggers_cache),
-            'scenes': len(self._scenes_cache),
-            'devices_by_controller': sum(len(v) for v in self._devices_by_controller.values()),
-            'devices_by_type': sum(len(v) for v in self._devices_by_type.values()),
-            'triggers_by_controller': sum(len(v) for v in self._triggers_by_controller.values())
-        }
-
-    def get_device_by_controller_and_port(self, controller_mac: str, port: str) -> Optional[Device]:
-        """Получение устройства по MAC контроллера и порту"""
-        for device in self._devices_cache.values():
-            if device.controller_mac == controller_mac and device.port == port:
-                return device
-        return None
-
     def get_triggers_by_controller_and_active(self, controller_mac: str, is_active: bool = True) -> List[Trigger]:
-        """Получение активных триггеров по MAC контроллера"""
         result = []
         for tid in self._triggers_by_controller.get(controller_mac, []):
             trigger = self._triggers_cache.get(tid)
@@ -415,6 +242,48 @@ class Database:
                 result.append(trigger)
         return result
 
+    # ============= МЕТОДЫ ДЛЯ СЦЕНАРИЕВ =============
+
+    def get_scene_by_id(self, scene_id: int) -> Optional[Scene]:
+        return self._scenes_cache.get(scene_id)
+
+    def get_all_scenes(self) -> List[Scene]:
+        return list(self._scenes_cache.values())
+
     def get_active_scenes(self) -> List[Scene]:
-        """Получение всех активных сценариев"""
         return [s for s in self._scenes_cache.values() if s.is_active]
+
+    def update_scene_executed(self, scene_id: int, is_executed: bool) -> bool:
+        """Обновление статуса выполнения сценария"""
+        query = """
+            UPDATE scenes 
+            SET is_executed = %s 
+            WHERE id = %s
+        """
+        self._execute_query(query, (is_executed, scene_id))
+
+        scene = self._scenes_cache.get(scene_id)
+        if scene:
+            scene.is_executed = is_executed
+            return True
+        return False
+
+    def update_scene_status(self, scene_id: int, is_active: bool) -> bool:
+        query = """
+            UPDATE scenes 
+            SET is_active = %s 
+            WHERE id = %s
+        """
+        self._execute_query(query, (is_active, scene_id))
+
+        scene = self._scenes_cache.get(scene_id)
+        if scene:
+            scene.is_active = is_active
+            return True
+        return False
+
+    # ============= ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =============
+
+    def refresh_cache(self):
+        self._load_all_cache()
+        logger.info("Cache refreshed from database")

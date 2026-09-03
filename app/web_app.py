@@ -17,6 +17,7 @@ from api.api_device_routes import register_device_routes
 from api.api_controller_routes import register_controller_routes
 from api.api_room_routes import register_room_routes
 from api.api_trigger_routes import register_trigger_routes
+from api.api_scene_routes import register_scene_routes
 from api.api_firmware_routes import register_firmware_routes
 
 logging.basicConfig(level=logging.INFO)
@@ -56,6 +57,7 @@ class WebInterface:
         register_controller_routes(app, self.db, self.kafkaHandler)
         register_room_routes(app, self.db, self.kafkaHandler)
         register_trigger_routes(app, self.db, self.kafkaHandler)
+        register_scene_routes(app, self.db, self.kafkaHandler)
         register_firmware_routes(app, self.db, self.kafkaHandler)
         register_sse_routes(app, self.db, self.kafkaHandler)
 
