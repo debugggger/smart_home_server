@@ -109,7 +109,7 @@ class CoreKafkaHandler:
                 print(f"[Core Kafka] Device {device_id} not found")
                 return
 
-            req_parts = []
+            req_parts = ['exec']
             req_parts.append(device.type)
             if device.port:
                 req_parts.append(device.port)
@@ -120,13 +120,7 @@ class CoreKafkaHandler:
                 req_parts.append(str(value))
             req = "/".join(req_parts)
 
-
-
-            # controller = self.db.get_controller_by_mac(controller_mac)
-            # controller.waiting_confirm_list.append(req)
-            # controller.prev_query_time = datetime.now()
-
-            self.db.set_device_waiting(device_id)
+            #self.db.set_device_waiting(device_id) # состояние в core
 
             self.mqtt_client.publish(controller_mac, req)
             print(f"[Core Kafka] MQTT command sent to {controller_mac}: {req}")

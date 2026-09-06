@@ -47,6 +47,7 @@ class Trigger:
     controller_resp_id: int = None
     name: str = None
     is_active: bool = True
+    is_scene: bool = False
 
 @dataclass
 class TrigCondition:
@@ -61,26 +62,6 @@ class TrigResponse:
     device_id: int = None
     resp: str = None
     trigger_id: int = None
-
-@dataclass
-class Scene:
-    id: Optional[int] = None
-    name: str = None
-    is_active: bool = True
-
-@dataclass
-class SceneCondition:
-    id: Optional[int] = None
-    device_id: int = None
-    condition: str = None
-    scene_id: int = None
-
-@dataclass
-class SceneResponse:
-    id: Optional[int] = None
-    device_id: int = None
-    resp: str = None
-    scene_id: int = None
 
 class Database:
     def __init__(self, host=None, port=None, name=None, user=None, password=None):
@@ -102,9 +83,6 @@ class Database:
         self._triggers_cache = {}  # id -> Trigger
         self._trigger_conditions_cache = {}  # id -> TrigCondition
         self._trigger_responses_cache = {}  # id -> TrigResponse
-        self._scenes_cache = {}  # id -> Scene
-        self._scene_conditions_cache = {}  # id -> SceneCondition
-        self._scene_responses_cache = {}  # id -> SceneResponse
 
         self._controllers_by_room = {}  # room_id -> [controller_ids]
         self._devices_by_controller = {}  # controller_id -> [device_ids]
@@ -113,8 +91,6 @@ class Database:
         self._triggers_by_resp_controller = {}  # controller_resp_id -> [trigger_ids]
         self._conditions_by_trigger = {}  # trigger_id -> [condition_ids]
         self._responses_by_trigger = {}  # trigger_id -> [response_ids]
-        self._conditions_by_scene = {}  # scene_id -> [condition_ids]
-        self._responses_by_scene = {}  # scene_id -> [response_ids]
 
         self._load_all_cache()
 
@@ -125,7 +101,7 @@ class Database:
         self._load_device_types_cache()
         self._load_devices_cache()
         self._load_triggers_cache()
-        self._load_scenes_cache()
+        # self._load_scenes_cache()
 
     def _load_rooms_cache(self):
         query = "SELECT id, name FROM rooms"
@@ -227,40 +203,6 @@ class Database:
                 self._responses_by_trigger[r[3]] = []
             self._responses_by_trigger[r[3]].append(r[0])
 
-    def _load_scenes_cache(self):
-        query = "SELECT id, name, is_active FROM scenes"
-        results = self._execute_query(query, fetch_all=True)
-        self._scenes_cache = {}
-
-        for r in results:
-            self._scenes_cache[r[0]] = Scene(id=r[0], name=r[1], is_active=r[2])
-
-        query = "SELECT id, device_id, condition, scene_id FROM scene_conditions"
-        results = self._execute_query(query, fetch_all=True)
-        self._scene_conditions_cache = {}
-        self._conditions_by_scene = {}
-
-        for r in results:
-            condition = SceneCondition(id=r[0], device_id=r[1], condition=r[2], scene_id=r[3])
-            self._scene_conditions_cache[r[0]] = condition
-
-            if r[3] not in self._conditions_by_scene:
-                self._conditions_by_scene[r[3]] = []
-            self._conditions_by_scene[r[3]].append(r[0])
-
-        query = "SELECT id, device_id, resp, scene_id FROM scene_responses"
-        results = self._execute_query(query, fetch_all=True)
-        self._scene_responses_cache = {}
-        self._responses_by_scene = {}
-
-        for r in results:
-            response = SceneResponse(id=r[0], device_id=r[1], resp=r[2], scene_id=r[3])
-            self._scene_responses_cache[r[0]] = response
-
-            if r[3] not in self._responses_by_scene:
-                self._responses_by_scene[r[3]] = []
-            self._responses_by_scene[r[3]].append(r[0])
-
     def _execute_query(self, query: str, params: tuple = None,
                        fetch_one: bool = False, fetch_all: bool = False):
         with self.connection.cursor() as cur:
@@ -292,8 +234,13 @@ class Database:
         """Получение всех комнат из кеша"""
         return list(self._rooms_cache.values())
 
-    def delete_room(self, room_id: int) -> bool:
+    def delete_room(self, room_id: int, kafkaHandler) -> bool:
         """Удаление комнаты по ID"""
+
+        conntollers = self.get_controllers_by_room(room_id)
+        for controller in conntollers:
+            self.delete_controller(controller.id, kafkaHandler)
+
         query = "DELETE FROM rooms WHERE id = %s"
         self._execute_query(query, (room_id,))
         if room_id in self._rooms_cache:
@@ -354,8 +301,27 @@ class Database:
                 return True
         return False
 
-    def delete_controller(self, controller_id: int) -> bool:
+    def delete_controller(self, controller_id: int, kafkaHandler) -> bool:
         """Удаление контроллера по ID"""
+
+        triggers = {}
+        for t in self.get_triggers_by_controller(controller_id):
+            triggers[t.id] = t
+
+        for t in self.get_triggers_by_resp_controller(controller_id):
+            if t.id not in triggers:
+                triggers[t.id] = t
+
+        unique_triggers = list(triggers.values())
+        for trig in unique_triggers:
+            if not self.delete_trigger(trig.id, kafkaHandler):
+                return False
+
+        devices = self.get_devices_by_controller(controller_id)
+        for device in devices:
+            if not self.delete_device(device.id, kafkaHandler):
+                return False
+
         query = "DELETE FROM controllers WHERE id = %s"
         self._execute_query(query, (controller_id,))
         if controller_id in self._controllers_cache:
@@ -488,26 +454,51 @@ class Database:
             return True
         return False
 
-    def delete_device(self, device_id: int) -> bool:
+    def delete_device(self, device_id: int, kafkaHandler) -> bool:
         """Удаление устройства по ID"""
-        query = "DELETE FROM devices WHERE id = %s"
-        self._execute_query(query, (device_id,))
-        if device_id in self._devices_cache:
-            del self._devices_cache[device_id]
-        return True
+        device = self.get_device_by_id(device_id)
+        if not device:
+            return False
+
+        affected_triggers = set()
+        all_conditions = self.get_all_trig_conditions()
+        for condition in all_conditions:
+            if condition.device_id == device_id:
+                affected_triggers.add(condition.trigger_id)
+        all_responses = self.get_all_trig_responses()
+        for response in all_responses:
+            if response.device_id == device_id:
+                affected_triggers.add(response.trigger_id)
+        for trigger_id in affected_triggers:
+            success = self.delete_trigger(trigger_id, kafkaHandler)
+            if not success:
+                return False
+
+        kafka_data = {
+            'command_type': 'DELETE',
+            'id': device_id
+        }
+        success = kafkaHandler.update_device_table(kafka_data)
+        if success:
+            query = "DELETE FROM devices WHERE id = %s"
+            self._execute_query(query, (device_id,))
+            if device_id in self._devices_cache:
+                del self._devices_cache[device_id]
+            return True
+        return False
 
     # ============= МЕТОДЫ ДЛЯ TRIGGERS (кешированные) =============
 
     def add_trigger(self, trigger: Trigger) -> Optional[int]:
         """Добавление триггера"""
         query = """
-            INSERT INTO triggers (controller_id, controller_resp_id, name, is_active) 
-            VALUES (%s, %s, %s, %s) 
+            INSERT INTO triggers (controller_id, controller_resp_id, name, is_active, is_scene) 
+            VALUES (%s, %s, %s, %s, %s) 
             RETURNING id
         """
         result = self._execute_query(
             query,
-            (trigger.controller_id, trigger.controller_resp_id, trigger.name, trigger.is_active),
+            (trigger.controller_id, trigger.controller_resp_id, trigger.name, trigger.is_active, trigger.is_scene),
             fetch_one=True
         )
         if result:
@@ -567,13 +558,54 @@ class Database:
             return True
         return False
 
-    def delete_trigger(self, trigger_id: int) -> bool:
+    def update_trig_scene(self, trigger_id: int, is_scene: bool) -> bool:
+        """Обновление статуса триггера"""
+        query = "UPDATE triggers SET is_scene = %s WHERE id = %s"
+        self._execute_query(query, (is_scene, trigger_id))
+
+        trigger = self._triggers_cache.get(trigger_id)
+        if trigger:
+            trigger.is_scene = is_scene
+            return True
+        return False
+
+    def update_trig_name(self, trig_id: int, name: str) -> bool:
+        """Обновление имени сценария"""
+        query = "UPDATE triggers SET name = %s WHERE id = %s"
+        self._execute_query(query, (name, trig_id))
+
+        trig = self._triggers_cache.get(trig_id)
+        if trig:
+            trig.name = name
+            return True
+        return False
+
+    def delete_trigger(self, trigger_id: int, kafkaHandler) -> bool:
         """Удаление триггера по ID"""
-        query = "DELETE FROM triggers WHERE id = %s"
-        self._execute_query(query, (trigger_id,))
-        if trigger_id in self._triggers_cache:
-            del self._triggers_cache[trigger_id]
-        return True
+        kafka_data = {
+            'command_type': 'DELETE',
+            'id': trigger_id
+        }
+        kafka_res = False
+        if self.get_trigger_by_id(trigger_id).is_scene:
+            kafka_res = kafkaHandler.update_scene_table(kafka_data)
+        else:
+            kafka_res = kafkaHandler.update_trig_table(kafka_data)
+
+        if kafka_res:
+            trig_conditions = self.get_trig_conditions_by_trigger(trigger_id)
+            for trig_cond in trig_conditions:
+                self.delete_trig_condition(trig_cond.id)
+            trig_responses = self.get_trig_responses_by_trigger(trigger_id)
+            for trig_resp in trig_responses:
+                self.delete_trig_response(trig_resp.id)
+            # TODO откат транзации если что-то не выполнилось
+            query = "DELETE FROM triggers WHERE id = %s"
+            self._execute_query(query, (trigger_id,))
+            if trigger_id in self._triggers_cache:
+                del self._triggers_cache[trigger_id]
+            return True
+        return False
 
     # ============= МЕТОДЫ ДЛЯ TRIG_CONDITIONS (кешированные) =============
 
@@ -683,167 +715,186 @@ class Database:
             del self._trigger_responses_cache[response_id]
         return True
 
-    # ============= МЕТОДЫ ДЛЯ SCENES (кешированные) =============
+    # # ============= МЕТОДЫ ДЛЯ SCENES (кешированные) =============
+    #
+    # def add_scene(self, scene: Scene) -> Optional[int]:
+    #     """Добавление сценария"""
+    #     query = "INSERT INTO scenes (name, is_active) VALUES (%s, %s) RETURNING id"
+    #     result = self._execute_query(query, (scene.name, scene.is_active), fetch_one=True)
+    #     if result:
+    #         scene.id = result[0]
+    #         self._scenes_cache[scene.id] = scene
+    #         return result[0]
+    #     return None
+    #
+    # def get_scene_by_id(self, scene_id: int) -> Optional[Scene]:
+    #     """Получение сценария по ID из кеша"""
+    #     return self._scenes_cache.get(scene_id)
+    #
+    # def get_scenes_by_name(self, name: str) -> List[Scene]:
+    #     """Получение сценариев по имени из кеша"""
+    #     return [s for s in self._scenes_cache.values() if s.name == name]
+    #
+    # def get_all_scenes(self) -> List[Scene]:
+    #     """Получение всех сценариев из кеша"""
+    #     return list(self._scenes_cache.values())
+    #
+    # def update_scene_status(self, scene_id: int, is_active: bool) -> bool:
+    #     """Обновление статуса сценария"""
+    #     query = "UPDATE scenes SET is_active = %s WHERE id = %s"
+    #     self._execute_query(query, (is_active, scene_id))
+    #
+    #     scene = self._scenes_cache.get(scene_id)
+    #     if scene:
+    #         scene.is_active = is_active
+    #         return True
+    #     return False
+    #
+    # def update_scene_name(self, scene_id: int, name: str) -> bool:
+    #     """Обновление имени сценария"""
+    #     query = "UPDATE scenes SET name = %s WHERE id = %s"
+    #     self._execute_query(query, (name, scene_id))
+    #
+    #     scene = self._scenes_cache.get(scene_id)
+    #     if scene:
+    #         scene.name = name
+    #         return True
+    #     return False
+    #
+    # def delete_scene(self, scene_id: int, kafkaHandler) -> bool:
+    #     """Удаление сценария по ID"""
+    #     kafka_data = {
+    #         'command_type': 'DELETE',
+    #         'id': scene_id
+    #     }
+    #     if kafkaHandler.update_trig_table(kafka_data):
+    #         trig_conditions = self.get_scene_conditions_by_scene(scene_id)
+    #         for trig_cond in trig_conditions:
+    #             self.delete_scene_condition(trig_cond.id)
+    #         trig_responses = self.get_scene_responses_by_scene(scene_id)
+    #         for trig_resp in trig_responses:
+    #             self.delete_scene_response(trig_resp.id)
+    #         # TODO откат транзации если что-то не выполнилось
+    #         query = "DELETE FROM scenes WHERE id = %s"
+    #         self._execute_query(query, (scene_id,))
+    #         if scene_id in self._scenes_cache:
+    #             del self._scenes_cache[scene_id]
+    #         return True
+    #     return False
+    #
+    #     # query = "DELETE FROM scenes WHERE id = %s"
+    #     # self._execute_query(query, (scene_id,))
+    #     # if scene_id in self._scenes_cache:
+    #     #     del self._scenes_cache[scene_id]
+    #     # return True
 
-    def add_scene(self, scene: Scene) -> Optional[int]:
-        """Добавление сценария"""
-        query = "INSERT INTO scenes (name, is_active) VALUES (%s, %s) RETURNING id"
-        result = self._execute_query(query, (scene.name, scene.is_active), fetch_one=True)
-        if result:
-            scene.id = result[0]
-            self._scenes_cache[scene.id] = scene
-            return result[0]
-        return None
+    # # ============= МЕТОДЫ ДЛЯ SCENE_CONDITIONS (кешированные) =============
+    #
+    # def add_scene_condition(self, condition: SceneCondition) -> Optional[int]:
+    #     """Добавление условия сценария"""
+    #     query = """
+    #         INSERT INTO scene_conditions (device_id, condition, scene_id)
+    #         VALUES (%s, %s, %s)
+    #         RETURNING id
+    #     """
+    #     result = self._execute_query(
+    #         query,
+    #         (condition.device_id, condition.condition, condition.scene_id),
+    #         fetch_one=True
+    #     )
+    #     if result:
+    #         condition.id = result[0]
+    #         self._scene_conditions_cache[condition.id] = condition
+    #
+    #         if condition.scene_id not in self._conditions_by_scene:
+    #             self._conditions_by_scene[condition.scene_id] = []
+    #         self._conditions_by_scene[condition.scene_id].append(condition.id)
+    #
+    #         return result[0]
+    #     return None
+    #
+    # def get_scene_condition_by_id(self, condition_id: int) -> Optional[SceneCondition]:
+    #     """Получение условия сценария по ID из кеша"""
+    #     return self._scene_conditions_cache.get(condition_id)
+    #
+    # def get_scene_conditions_by_device(self, device_id: int) -> List[SceneCondition]:
+    #     """Получение условий по устройству из кеша"""
+    #     return [c for c in self._scene_conditions_cache.values() if c.device_id == device_id]
+    #
+    # def get_scene_conditions_by_scene(self, scene_id: int) -> List[SceneCondition]:
+    #     """Получение условий по сценарию из кеша"""
+    #     result = []
+    #     for cid in self._conditions_by_scene.get(scene_id, []):
+    #         condition = self._scene_conditions_cache.get(cid)
+    #         if condition:
+    #             result.append(condition)
+    #     return result
+    #
+    # def get_all_scene_conditions(self) -> List[SceneCondition]:
+    #     """Получение всех условий сценариев из кеша"""
+    #     return list(self._scene_conditions_cache.values())
+    #
+    # def delete_scene_condition(self, condition_id: int) -> bool:
+    #     """Удаление условия сценария по ID"""
+    #     query = "DELETE FROM scene_conditions WHERE id = %s"
+    #     self._execute_query(query, (condition_id,))
+    #     if condition_id in self._scene_conditions_cache:
+    #         del self._scene_conditions_cache[condition_id]
+    #     return True
 
-    def get_scene_by_id(self, scene_id: int) -> Optional[Scene]:
-        """Получение сценария по ID из кеша"""
-        return self._scenes_cache.get(scene_id)
-
-    def get_scenes_by_name(self, name: str) -> List[Scene]:
-        """Получение сценариев по имени из кеша"""
-        return [s for s in self._scenes_cache.values() if s.name == name]
-
-    def get_all_scenes(self) -> List[Scene]:
-        """Получение всех сценариев из кеша"""
-        return list(self._scenes_cache.values())
-
-    def update_scene_status(self, scene_id: int, is_active: bool) -> bool:
-        """Обновление статуса сценария"""
-        query = "UPDATE scenes SET is_active = %s WHERE id = %s"
-        self._execute_query(query, (is_active, scene_id))
-
-        scene = self._scenes_cache.get(scene_id)
-        if scene:
-            scene.is_active = is_active
-            return True
-        return False
-
-    def update_scene_name(self, scene_id: int, name: str) -> bool:
-        """Обновление имени сценария"""
-        query = "UPDATE scenes SET name = %s WHERE id = %s"
-        self._execute_query(query, (name, scene_id))
-
-        scene = self._scenes_cache.get(scene_id)
-        if scene:
-            scene.name = name
-            return True
-        return False
-
-    def delete_scene(self, scene_id: int) -> bool:
-        """Удаление сценария по ID"""
-        query = "DELETE FROM scenes WHERE id = %s"
-        self._execute_query(query, (scene_id,))
-        if scene_id in self._scenes_cache:
-            del self._scenes_cache[scene_id]
-        return True
-
-    # ============= МЕТОДЫ ДЛЯ SCENE_CONDITIONS (кешированные) =============
-
-    def add_scene_condition(self, condition: SceneCondition) -> Optional[int]:
-        """Добавление условия сценария"""
-        query = """
-            INSERT INTO scene_conditions (device_id, condition, scene_id) 
-            VALUES (%s, %s, %s) 
-            RETURNING id
-        """
-        result = self._execute_query(
-            query,
-            (condition.device_id, condition.condition, condition.scene_id),
-            fetch_one=True
-        )
-        if result:
-            condition.id = result[0]
-            self._scene_conditions_cache[condition.id] = condition
-
-            if condition.scene_id not in self._conditions_by_scene:
-                self._conditions_by_scene[condition.scene_id] = []
-            self._conditions_by_scene[condition.scene_id].append(condition.id)
-
-            return result[0]
-        return None
-
-    def get_scene_condition_by_id(self, condition_id: int) -> Optional[SceneCondition]:
-        """Получение условия сценария по ID из кеша"""
-        return self._scene_conditions_cache.get(condition_id)
-
-    def get_scene_conditions_by_device(self, device_id: int) -> List[SceneCondition]:
-        """Получение условий по устройству из кеша"""
-        return [c for c in self._scene_conditions_cache.values() if c.device_id == device_id]
-
-    def get_scene_conditions_by_scene(self, scene_id: int) -> List[SceneCondition]:
-        """Получение условий по сценарию из кеша"""
-        result = []
-        for cid in self._conditions_by_scene.get(scene_id, []):
-            condition = self._scene_conditions_cache.get(cid)
-            if condition:
-                result.append(condition)
-        return result
-
-    def get_all_scene_conditions(self) -> List[SceneCondition]:
-        """Получение всех условий сценариев из кеша"""
-        return list(self._scene_conditions_cache.values())
-
-    def delete_scene_condition(self, condition_id: int) -> bool:
-        """Удаление условия сценария по ID"""
-        query = "DELETE FROM scene_conditions WHERE id = %s"
-        self._execute_query(query, (condition_id,))
-        if condition_id in self._scene_conditions_cache:
-            del self._scene_conditions_cache[condition_id]
-        return True
-
-    # ============= МЕТОДЫ ДЛЯ SCENE_RESPONSES (кешированные) =============
-
-    def add_scene_response(self, response: SceneResponse) -> Optional[int]:
-        """Добавление ответа сценария"""
-        query = """
-            INSERT INTO scene_responses (device_id, resp, scene_id) 
-            VALUES (%s, %s, %s) 
-            RETURNING id
-        """
-        result = self._execute_query(
-            query,
-            (response.device_id, response.resp, response.scene_id),
-            fetch_one=True
-        )
-        if result:
-            response.id = result[0]
-            self._scene_responses_cache[response.id] = response
-
-            if response.scene_id not in self._responses_by_scene:
-                self._responses_by_scene[response.scene_id] = []
-            self._responses_by_scene[response.scene_id].append(response.id)
-
-            return result[0]
-        return None
-
-    def get_scene_response_by_id(self, response_id: int) -> Optional[SceneResponse]:
-        """Получение ответа сценария по ID из кеша"""
-        return self._scene_responses_cache.get(response_id)
-
-    def get_scene_responses_by_device(self, device_id: int) -> List[SceneResponse]:
-        """Получение ответов по устройству из кеша"""
-        return [r for r in self._scene_responses_cache.values() if r.device_id == device_id]
-
-    def get_scene_responses_by_scene(self, scene_id: int) -> List[SceneResponse]:
-        """Получение ответов по сценарию из кеша"""
-        result = []
-        for rid in self._responses_by_scene.get(scene_id, []):
-            response = self._scene_responses_cache.get(rid)
-            if response:
-                result.append(response)
-        return result
-
-    def get_all_scene_responses(self) -> List[SceneResponse]:
-        """Получение всех ответов сценариев из кеша"""
-        return list(self._scene_responses_cache.values())
-
-    def delete_scene_response(self, response_id: int) -> bool:
-        """Удаление ответа сценария по ID"""
-        query = "DELETE FROM scene_responses WHERE id = %s"
-        self._execute_query(query, (response_id,))
-        if response_id in self._scene_responses_cache:
-            del self._scene_responses_cache[response_id]
-        return True
+    # # ============= МЕТОДЫ ДЛЯ SCENE_RESPONSES (кешированные) =============
+    #
+    # def add_scene_response(self, response: SceneResponse) -> Optional[int]:
+    #     """Добавление ответа сценария"""
+    #     query = """
+    #         INSERT INTO scene_responses (device_id, resp, scene_id)
+    #         VALUES (%s, %s, %s)
+    #         RETURNING id
+    #     """
+    #     result = self._execute_query(
+    #         query,
+    #         (response.device_id, response.resp, response.scene_id),
+    #         fetch_one=True
+    #     )
+    #     if result:
+    #         response.id = result[0]
+    #         self._scene_responses_cache[response.id] = response
+    #
+    #         if response.scene_id not in self._responses_by_scene:
+    #             self._responses_by_scene[response.scene_id] = []
+    #         self._responses_by_scene[response.scene_id].append(response.id)
+    #
+    #         return result[0]
+    #     return None
+    #
+    # def get_scene_response_by_id(self, response_id: int) -> Optional[SceneResponse]:
+    #     """Получение ответа сценария по ID из кеша"""
+    #     return self._scene_responses_cache.get(response_id)
+    #
+    # def get_scene_responses_by_device(self, device_id: int) -> List[SceneResponse]:
+    #     """Получение ответов по устройству из кеша"""
+    #     return [r for r in self._scene_responses_cache.values() if r.device_id == device_id]
+    #
+    # def get_scene_responses_by_scene(self, scene_id: int) -> List[SceneResponse]:
+    #     """Получение ответов по сценарию из кеша"""
+    #     result = []
+    #     for rid in self._responses_by_scene.get(scene_id, []):
+    #         response = self._scene_responses_cache.get(rid)
+    #         if response:
+    #             result.append(response)
+    #     return result
+    #
+    # def get_all_scene_responses(self) -> List[SceneResponse]:
+    #     """Получение всех ответов сценариев из кеша"""
+    #     return list(self._scene_responses_cache.values())
+    #
+    # def delete_scene_response(self, response_id: int) -> bool:
+    #     """Удаление ответа сценария по ID"""
+    #     query = "DELETE FROM scene_responses WHERE id = %s"
+    #     self._execute_query(query, (response_id,))
+    #     if response_id in self._scene_responses_cache:
+    #         del self._scene_responses_cache[response_id]
+    #     return True
 
     # ============= ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ КЕША =============
 
@@ -852,20 +903,20 @@ class Database:
         self._load_all_cache()
         logger.info("Cache refreshed from database")
 
-    def get_cache_stats(self) -> dict:
-        """Получить статистику кеша"""
-        return {
-            'rooms': len(self._rooms_cache),
-            'controllers': len(self._controllers_cache),
-            'devices': len(self._devices_cache),
-            'device_types': len(self._device_types_cache),
-            'triggers': len(self._triggers_cache),
-            'trigger_conditions': len(self._trigger_conditions_cache),
-            'trigger_responses': len(self._trigger_responses_cache),
-            'scenes': len(self._scenes_cache),
-            'scene_conditions': len(self._scene_conditions_cache),
-            'scene_responses': len(self._scene_responses_cache)
-        }
+    # def get_cache_stats(self) -> dict:
+    #     """Получить статистику кеша"""
+    #     return {
+    #         'rooms': len(self._rooms_cache),
+    #         'controllers': len(self._controllers_cache),
+    #         'devices': len(self._devices_cache),
+    #         'device_types': len(self._device_types_cache),
+    #         'triggers': len(self._triggers_cache),
+    #         'trigger_conditions': len(self._trigger_conditions_cache),
+    #         'trigger_responses': len(self._trigger_responses_cache),
+    #         'scenes': len(self._scenes_cache),
+    #         'scene_conditions': len(self._scene_conditions_cache),
+    #         'scene_responses': len(self._scene_responses_cache)
+    #     }
 
     def close(self):
         """Закрытие соединения с БД"""

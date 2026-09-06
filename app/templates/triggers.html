@@ -53,17 +53,28 @@
         .toggle-slider:before { content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%; position: absolute; }
         input:checked + .toggle-slider { background-color: #10b981; }
         input:checked + .toggle-slider:before { transform: translateX(26px); }
-        .toast-msg { position: fixed; bottom: 25px; right: 25px; background: #1e2a3a; color: white; padding: 12px 20px; border-radius: 40px; font-size: 14px; z-index: 2000; opacity: 0; transition: 0.2s; }
-        .toast-msg.show { opacity: 1; }
+        .status-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+        .status-label .active { color: #10b981; }
+        .status-label .inactive { color: #94a3b8; }
+        .cond-detail { font-size: 13px; color: #334155; }
+        .cond-detail .device-name { font-weight: 600; color: #1e2a3a; }
+        .cond-detail .type-name { color: #64748b; font-style: italic; }
+        .cond-detail .command-info { color: #475569; }
+        .resp-detail { font-size: 13px; color: #334155; }
+        .resp-detail .device-name { font-weight: 600; color: #1e2a3a; }
+        .resp-detail .type-name { color: #64748b; font-style: italic; }
+        .resp-detail .command-info { color: #475569; }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 3000; align-items: center; justify-content: center; }
+        .loading-overlay.active { display: flex; }
+        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #4fc3f7; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; }
         .modal.active { display: flex; }
         .modal-content { background: white; padding: 24px; border-radius: 24px; width: 90%; max-width: 650px; max-height: 80vh; overflow-y: auto; }
         .controller-select { margin-bottom: 15px; }
         .controller-select label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; color: #334155; }
         .controller-select select { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
-        .status-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
-        .status-label .active { color: #10b981; }
-        .status-label .inactive { color: #94a3b8; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
         @media (max-width: 768px) { body { padding: 10px; } .card { padding: 16px; } }
     </style>
 </head>
@@ -101,6 +112,10 @@
         </div>
     </div>
 
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+
     <div id="sceneModal" class="modal">
         <div class="modal-content">
             <h3 id="modalTitle">➕ Создать сценарий</h3>
@@ -114,7 +129,7 @@
             <h4 style="margin-top: 20px;">⚡ Действия</h4>
             <div id="actionsContainer"></div>
             <button class="add-condition-btn" onclick="addAction()">+ Добавить действие</button>
-            <div class="modal-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
+            <div class="modal-buttons">
                 <button class="add-btn" onclick="saveScene()" style="background: #10b981; color: white;">Сохранить</button>
                 <button class="back-btn" onclick="closeModal()">Отмена</button>
             </div>
@@ -126,10 +141,19 @@
         let currentEditId = null;
         let controllersList = [];
         let devicesCache = {};
+        let allDevicesMap = {};
         let deviceTypesMap = {};
         let serverCommands = [];
         const SERVER_ID = -1;
         const SERVER_NAME = 'Сервер';
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
 
         async function loadDeviceTypes() {
             try {
@@ -163,9 +187,25 @@
                 controllersList = await response.json();
             } catch (error) {
                 console.error('Error loading controllers:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка загрузки контроллеров' });
-                }
+            }
+        }
+
+        async function loadAllDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const allDevices = await response.json();
+                allDevicesMap = {};
+                devicesCache = {};
+                allDevices.forEach(device => {
+                    allDevicesMap[device.id] = device;
+                    const controllerId = device.controller_id;
+                    if (!devicesCache[controllerId]) {
+                        devicesCache[controllerId] = [];
+                    }
+                    devicesCache[controllerId].push(device);
+                });
+            } catch (error) {
+                console.error('Error loading all devices:', error);
             }
         }
 
@@ -177,6 +217,9 @@
                 const response = await fetch(`/api/devices/by-controller/${controllerId}`);
                 const devices = await response.json();
                 devicesCache[controllerId] = devices;
+                devices.forEach(device => {
+                    allDevicesMap[device.id] = device;
+                });
                 return devices;
             } catch (error) { console.error('Error loading devices:', error); return []; }
         }
@@ -203,39 +246,31 @@
         }
 
         function getDeviceReadingCommands(deviceId) {
-            for (const controllerId in devicesCache) {
-                const device = devicesCache[controllerId].find(d => d.id == deviceId);
-                if (device) {
-                    const type = findTypeById(device.type_id);
-                    if (type && type.param_names && type.param_names.reading_commands) {
-                        return type.param_names.reading_commands;
-                    }
-                    return [];
+            const device = allDevicesMap[deviceId];
+            if (device) {
+                const type = findTypeById(device.type_id);
+                if (type && type.param_names && type.param_names.reading_commands) {
+                    return type.param_names.reading_commands;
                 }
+                return [];
             }
             return [];
         }
 
         function getDeviceSendingCommands(deviceId) {
-            for (const controllerId in devicesCache) {
-                const device = devicesCache[controllerId].find(d => d.id == deviceId);
-                if (device) {
-                    const type = findTypeById(device.type_id);
-                    if (type && type.param_names && type.param_names.sending_commands) {
-                        return type.param_names.sending_commands;
-                    }
-                    return { binary: [], numeric: [] };
+            const device = allDevicesMap[deviceId];
+            if (device) {
+                const type = findTypeById(device.type_id);
+                if (type && type.param_names && type.param_names.sending_commands) {
+                    return type.param_names.sending_commands;
                 }
+                return { binary: [], numeric: [] };
             }
             return { binary: [], numeric: [] };
         }
 
-        async function findDeviceInCache(deviceId) {
-            for (const controllerId in devicesCache) {
-                const device = devicesCache[controllerId].find(d => d.id == deviceId);
-                if (device) return device;
-            }
-            return null;
+        function findDeviceInCache(deviceId) {
+            return allDevicesMap[deviceId] || null;
         }
 
         function createParamFields(container, params) {
@@ -376,12 +411,12 @@
                 const controllerId = conditionData.src_controller_id || conditionData.controller_id;
                 if (controllerId) {
                     controllerSelect.value = controllerId;
-                    onConditionControllerChange(controllerSelect);
+                    await onConditionControllerChange(controllerSelect);
                 }
                 const deviceSelect = div.querySelector('.condition-device');
                 if (conditionData.device_id) {
                     deviceSelect.value = conditionData.device_id;
-                    onConditionDeviceChange(deviceSelect);
+                    await onConditionDeviceChange(deviceSelect);
                 }
                 const readingSelect = div.querySelector('.condition-reading-command');
                 if (conditionData.command) {
@@ -636,12 +671,12 @@
                 const controllerId = actionData.dst_controller_id || actionData.controller_id;
                 if (controllerId) {
                     controllerSelect.value = controllerId;
-                    onActionControllerChange(controllerSelect);
+                    await onActionControllerChange(controllerSelect);
                 }
                 const deviceSelect = div.querySelector('.action-device');
                 if (actionData.device_id) {
                     deviceSelect.value = actionData.device_id;
-                    onActionDeviceChange(deviceSelect);
+                    await onActionDeviceChange(deviceSelect);
                 }
                 const commandSelect = div.querySelector('.action-command');
                 if (actionData.command) {
@@ -700,7 +735,7 @@
                 });
                 return;
             }
-            const device = await findDeviceInCache(parseInt(deviceId));
+            const device = findDeviceInCache(parseInt(deviceId));
             if (!device) { commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>'; return; }
             const sendingCommands = getDeviceSendingCommands(parseInt(deviceId));
             const allCommands = [];
@@ -758,7 +793,6 @@
         }
 
         function buildConditionString(deviceType, port, paramNumber, triggerType, compare, value, time) {
-            console.log('[buildConditionString] Параметры:', { deviceType, port, paramNumber, triggerType, compare, value, time });
             let result;
             if (triggerType === 'time') {
                 const timeMs = parseInt(time) * 1000;
@@ -768,7 +802,6 @@
             } else {
                 result = `${deviceType}/${port}/value/${paramNumber}/${compare}/${value}`;
             }
-            console.log('[buildConditionString] Результат:', result);
             return result;
         }
 
@@ -797,9 +830,7 @@
         async function saveScene() {
             const name = document.getElementById('sceneName').value;
             if (!name) {
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'warning', message: '❌ Введите название сценария' });
-                } else { showToast('❌ Введите название сценария'); }
+                showToast('❌ Введите название сценария');
                 return;
             }
 
@@ -896,15 +927,11 @@
             });
 
             if (conditions.length === 0) {
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'warning', message: '❌ Добавьте хотя бы одно условие' });
-                } else { showToast('❌ Добавьте хотя бы одно условие'); }
+                showToast('❌ Добавьте хотя бы одно условие');
                 return;
             }
             if (responses.length === 0) {
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'warning', message: '❌ Добавьте хотя бы одно действие' });
-                } else { showToast('❌ Добавьте хотя бы одно действие'); }
+                showToast('❌ Добавьте хотя бы одно действие');
                 return;
             }
 
@@ -915,73 +942,41 @@
                 data.dst_controller_id = responses[0]?.dst_controller_id;
             }
 
-            const url = currentEditId
-                ? (sceneType === 'simple' ? `/api/triggers/${currentEditId}` : `/api/scenes/${currentEditId}`)
-                : (sceneType === 'simple' ? '/api/triggers' : '/api/scenes');
+            const url = currentEditId ? `/api/triggers/${currentEditId}` : '/api/triggers';
             const method = currentEditId ? 'PUT' : 'POST';
 
             try {
+                showLoading();
                 const response = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 if (response.ok) {
-                    if (window.notificationManager) {
-                        window.notificationManager.showToast({ type: 'ok', message: currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан' });
-                    } else { showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан'); }
+                    showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан');
                     closeModal();
                     loadScenes();
                     devicesCache = {};
                 } else {
                     const error = await response.json();
-                    if (window.notificationManager) {
-                        window.notificationManager.showToast({ type: 'error', message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}` });
-                    } else { showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`); }
+                    showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
                 }
             } catch (error) {
                 console.error('Error saving scene:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка сохранения сценария' });
-                } else { showToast('❌ Ошибка сохранения сценария'); }
+                showToast('❌ Ошибка сохранения сценария');
+            } finally {
+                hideLoading();
             }
         }
 
         async function loadScenes() {
             try {
-                const [triggersRes, scenesRes] = await Promise.all([
-                    fetch('/api/triggers'),
-                    fetch('/api/scenes')
-                ]);
-                const triggers = await triggersRes.json();
-                const scenes = await scenesRes.json();
-                const allScenes = [];
-                triggers.forEach(trigger => {
-                    allScenes.push({
-                        id: trigger.id,
-                        name: trigger.name,
-                        is_active: trigger.is_active !== undefined ? trigger.is_active : true,
-                        conditions: trigger.conditions || [],
-                        responses: trigger.responses || [],
-                        type: 'simple'
-                    });
-                });
-                scenes.forEach(scene => {
-                    allScenes.push({
-                        id: scene.id,
-                        name: scene.name,
-                        is_active: scene.is_active !== undefined ? scene.is_active : true,
-                        conditions: scene.conditions || [],
-                        responses: scene.responses || [],
-                        type: 'complex'
-                    });
-                });
-                renderScenesTable(allScenes);
+                const response = await fetch('/api/triggers');
+                const triggers = await response.json();
+                renderScenesTable(triggers);
             } catch (error) {
                 console.error('Error loading scenes:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка загрузки сценариев' });
-                } else { showToast('❌ Ошибка загрузки сценариев'); }
+                showToast('❌ Ошибка загрузки сценариев');
             }
         }
 
@@ -996,34 +991,61 @@
                 const row = tbody.insertRow();
                 row.insertCell(0).innerText = scene.id;
                 row.insertCell(1).innerText = scene.name;
+
                 const conditionsCell = row.insertCell(2);
-                if (scene.conditions.length > 0) {
+                if (scene.conditions && scene.conditions.length > 0) {
                     const subTable = document.createElement('table');
                     subTable.className = 'sub-table';
                     scene.conditions.forEach(cond => {
                         const device = findDeviceInCache(cond.device_id);
+                        const subRow = subTable.insertRow();
+                        const cell = subRow.insertCell(0);
                         if (device) {
-                            const subRow = subTable.insertRow();
                             const typeDisplayName = getTypeDisplayName(device.type_id);
-                            subRow.insertCell(0).innerHTML = `<strong>${device.name}</strong> <small style="color:#64748b;">(${typeDisplayName})</small>`;
+                            cell.innerHTML = `
+                                <div class="cond-detail">
+                                    <span class="device-name">${device.name}</span>
+                                    <span class="type-name">(${typeDisplayName})</span>
+                                    <span class="command-info">→ ${cond.command || '—'}</span>
+                                    ${cond.value ? `<span class="command-info">значение: ${cond.value}</span>` : ''}
+                                </div>
+                            `;
+                        } else {
+                            cell.innerHTML = `<span class="cond-detail">Устройство ID: ${cond.device_id} (не найдено)</span>`;
                         }
                     });
                     conditionsCell.appendChild(subTable);
-                } else { conditionsCell.innerText = '—'; }
+                } else {
+                    conditionsCell.innerText = '—';
+                }
+
                 const actionsCell = row.insertCell(3);
-                if (scene.responses.length > 0) {
+                if (scene.responses && scene.responses.length > 0) {
                     const subTable = document.createElement('table');
                     subTable.className = 'sub-table';
                     scene.responses.forEach(resp => {
                         const device = findDeviceInCache(resp.device_id);
+                        const subRow = subTable.insertRow();
+                        const cell = subRow.insertCell(0);
                         if (device) {
-                            const subRow = subTable.insertRow();
                             const typeDisplayName = getTypeDisplayName(device.type_id);
-                            subRow.insertCell(0).innerHTML = `<strong>${device.name}</strong> <small style="color:#64748b;">(${typeDisplayName})</small>`;
+                            cell.innerHTML = `
+                                <div class="resp-detail">
+                                    <span class="device-name">${device.name}</span>
+                                    <span class="type-name">(${typeDisplayName})</span>
+                                    <span class="command-info">→ ${resp.command || '—'}</span>
+                                    ${resp.value ? `<span class="command-info">значение: ${resp.value}</span>` : ''}
+                                </div>
+                            `;
+                        } else {
+                            cell.innerHTML = `<span class="resp-detail">Устройство ID: ${resp.device_id} (не найдено)</span>`;
                         }
                     });
                     actionsCell.appendChild(subTable);
-                } else { actionsCell.innerText = '—'; }
+                } else {
+                    actionsCell.innerText = '—';
+                }
+
                 const statusCell = row.insertCell(4);
                 const isActive = scene.is_active !== undefined ? scene.is_active : true;
                 statusCell.innerHTML = `
@@ -1035,12 +1057,13 @@
                         <span class="${isActive ? 'active' : 'inactive'}">${isActive ? 'Включен' : 'Выключен'}</span>
                     </div>
                 `;
+
                 const actionCell = row.insertCell(5);
                 const editBtn = document.createElement('button');
                 editBtn.innerText = '✏️';
                 editBtn.className = 'edit-scene-btn';
                 editBtn.title = 'Редактировать';
-                editBtn.onclick = () => editScene(scene);
+                editBtn.onclick = () => editScene(scene.id);
                 actionCell.appendChild(editBtn);
                 const delBtn = document.createElement('button');
                 delBtn.innerText = '🗑️';
@@ -1053,71 +1076,75 @@
 
         async function toggleScene(sceneId, isActive) {
             try {
-                let response = await fetch(`/api/scenes/${sceneId}/toggle`, {
+                const response = await fetch(`/api/triggers/${sceneId}/toggle`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ is_active: isActive })
                 });
-                if (!response.ok) {
-                    response = await fetch(`/api/triggers/${sceneId}/toggle`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ is_active: isActive })
-                    });
-                }
                 if (response.ok) {
-                    if (window.notificationManager) {
-                        window.notificationManager.showToast({ type: 'ok', message: `Сценарий ${isActive ? 'активирован' : 'деактивирован'}` });
-                    } else { showToast(`✅ Сценарий ${isActive ? 'активирован' : 'деактивирован'}`); }
+                    showToast(`✅ Сценарий ${isActive ? 'активирован' : 'деактивирован'}`);
                     loadScenes();
-                } else { throw new Error('Failed to toggle scene'); }
+                } else {
+                    throw new Error('Failed to toggle scene');
+                }
             } catch (error) {
                 console.error('Error toggling scene:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка изменения статуса' });
-                } else { showToast('❌ Ошибка изменения статуса'); }
+                showToast('❌ Ошибка изменения статуса');
                 loadScenes();
             }
         }
 
-        async function editScene(scene) {
-            currentEditId = scene.id;
-            document.getElementById('modalTitle').innerText = '✏️ Редактировать сценарий';
-            document.getElementById('sceneName').value = scene.name;
-            await loadDeviceTypes();
-            await loadServerCommands();
-            await loadControllers();
-            document.getElementById('conditionsContainer').innerHTML = '';
-            for (const cond of scene.conditions) {
-                await addCondition({ ...cond, src_controller_id: cond.src_controller_id || cond.controller_id });
+        async function editScene(sceneId) {
+            try {
+                showLoading();
+                const response = await fetch(`/api/triggers/${sceneId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load scene data');
+                }
+                const scene = await response.json();
+
+                currentEditId = scene.id;
+                document.getElementById('modalTitle').innerText = '✏️ Редактировать сценарий';
+                document.getElementById('sceneName').value = scene.name;
+
+                document.getElementById('conditionsContainer').innerHTML = '';
+                for (const cond of scene.conditions) {
+                    await addCondition({
+                        ...cond,
+                        src_controller_id: cond.src_controller_id || cond.controller_id
+                    });
+                }
+
+                document.getElementById('actionsContainer').innerHTML = '';
+                for (const resp of scene.responses) {
+                    await addAction({
+                        ...resp,
+                        dst_controller_id: resp.dst_controller_id || resp.controller_id
+                    });
+                }
+
+                document.getElementById('sceneModal').classList.add('active');
+            } catch (error) {
+                console.error('Error loading scene for edit:', error);
+                showToast('❌ Ошибка загрузки данных сценария');
+            } finally {
+                hideLoading();
             }
-            document.getElementById('actionsContainer').innerHTML = '';
-            for (const resp of scene.responses) {
-                await addAction({ ...resp, dst_controller_id: resp.dst_controller_id || resp.controller_id });
-            }
-            document.getElementById('sceneModal').classList.add('active');
         }
 
         async function deleteScene(sceneId) {
             if (!confirm('Удалить сценарий? Это действие нельзя отменить.')) return;
             try {
-                let response = await fetch(`/api/scenes/${sceneId}`, { method: 'DELETE' });
-                if (!response.ok) { response = await fetch(`/api/triggers/${sceneId}`, { method: 'DELETE' }); }
+                const response = await fetch(`/api/triggers/${sceneId}`, { method: 'DELETE' });
                 if (response.ok) {
-                    if (window.notificationManager) {
-                        window.notificationManager.showToast({ type: 'ok', message: '✅ Сценарий удален' });
-                    } else { showToast('✅ Сценарий удален'); }
+                    showToast('✅ Сценарий удален');
                     loadScenes();
                 } else {
-                    if (window.notificationManager) {
-                        window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка удаления' });
-                    } else { showToast('❌ Ошибка удаления'); }
+                    showToast('❌ Ошибка удаления');
                 }
             } catch (error) {
                 console.error('Error deleting scene:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка удаления сценария' });
-                } else { showToast('❌ Ошибка удаления сценария'); }
+                showToast('❌ Ошибка удаления сценария');
             }
         }
 
@@ -1127,11 +1154,9 @@
             document.getElementById('sceneName').value = '';
             document.getElementById('conditionsContainer').innerHTML = '';
             document.getElementById('actionsContainer').innerHTML = '';
-            loadDeviceTypes().then(() => loadServerCommands().then(() => loadControllers().then(() => {
-                addCondition();
-                addAction();
-                document.getElementById('sceneModal').classList.add('active');
-            })));
+            addCondition();
+            addAction();
+            document.getElementById('sceneModal').classList.add('active');
         }
 
         function closeModal() {
@@ -1139,26 +1164,23 @@
         }
 
         function showToast(msg) {
-            const toast = document.getElementById('toastMsg');
-            toast.innerText = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            if (window.notificationManager) {
+                window.notificationManager.showToast({ type: 'info', message: msg });
+            } else {
+                const toast = document.createElement('div');
+                toast.className = 'toast-msg';
+                toast.textContent = msg;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.classList.add('show'), 10);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             if (window.notificationManager) {
-                window.notificationManager.addListener('notification', function(data) {
-                    console.log('[Scenes] Уведомление:', data);
-                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS' ||
-                        data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE' ||
-                        data.type === 'TRIGGER_CREATED' || data.type === 'TRIGGER_DELETED') {
-                        loadScenes();
-                    }
-                });
-                window.notificationManager.addListener('device_status_update', function(data) {
-                    console.log('[Scenes] Обновление статуса устройства:', data);
-                    loadScenes();
-                });
                 window.notificationManager.addListener('connection_status', function(status) {
                     const dot = document.getElementById('statusDot');
                     const text = document.getElementById('statusText');
@@ -1169,11 +1191,19 @@
                     }
                 });
             }
-        });
 
-        loadDeviceTypes();
-        loadServerCommands();
-        loadScenes();
+            showLoading();
+            Promise.all([
+                loadDeviceTypes(),
+                loadAllDevices(),
+                loadControllers(),
+                loadServerCommands()
+            ]).then(() => {
+                loadScenes();
+            }).finally(() => {
+                hideLoading();
+            });
+        });
     </script>
 </body>
 </html>

@@ -4,8 +4,7 @@ import logging
 from flask import request, jsonify
 from .api_utils import handle_api_errors
 from database import (
-    Trigger, TrigCondition, TrigResponse,
-    Scene, SceneCondition, SceneResponse
+    Trigger, TrigCondition, TrigResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +105,7 @@ def register_trigger_routes(app, db, kafkaHandler):
 
     # ============ СОХРАНЕНИЕ УСЛОВИЙ ============
 
-    def save_conditions(trigger_id, conditions, is_scene=False, src_controller_id=None):
+    def save_conditions(trigger_id, conditions, is_scene=False):
         """Сохранение условий для триггера или сценария"""
         if is_scene:
             # Для сценариев сохраняем как JSON
@@ -117,12 +116,12 @@ def register_trigger_routes(app, db, kafkaHandler):
                 json_conditions.append(cond_json)
 
             # Сохраняем как JSON строку
-            cond_obj = SceneCondition(
+            cond_obj = TrigCondition(
                 device_id=conditions[0]['device_id'] if conditions else 0,
                 condition=json.dumps(json_conditions),
-                scene_id=trigger_id
+                trigger_id=trigger_id
             )
-            db.add_scene_condition(cond_obj)
+            db.add_trig_condition(cond_obj)
 
         else:
             # Для триггеров сохраняем как строку
@@ -157,12 +156,12 @@ def register_trigger_routes(app, db, kafkaHandler):
                 json_responses.append(resp_json)
 
             # Сохраняем как JSON строку
-            resp_obj = SceneResponse(
+            resp_obj = TrigResponse(
                 device_id=responses[0]['device_id'] if responses else 0,
                 resp=json.dumps(json_responses),
-                scene_id=trigger_id
+                trigger_id=trigger_id
             )
-            db.add_scene_response(resp_obj)
+            db.add_trig_response(resp_obj)
         else:
             # Для триггеров сохраняем как строку
             for response in responses:
@@ -177,35 +176,26 @@ def register_trigger_routes(app, db, kafkaHandler):
 
     # ============ УДАЛЕНИЕ ДАННЫХ ============
 
-    def delete_conditions(trigger_id, is_scene=False):
-        if is_scene:
-            conditions = db.get_scene_conditions_by_scene(trigger_id)
-            for cond in conditions:
-                db.delete_scene_condition(cond.id)
-        else:
-            conditions = db.get_trig_conditions_by_trigger(trigger_id)
-            for cond in conditions:
-                db.delete_trig_condition(cond.id)
+    def delete_conditions(trigger_id):
 
-    def delete_responses(trigger_id, is_scene=False):
-        if is_scene:
-            responses = db.get_scene_responses_by_scene(trigger_id)
-            for resp in responses:
-                db.delete_scene_response(resp.id)
-        else:
-            responses = db.get_trig_responses_by_trigger(trigger_id)
-            for resp in responses:
-                db.delete_trig_response(resp.id)
+        conditions = db.get_trig_conditions_by_trigger(trigger_id)
+        for cond in conditions:
+            db.delete_trig_condition(cond.id)
+
+    def delete_responses(trigger_id):
+        responses = db.get_trig_responses_by_trigger(trigger_id)
+        for resp in responses:
+            db.delete_trig_response(resp.id)
 
     # ============ ОТПРАВКА В KAFKA ============
 
     def send_to_kafka(trigger_id, data, is_scene=False):
         """Отправка данных в Kafka"""
         if is_scene:
-            scene = db.get_scene_by_id(trigger_id)
+            scene = db.get_trigger_by_id(trigger_id)
             if scene:
-                scene_conditions = db.get_scene_conditions_by_scene(trigger_id)
-                scene_responses = db.get_scene_responses_by_scene(trigger_id)
+                scene_conditions = db.get_trig_conditions_by_trigger(trigger_id)
+                scene_responses = db.get_trig_responses_by_trigger(trigger_id)
 
                 conditions_json = []
                 responses_json = []
@@ -271,10 +261,8 @@ def register_trigger_routes(app, db, kafkaHandler):
                 kafkaHandler.update_trig_table(trig_data_for_core)
 
     def delete_from_kafka(trigger_id, is_scene=False):
-        if is_scene:
-            kafkaHandler.delete_scene(trigger_id)
-        else:
-            kafkaHandler.delete_trigger(trigger_id)
+
+        kafkaHandler.delete_trigger(trigger_id)
 
     # ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ JSON ============
 
@@ -395,94 +383,27 @@ def register_trigger_routes(app, db, kafkaHandler):
             })
         return jsonify(result)
 
-    @app.route('/api/scenes', methods=['GET'])
-    @handle_api_errors
-    def get_all_scenes():
-        scenes = db.get_all_scenes()
-        result = []
-        for scene in scenes:
-            conditions = db.get_scene_conditions_by_scene(scene.id)
-            conditions_data = []
-            for cond in conditions:
-                device = db.get_device_by_id(cond.device_id)
-                if device:
-                    controller = db.get_controller_by_id(device.controller_id)
-                    device_type = db.get_device_type_by_id(device.type_id)
-                    parts = cond.condition.split('/')
-                    command = parts[0] if parts else ''
-                    value = parts[1] if len(parts) > 1 else None
-                    conditions_data.append({
-                        'id': cond.id,
-                        'device_id': device.id,
-                        'device_name': device.name,
-                        'device_type': device_type.name if device_type else 'Unknown',
-                        'controller_name': controller.name if controller else 'Unknown',
-                        'port': device.port,
-                        'command': command,
-                        'value': value
-                    })
-            responses = db.get_scene_responses_by_scene(scene.id)
-            responses_data = []
-            for resp in responses:
-                device = db.get_device_by_id(resp.device_id)
-                if device:
-                    controller = db.get_controller_by_id(device.controller_id)
-                    device_type = db.get_device_type_by_id(device.type_id)
-                    parts = resp.resp.split('/')
-                    command = parts[0] if parts else ''
-                    value = parts[1] if len(parts) > 1 else None
-                    responses_data.append({
-                        'id': resp.id,
-                        'device_id': device.id,
-                        'device_name': device.name,
-                        'device_type': device_type.name if device_type else 'Unknown',
-                        'controller_name': controller.name if controller else 'Unknown',
-                        'port': device.port,
-                        'command': command,
-                        'value': value
-                    })
-            result.append({
-                'id': scene.id,
-                'name': scene.name,
-                'is_active': scene.is_active if hasattr(scene, 'is_active') else True,
-                'conditions': conditions_data,
-                'responses': responses_data
-            })
-        return jsonify(result)
-
     @app.route('/api/triggers', methods=['POST'])
     @handle_api_errors
     def create_trigger():
         data = request.json
         is_scene = data.get('type') == 'complex'
 
-        if is_scene:
-            scene = Scene(
-                name=data['name'],
-                is_active=True
-            )
-            scene_id = db.add_scene(scene)
-            if not scene_id:
-                return jsonify({'success': False, 'error': 'Failed to create scene'}), 400
-            save_conditions(scene_id, data['conditions'], is_scene=True)
-            save_responses(scene_id, data['responses'], is_scene=True)
-            send_to_kafka(scene_id, data, is_scene=True)
-            return jsonify({'success': True, 'id': scene_id})
-        else:
-            trigger = Trigger(
-                controller_id=data['src_controller_id'],
-                controller_resp_id=data['dst_controller_id'],
-                name=data['name'],
-                is_active=True
-            )
-            trigger_id = db.add_trigger(trigger)
-            if not trigger_id:
-                return jsonify({'success': False, 'error': 'Failed to create trigger'}), 400
-            save_conditions(trigger_id, data['conditions'], is_scene=False)
-            save_responses(trigger_id, data['responses'], is_scene=False)
-            trigger.id = trigger_id
-            send_to_kafka(trigger_id, data, is_scene=False)
-            return jsonify({'success': True, 'id': trigger_id})
+        trigger = Trigger(
+            controller_id=data.get('src_controller_id', None),
+            controller_resp_id=data.get('dst_controller_id', None),
+            name=data['name'],
+            is_active=True,
+            is_scene=is_scene
+        )
+        trigger_id = db.add_trigger(trigger)
+        if not trigger_id:
+            return jsonify({'success': False, 'error': 'Failed to create trigger'}), 400
+        save_conditions(trigger_id, data['conditions'], is_scene=is_scene)
+        save_responses(trigger_id, data['responses'], is_scene=is_scene)
+        trigger.id = trigger_id
+        send_to_kafka(trigger_id, data, is_scene=is_scene)
+        return jsonify({'success': True, 'id': trigger_id})
 
     @app.route('/api/triggers/<int:trigger_id>', methods=['PUT'])
     @handle_api_errors
@@ -490,98 +411,42 @@ def register_trigger_routes(app, db, kafkaHandler):
         data = request.json
         new_is_scene = data.get('type') == 'complex'
 
-        existing_scene = db.get_scene_by_id(trigger_id)
-        existing_trigger = db.get_trigger_by_id(trigger_id) if not existing_scene else None
+        old_is_scene = db.get_trigger_by_id(trigger_id).is_scene
 
-        old_is_scene = existing_scene is not None
+        db.update_trig_scene(trigger_id, new_is_scene)
 
-        if old_is_scene == new_is_scene:
-            if new_is_scene:
-                db.update_scene_name(trigger_id, data['name'])
-                delete_conditions(trigger_id, is_scene=True)
-                delete_responses(trigger_id, is_scene=True)
-                save_conditions(trigger_id, data['conditions'], is_scene=True)
-                save_responses(trigger_id, data['responses'], is_scene=True)
-                send_to_kafka(trigger_id, data, is_scene=True)
+        db.update_trig_name(trigger_id, data['name'])
+        delete_conditions(trigger_id)
+        delete_responses(trigger_id)
+        save_conditions(trigger_id, data['conditions'], is_scene=new_is_scene)
+        save_responses(trigger_id, data['responses'], is_scene=new_is_scene)
+        send_to_kafka(trigger_id, data, is_scene=new_is_scene)
+
+        if old_is_scene != new_is_scene:
+            kafka_data = {
+                'command_type': 'DELETE',
+                'id': trigger_id
+            }
+            if old_is_scene:
+                kafkaHandler.update_scene_table(kafka_data)
             else:
+                kafkaHandler.update_trig_table(kafka_data)
+
+        if not new_is_scene:
+            if 'src_controller_id' in data and 'dst_controller_id' in data:
                 with db.connection.cursor() as cur:
-                    cur.execute("UPDATE triggers SET name = %s WHERE id = %s",
-                                (data['name'], trigger_id))
+                    cur.execute("""
+                        UPDATE triggers 
+                        SET controller_id = %s, controller_resp_id = %s 
+                        WHERE id = %s
+                    """, (data['src_controller_id'], data['dst_controller_id'], trigger_id))
                     db.connection.commit()
-                delete_conditions(trigger_id, is_scene=False)
-                delete_responses(trigger_id, is_scene=False)
-                save_conditions(trigger_id, data['conditions'], is_scene=False)
-                save_responses(trigger_id, data['responses'], is_scene=False)
-                if 'src_controller_id' in data and 'dst_controller_id' in data:
-                    with db.connection.cursor() as cur:
-                        cur.execute("""
-                            UPDATE triggers 
-                            SET controller_id = %s, controller_resp_id = %s 
-                            WHERE id = %s
-                        """, (data['src_controller_id'], data['dst_controller_id'], trigger_id))
-                        db.connection.commit()
-                send_to_kafka(trigger_id, data, is_scene=False)
 
-            return jsonify({'success': True, 'id': trigger_id, 'type_changed': False})
-
-        if old_is_scene:
-            delete_conditions(trigger_id, is_scene=True)
-            delete_responses(trigger_id, is_scene=True)
-            db.delete_scene(trigger_id)
-            delete_from_kafka(trigger_id, is_scene=True)
-            logger.info(f"Deleted old scene {trigger_id} before type change")
-        else:
-            conditions = db.get_trig_conditions_by_trigger(trigger_id)
-            for cond in conditions:
-                db.delete_trig_condition(cond.id)
-            responses = db.get_trig_responses_by_trigger(trigger_id)
-            for resp in responses:
-                db.delete_trig_response(resp.id)
-            db.delete_trigger(trigger_id)
-            delete_from_kafka(trigger_id, is_scene=False)
-            logger.info(f"Deleted old trigger {trigger_id} before type change")
-
-        new_id = None
-        if new_is_scene:
-            scene = Scene(
-                name=data['name'],
-                is_active=True
-            )
-            new_id = db.add_scene(scene)
-            if not new_id:
-                return jsonify({'success': False, 'error': 'Failed to create scene during type change'}), 400
-            save_conditions(new_id, data['conditions'], is_scene=True)
-            save_responses(new_id, data['responses'], is_scene=True)
-            send_to_kafka(new_id, data, is_scene=True)
-            logger.info(f"Created new scene {new_id} after type change from trigger {trigger_id}")
-        else:
-            trigger = Trigger(
-                controller_id=data['src_controller_id'],
-                controller_resp_id=data['dst_controller_id'],
-                name=data['name'],
-                is_active=True
-            )
-            new_id = db.add_trigger(trigger)
-            if not new_id:
-                return jsonify({'success': False, 'error': 'Failed to create trigger during type change'}), 400
-            save_conditions(new_id, data['conditions'], is_scene=False)
-            save_responses(new_id, data['responses'], is_scene=False)
-            trigger.id = new_id
-            send_to_kafka(new_id, data, is_scene=False)
-            logger.info(f"Created new trigger {new_id} after type change from scene {trigger_id}")
-
-        return jsonify({'success': True, 'id': new_id, 'type_changed': True})
+        return jsonify({'success': True, 'id': trigger_id, 'type_changed': False})
 
     @app.route('/api/triggers/<int:trigger_id>', methods=['DELETE'])
     @handle_api_errors
     def delete_trigger(trigger_id):
-        scene = db.get_scene_by_id(trigger_id) #TODO проверять так не корректно, может быть и триггер и сценарий с одним id
-        if scene:
-            delete_conditions(trigger_id, is_scene=True)
-            delete_responses(trigger_id, is_scene=True)
-            db.delete_scene(trigger_id)
-            delete_from_kafka(trigger_id, is_scene=True)
-            return jsonify({'success': True})
 
         conditions = db.get_trig_conditions_by_trigger(trigger_id)
         for cond in conditions:
@@ -598,18 +463,6 @@ def register_trigger_routes(app, db, kafkaHandler):
             data = request.json
             is_active = data.get('is_active', True)
 
-            scene = db.get_scene_by_id(trigger_id)
-            if scene:
-                db.update_scene_status(trigger_id, is_active)
-                if kafkaHandler:
-                    scene_data = {
-                        'command_type': 'UPD_STATUS',
-                        'scene_id': trigger_id,
-                        'is_active': is_active
-                    }
-                    kafkaHandler.update_scene_status(scene_data)
-                return jsonify({'success': True})
-
             db.update_trig_status(trigger_id, is_active)
             if kafkaHandler:
                 trigger_data = {
@@ -617,7 +470,10 @@ def register_trigger_routes(app, db, kafkaHandler):
                     'trigger_id': trigger_id,
                     'is_active': is_active
                 }
-                kafkaHandler.update_trig_table(trigger_data)
+                if db.get_trigger_by_id(trigger_id).is_scene:
+                    kafkaHandler.update_scene_table(trigger_data)
+                else:
+                    kafkaHandler.update_trig_table(trigger_data)
 
             return jsonify({'success': True})
 
@@ -649,81 +505,108 @@ def register_trigger_routes(app, db, kafkaHandler):
             logger.error(f"Error parsing server commands: {e}")
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/scenes', methods=['POST'])
-    def create_scene():
-        """Создать сложный сценарий"""
-        try:
-            data = request.json
 
-            scene = Scene(
-                name=data['name'],
-                is_active=True
-            )
-            scene_id = db.add_scene(scene)
+    @app.route('/api/triggers/<int:trigger_id>', methods=['GET'])
+    @handle_api_errors
+    def get_trigger(trigger_id):
+        """Получение одного триггера по ID"""
+        trigger = db.get_trigger_by_id(trigger_id)
+        if not trigger:
+            return jsonify({'error': 'Trigger not found'}), 404
 
-            if not scene_id:
-                return jsonify({'success': False, 'error': 'Failed to create scene'}), 400
+        # Получаем условия
+        conditions = db.get_trig_conditions_by_trigger(trigger.id)
+        conditions_data = []
+        for cond in conditions:
+            device = db.get_device_by_id(cond.device_id)
+            if device:
+                device_type = db.get_device_type_by_id(device.type_id)
+                # Парсим строку условия
+                parts = cond.condition.split('/')
+                condition_info = parse_condition_string(cond.condition)
+                conditions_data.append({
+                    'id': cond.id,
+                    'device_id': device.id,
+                    'device_name': device.name,
+                    'device_type': device_type.name if device_type else 'Unknown',
+                    'controller_id': device.controller_id,
+                    'src_controller_id': device.controller_id,
+                    'port': device.port,
+                    'command': condition_info.get('command', ''),
+                    'value': condition_info.get('value', ''),
+                    'compare': condition_info.get('compare', 'equal'),
+                    'trigger_type': condition_info.get('trigger_type', 'value'),
+                    'time': condition_info.get('time', 0),
+                    'condition_string': cond.condition
+                })
 
-            save_conditions(scene_id, data['conditions'], is_scene=True)
-            save_responses(scene_id, data['responses'], is_scene=True)
+        # Получаем действия
+        responses = db.get_trig_responses_by_trigger(trigger.id)
+        responses_data = []
+        for resp in responses:
+            device = db.get_device_by_id(resp.device_id)
+            if device:
+                device_type = db.get_device_type_by_id(device.type_id)
+                parts = resp.resp.split('/')
+                # Парсим строку ответа
+                command = parts[2] if len(parts) > 2 else ''
+                value = parts[3] if len(parts) > 3 else ''
+                responses_data.append({
+                    'id': resp.id,
+                    'device_id': device.id,
+                    'device_name': device.name,
+                    'device_type': device_type.name if device_type else 'Unknown',
+                    'controller_id': device.controller_id,
+                    'dst_controller_id': device.controller_id,
+                    'port': device.port,
+                    'command': command,
+                    'value': value,
+                    'action_string': resp.resp
+                })
 
-            send_to_kafka(scene_id, data, is_scene=True)
+        src_controller = db.get_controller_by_id(trigger.controller_id)
+        dst_controller = db.get_controller_by_id(trigger.controller_resp_id)
 
-            # if kafkaHandler:
-            #     scene_data = {
-            #         'scene_id': scene_id,
-            #         'name': data['name'],
-            #         'conditions': data['conditions'],
-            #         'responses': data['responses'],
-            #         'type': 'complex'
-            #     }
-            #     kafkaHandler.update_scene_table(scene_data)
+        return jsonify({
+            'id': trigger.id,
+            'name': trigger.name,
+            'is_active': trigger.is_active if hasattr(trigger, 'is_active') else True,
+            'type': 'complex' if trigger.is_scene else 'simple',
+            'src_controller_id': trigger.controller_id,
+            'src_controller_name': src_controller.name if src_controller else 'Unknown',
+            'dst_controller_id': trigger.controller_resp_id,
+            'dst_controller_name': dst_controller.name if dst_controller else 'Unknown',
+            'conditions': conditions_data,
+            'responses': responses_data
+        })
 
-            return jsonify({'success': True, 'id': scene_id})
 
-        except Exception as e:
-            logger.error(f"Error creating scene: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+    def parse_condition_string(condition_str):
+        """Парсит строку условия для получения структурированных данных"""
+        parts = condition_str.split('/')
+        result = {
+            'device_type': parts[0] if len(parts) > 0 else '',
+            'port': parts[1] if len(parts) > 1 else '',
+            'command': '',
+            'value': '',
+            'compare': 'equal',
+            'trigger_type': 'value',
+            'time': 0
+        }
 
-    @app.route('/api/scenes/<int:scene_id>/toggle', methods=['PUT'])
-    def toggle_scene(scene_id):
-        """Переключение статуса сценария"""
-        try:
-            data = request.json
-            is_active = data.get('is_active', True)
+        if len(parts) >= 4:
+            if parts[2] == 'time':
+                result['trigger_type'] = 'time'
+                result['time'] = int(parts[3]) if parts[3].isdigit() else 0
+            elif parts[2] == 'value':
+                if len(parts) >= 6:
+                    result['command'] = parts[3]
+                    if parts[4] == 'onChange':
+                        result['trigger_type'] = 'changed'
+                        result['value'] = 'onChange'
+                    else:
+                        result['trigger_type'] = 'value'
+                        result['compare'] = parts[4]
+                        result['value'] = parts[5]
 
-            db.update_scene_status(scene_id, is_active)
-
-            # Отправляем через Kafka для синхронизации
-            if kafkaHandler:
-                scene_data = {
-                    'scene_id': scene_id,
-                    'is_active': is_active
-                }
-                kafkaHandler.update_scene_status(scene_data)
-
-            return jsonify({'success': True})
-
-        except Exception as e:
-            logger.error(f"Error toggling scene: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @app.route('/api/scenes/<int:scene_id>', methods=['DELETE'])
-    def delete_scene(scene_id):
-        """Удалить сложный сценарий"""
-        try:
-            # Удаляем связанные данные
-            conditions = db.get_scene_conditions_by_scene(scene_id)
-            for cond in conditions:
-                db.delete_scene_condition(cond.id)
-
-            responses = db.get_scene_responses_by_scene(scene_id)
-            for resp in responses:
-                db.delete_scene_response(resp.id)
-
-            db.delete_scene(scene_id)
-            return jsonify({'success': True})
-
-        except Exception as e:
-            logger.error(f"Error deleting scene: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+        return result

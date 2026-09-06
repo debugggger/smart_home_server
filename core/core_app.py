@@ -8,13 +8,8 @@ from dataclasses import dataclass, field
 import requests
 from flask import Flask, jsonify, request
 
-from otaServer import OTAServer
-from sh_utils import get_local_ip
-
-
 @dataclass
 class ControllerState:
-    """Состояние контроллера в оперативной памяти"""
     mac: str
     prev_resp_time: datetime = field(default_factory=datetime.now)
     is_waiting_init: bool = False
@@ -25,15 +20,14 @@ class ControllerState:
 
 @dataclass
 class DeviceState:
-    """Состояние устройства в оперативной памяти"""
     device_id: int
     controller_mac: str
     is_waiting_confirm: bool = False
     prev_resp_time: datetime = field(default_factory=datetime.now)
     failures_count: int = 0
-    offline_count: int = 0  # Счетчик последовательных неудач
-    is_active: bool = True  # Активно ли устройство
-    is_offline: bool = False  # Оффлайн ли устройство
+    #offline_count: int = 0
+    is_active: bool = True
+    #is_offline: bool = False  # Оффлайн ли устройство
     last_message: str = ""
 
 
@@ -43,48 +37,40 @@ class Core:
         self.mqtt_client = mqtt_client
         self.running = False
         self.processing_thread = None
-        self.thread_controller = None  # Поток для контроля контроллеров
+        self.thread_controller = None
         self.stop_event = threading.Event()
         self.otaServ = ota_serv
         self.kafka_handler = kafka_handler
 
-        # Состояния контроллеров (mac -> ControllerState)
         self.controllers_state: Dict[str, ControllerState] = {}
 
-        # Состояния устройств (device_id -> DeviceState)
         self.devices_state: Dict[int, DeviceState] = {}
 
-        # Очереди ожидания ответа
         self.mac_wait_request_init = []  # Список MAC контроллеров ожидающих init
         self.mac_wait_request_update = []  # Список устройств ожидающих update
 
-        # Настройки
-        self.TIMEOUT_SECONDS = 10
-        self.GET_VALUES_DELAY = 60
+        self.TIMEOUT_SECONDS = 5
+        self.GET_VALUES_DELAY = 10
         self.MAX_FAILURES = 3
 
-        # Инициализируем состояния из БД
         self._init_states_from_db()
 
     def _init_states_from_db(self):
-        """Инициализация состояний из данных БД"""
         devices = self.db.get_all_devices()
 
         for device in devices:
-            # Создаем состояние устройства
             self.devices_state[device.id] = DeviceState(
                 device_id=device.id,
                 controller_mac=device.controller_mac,
                 is_waiting_confirm=False,
                 prev_resp_time=datetime.now(),
                 failures_count=0,
-                offline_count=0,
+                #offline_count=0,
                 is_active=True,
-                is_offline=False,
+                #is_offline=False,
                 last_message=""
             )
 
-            # Создаем состояние контроллера если его нет
             if device.controller_mac not in self.controllers_state:
                 self.controllers_state[device.controller_mac] = ControllerState(
                     mac=device.controller_mac,
@@ -94,25 +80,20 @@ class Core:
                     failures_count=0,
                     last_message=""
                 )
-
         print(
             f"[Core] Инициализировано состояний: {len(self.devices_state)} устройств, {len(self.controllers_state)} контроллеров")
 
     def _get_device_state(self, device_id: int) -> Optional[DeviceState]:
-        """Получить состояние устройства"""
         return self.devices_state.get(device_id)
 
     def _get_controller_state(self, mac: str) -> Optional[ControllerState]:
-        """Получить состояние контроллера"""
         return self.controllers_state.get(mac)
 
     def _is_device_active(self, device_id: int) -> bool:
-        """Проверить активно ли устройство"""
         state = self._get_device_state(device_id)
         return state.is_active if state else False
 
     def _is_controller_active(self, mac: str) -> bool:
-        """Проверить активен ли контроллер"""
         state = self._get_controller_state(mac)
         return state.is_active if state else False
 
@@ -126,11 +107,9 @@ class Core:
         if len(parts) >= 2:
             mac = parts[0]
 
-            # Обновляем время ответа контроллера
             ctrl_state = self._get_controller_state(mac)
             if ctrl_state:
                 ctrl_state.prev_resp_time = datetime.now()
-                # Если контроллер был неактивен - активируем
                 if not ctrl_state.is_active:
                     ctrl_state.is_active = True
                     ctrl_state.failures_count = 0
@@ -154,7 +133,6 @@ class Core:
                 self._parse_init_response(parts)
 
     def _parse_exec_response(self, parts):
-        """Обработка ответа на выполнение команды"""
         mac = parts[0]
         devices = self.db.get_devices_by_controller(mac)
 
@@ -162,9 +140,12 @@ class Core:
         while index < len(parts) - 1:
             status = parts[index]
 
-            if status == "ok":
+            if status == "ok" or status == "values":
                 device_type = parts[index + 1]
                 device_port = parts[index + 2] if index + 2 < len(parts) else None
+
+                if status == "values":
+                    self.parse_states(parts)
 
                 for device in devices:
                     if device.port == device_port and device.type == device_type:
@@ -173,13 +154,17 @@ class Core:
                             dev_state.is_waiting_confirm = False
                             dev_state.prev_resp_time = datetime.now()
                             dev_state.failures_count = 0
-                            dev_state.offline_count = 0
+                            #dev_state.offline_count = 0
+                            if not dev_state.is_active:
+                                dev_state.is_active = True
+                                if self.kafka_handler:
+                                    self.kafka_handler.send_device_status(device.id, True)
                         break
                 index += 3
 
-            elif status == "values":
-                self.parse_states(parts)
-                index += 1  # Уже обработано в parse_states
+            # elif status == "values":
+            #     self.parse_states(parts)
+            #     index += 1
             else:
                 print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
                 break
@@ -289,7 +274,6 @@ class Core:
         self.running = True
         self.stop_event.clear()
 
-        # Поток обработки MQTT сообщений
         self.processing_thread = threading.Thread(target=self.process_messages, daemon=True)
         self.processing_thread.start()
 
@@ -330,7 +314,6 @@ class Core:
             return False
 
     def parse_init(self, parts):
-        """Отправка инициализации контроллеру"""
         mac = parts[0] if isinstance(parts, list) else parts
         devices = self.db.get_devices_by_controller(mac)
 
@@ -409,12 +392,10 @@ class Core:
             dev_state = self._get_device_state(device_id)
             if dev_state:
                 dev_state.failures_count = 0
-                dev_state.offline_count = 0
+                #dev_state.offline_count = 0
                 dev_state.prev_resp_time = datetime.now()
 
-                # Если устройство было оффлайн - восстанавливаем
-                if dev_state.is_offline:
-                    dev_state.is_offline = False
+                if not dev_state.is_active:
                     dev_state.is_active = True
                     if self.kafka_handler:
                         self.kafka_handler.send_device_status(device_id, True)
@@ -468,21 +449,23 @@ class Core:
                 # Собираем активные устройства по контроллерам для проверки
                 active_devices_by_controller: Dict[str, List[int]] = {}
 
+                all_controllers_mac: List[str] = []
+
                 for device in devices:
                     device_id = device.id
                     mac = device.controller_mac
 
-                    # Получаем состояние устройства
+                    if mac not in all_controllers_mac:
+                        all_controllers_mac.append(mac)
+
                     dev_state = self._get_device_state(device_id)
                     if not dev_state:
                         continue
 
-                    # Получаем состояние контроллера
                     ctrl_state = self._get_controller_state(mac)
                     if not ctrl_state:
                         continue
 
-                    # Собираем активные устройства по контроллерам
                     if dev_state.is_active:
                         if mac not in active_devices_by_controller:
                             active_devices_by_controller[mac] = []
@@ -491,10 +474,8 @@ class Core:
                     # === 1. Проверка устройств с истекшим временем ожидания ===
                     time_since_resp = (current_time - dev_state.prev_resp_time).total_seconds()
 
-                    # Если устройство ожидает подтверждения и время истекло
                     if dev_state.is_waiting_confirm and time_since_resp > self.TIMEOUT_SECONDS:
                         if dev_state.failures_count < self.MAX_FAILURES:
-                            # Повторная отправка
                             if dev_state.last_message:
                                 self.mqtt_client.publish(mac, dev_state.last_message)
                                 dev_state.prev_resp_time = datetime.now()
@@ -502,10 +483,10 @@ class Core:
                                 print(
                                     f"[Core] Повторная отправка устройству {device_id}: {dev_state.last_message} (попытка {dev_state.failures_count})")
                         else:
-                            # Превышено количество попыток - помечаем устройство как неактивное
                             if dev_state.is_active:
                                 dev_state.is_active = False
                                 if self.kafka_handler:
+                                    self.kafka_handler.send_device_status(device_id, False)
                                     self.kafka_handler.send_notification(
                                         f"Устройство {device_id} (тип: {device.type}) отключено после {self.MAX_FAILURES} неудачных попыток",
                                         'error'
@@ -515,70 +496,66 @@ class Core:
                             dev_state.is_waiting_confirm = False
                             dev_state.failures_count = 0
 
-                    # === 2. Проверка контроллеров - принудительный запрос состояний ===
+
+                # === 2. Проверка контроллеров - принудительный запрос состояний ===
+                for mac in all_controllers_mac:
+                    ctrl_state = self._get_controller_state(mac)
+                    if not ctrl_state:
+                        continue
                     ctrl_time_since_resp = (current_time - ctrl_state.prev_resp_time).total_seconds()
 
                     if ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
-                        # Отправляем запрос состояния для всех устройств контроллера
-                        if not dev_state.is_waiting_confirm and dev_state.is_active:
-                            message = f'exec/{device.type}/{device.port}/getValue/0'
+                            message = f'exec/getAllValues/next'
                             self.mqtt_client.publish(mac, message)
 
-                            dev_state.is_waiting_confirm = True
-                            dev_state.prev_resp_time = datetime.now()
-                            dev_state.last_message = message
+                            ctrl_state.prev_resp_time = datetime.now()
+
+                            # dev_state.is_waiting_confirm = True
+                            # dev_state.prev_resp_time = datetime.now()
+                            # dev_state.last_message = message
 
                             print(f"[Core] Принудительный запрос состояния: {message} -> {mac}")
 
                 # === 3. Проверка контроллеров на активность ===
-                for mac, ctrl_state in self.controllers_state.items():
                     if ctrl_state.is_active:
-                        # Проверяем есть ли активные устройства у этого контроллера
                         active_count = len(active_devices_by_controller.get(mac, []))
 
                         if active_count == 0:
-                            # Проверяем есть ли вообще устройства у контроллера
-                            controller_devices = self.db.get_devices_by_controller(mac)
-                            if len(controller_devices) > 0:
-                                ctrl_state.is_active = False
-                                if self.kafka_handler:
-                                    self.kafka_handler.send_notification(
-                                        f"Контроллер {mac} деактивирован (все устройства неактивны)",
-                                        'warning'
-                                    )
-                                print(f"[Core] Контроллер {mac} деактивирован")
+                            ctrl_state.is_active = False
+                            if self.kafka_handler:
+                                self.kafka_handler.send_notification(
+                                    f"Контроллер {mac} деактивирован (все устройства неактивны)",
+                                    'warning'
+                                )
+                            print(f"[Core] Контроллер {mac} деактивирован")
 
                     # === 4. Восстановление неактивных контроллеров ===
-                    if not ctrl_state.is_active:
-                        # Пытаемся восстановить контроллер
-                        ctrl_state.failures_count += 1
+                    if not ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
+                        ctrl_state.prev_resp_time = datetime.now()
+                        self.parse_init(mac)
+                        print(f"[Core] Попытка восстановления контроллера {mac}")
 
-                        if ctrl_state.failures_count % 5 == 0:  # Каждые 5 циклов (5 секунд)
-                            # Пытаемся отправить запрос инициализации
-                            self.parse_init(mac)
-                            print(f"[Core] Попытка восстановления контроллера {mac}")
-
-                # === 5. Проверка очереди ожидания update ===
-                current_time_ts = time.time()
-                for request in self.mac_wait_request_update[:]:
-                    if current_time_ts - request["timestamp"] > self.TIMEOUT_SECONDS:
-                        device_id = request["device_id"]
-                        self.mac_wait_request_update.remove(request)
-
-                        dev_state = self._get_device_state(device_id)
-                        if dev_state:
-                            dev_state.offline_count += 1
-
-                            if dev_state.offline_count >= self.MAX_FAILURES and not dev_state.is_offline:
-                                dev_state.is_offline = True
-                                dev_state.is_active = False
-                                if self.kafka_handler:
-                                    self.kafka_handler.send_device_status(device_id, False)
-                                    self.kafka_handler.send_notification(
-                                        f"Устройство {device_id} не отвечает",
-                                        'error'
-                                    )
-                                print(f"[Core] Устройство {device_id} помечено как offline")
+                # # === 5. Проверка очереди ожидания update ===
+                # current_time_ts = time.time()
+                # for request in self.mac_wait_request_update[:]:
+                #     if current_time_ts - request["timestamp"] > self.TIMEOUT_SECONDS:
+                #         device_id = request["device_id"]
+                #         self.mac_wait_request_update.remove(request)
+                #
+                #         dev_state = self._get_device_state(device_id)
+                #         if dev_state:
+                #             dev_state.offline_count += 1
+                #
+                #             if dev_state.offline_count >= self.MAX_FAILURES and not dev_state.is_offline:
+                #                 dev_state.is_offline = True
+                #                 dev_state.is_active = False
+                #                 if self.kafka_handler:
+                #                     self.kafka_handler.send_device_status(device_id, False)
+                #                     self.kafka_handler.send_notification(
+                #                         f"Устройство {device_id} не отвечает",
+                #                         'error'
+                #                     )
+                #                 print(f"[Core] Устройство {device_id} помечено как offline")
 
                 time.sleep(1)  # Проверка раз в секунду
 
