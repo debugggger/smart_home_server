@@ -8,6 +8,7 @@ from database import (
 )
 
 logger = logging.getLogger(__name__)
+SERVER_ID = -1
 
 
 def register_trigger_routes(app, db, kafkaHandler):
@@ -147,17 +148,34 @@ def register_trigger_routes(app, db, kafkaHandler):
             # Для сценариев сохраняем как JSON
             json_responses = []
             for response in responses:
-                device = db.get_device_by_id(response['device_id'])
+                device = None
+                device_id = response.get('device_id')
+                # ИЗМЕНЕНИЕ: Для сервера device_id может быть 0 или отсутствовать
+                if device_id and device_id != 0:
+                    device = db.get_device_by_id(device_id)
+
                 # Получаем MAC контроллера-приемника
                 dst_controller = db.get_controller_by_id(response.get('dst_controller_id'))
                 if dst_controller:
                     response['dst_controller_mac'] = dst_controller.mac
+                else:
+                    # ИЗМЕНЕНИЕ: Если контроллер не найден, но это сервер (dst_controller_id == SERVER_ID)
+                    # устанавливаем mac = 'serv'
+                    if response.get('dst_controller_id') == SERVER_ID:
+                        response['dst_controller_mac'] = 'serv'
+                        device_id = None
+
                 resp_json = build_response_json(response, device)
                 json_responses.append(resp_json)
 
             # Сохраняем как JSON строку
+            # ИЗМЕНЕНИЕ: Для device_id используем 0, если это сервер
+            first_device_id = 0
+            if responses:
+                first_device_id = responses[0].get('device_id') or None
+
             resp_obj = TrigResponse(
-                device_id=responses[0]['device_id'] if responses else 0,
+                device_id=first_device_id,
                 resp=json.dumps(json_responses),
                 trigger_id=trigger_id
             )
@@ -165,10 +183,15 @@ def register_trigger_routes(app, db, kafkaHandler):
         else:
             # Для триггеров сохраняем как строку
             for response in responses:
-                device = db.get_device_by_id(response['device_id'])
+                device = None
+                device_id = response.get('device_id')
+                # ИЗМЕНЕНИЕ: Для сервера device_id может быть 0 или отсутствовать
+                if device_id and device_id != 0:
+                    device = db.get_device_by_id(device_id)
+
                 resp_str = get_response_string(response, device)
                 resp_obj = TrigResponse(
-                    device_id=response['device_id'],
+                    device_id=device_id or 0,
                     resp=resp_str,
                     trigger_id=trigger_id
                 )
@@ -177,7 +200,6 @@ def register_trigger_routes(app, db, kafkaHandler):
     # ============ УДАЛЕНИЕ ДАННЫХ ============
 
     def delete_conditions(trigger_id):
-
         conditions = db.get_trig_conditions_by_trigger(trigger_id)
         for cond in conditions:
             db.delete_trig_condition(cond.id)
@@ -236,20 +258,12 @@ def register_trigger_routes(app, db, kafkaHandler):
                 for cond in trigConditions:
                     if condCount > 0:
                         req_parts.append("and")
-                    # device = db.get_device_by_id(cond.device_id)
-                    # req_parts.append(db.get_device_type_by_id(device.type_id).name)
-                    # if device.port:
-                    #     req_parts.append(device.port)
                     req_parts.append(cond.condition)
                     condCount += 1
                 req_parts.append("do")
                 req_parts.append(db.get_controller_by_id(trigger.controller_resp_id).mac)
                 trigResps = db.get_trig_responses_by_trigger(trigger.id)
                 for resp in trigResps:
-                    # device = db.get_device_by_id(resp.device_id)
-                    # req_parts.append(db.get_device_type_by_id(device.type_id).name)
-                    # if device.port:
-                    #     req_parts.append(device.port)
                     req_parts.append(resp.resp)
                 req = "/".join(req_parts)
                 trig_data_for_core = {
@@ -261,7 +275,6 @@ def register_trigger_routes(app, db, kafkaHandler):
                 kafkaHandler.update_trig_table(trig_data_for_core)
 
     def delete_from_kafka(trigger_id, is_scene=False):
-
         kafkaHandler.delete_trigger(trigger_id)
 
     # ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ JSON ============
@@ -275,16 +288,25 @@ def register_trigger_routes(app, db, kafkaHandler):
         command_name = command_parts[0]
         command_value = command_parts[1] if len(command_parts) > 1 else None
 
-        type_name = db.get_device_type_by_id(device.type_id).name
+        # ИЗМЕНЕНИЕ: Если устройство не найдено (сервер), используем 'serv'
+        if device:
+            type_name = db.get_device_type_by_id(device.type_id).name
+            device_port = device.port
+        else:
+            type_name = 'serv'
+            device_port = '0'
+
         resp_json = {
-            'mac': response.get('dst_controller_mac') or response.get('controller_mac'),
-            'device_type': type_name if device else 'unknown',
-            'device_port': device.port if device else '0',
+            'mac': response.get('dst_controller_mac') or response.get('controller_mac') or 'serv',
+            'device_type': type_name,
+            'device_port': device_port,
             'command': command_name
         }
 
         if command_value:
             resp_json['value'] = command_value
+        elif response.get('value'):
+            resp_json['value'] = response.get('value')
 
         return resp_json
 
@@ -293,10 +315,17 @@ def register_trigger_routes(app, db, kafkaHandler):
         Построение JSON для условия сценария
         Формат: {'device_type': '...', 'device_port': '...', 'value_type': '...', ...}
         """
-        type_name = db.get_device_type_by_id(device.type_id).name
+        # ИЗМЕНЕНИЕ: Если устройство не найдено, используем 'unknown'
+        if device:
+            type_name = db.get_device_type_by_id(device.type_id).name
+            device_port = device.port
+        else:
+            type_name = 'unknown'
+            device_port = '0'
+
         cond_json = {
-            'device_type': type_name if device else 'unknown',
-            'device_port': device.port if device else '0'
+            'device_type': type_name,
+            'device_port': device_port
         }
 
         trigger_type = condition.get('trigger_type', 'value')
@@ -368,6 +397,18 @@ def register_trigger_routes(app, db, kafkaHandler):
                         'command': command,
                         'value': value
                     })
+                else:
+                    # ИЗМЕНЕНИЕ: Для сервера device может быть не найден
+                    responses_data.append({
+                        'id': resp.id,
+                        'device_id': resp.device_id,
+                        'device_name': 'Сервер',
+                        'device_type': 'serv',
+                        'controller_name': 'Сервер',
+                        'port': '0',
+                        'command': resp.resp.split('/')[0] if resp.resp else '',
+                        'value': resp.resp.split('/')[1] if resp.resp and len(resp.resp.split('/')) > 1 else None
+                    })
             src_controller = db.get_controller_by_id(trigger.controller_id)
             dst_controller = db.get_controller_by_id(trigger.controller_resp_id)
             result.append({
@@ -389,6 +430,7 @@ def register_trigger_routes(app, db, kafkaHandler):
         data = request.json
         is_scene = data.get('type') == 'complex'
 
+        # ИЗМЕНЕНИЕ: Для сценариев с сервером controller_id может быть None
         trigger = Trigger(
             controller_id=data.get('src_controller_id', None),
             controller_resp_id=data.get('dst_controller_id', None),
@@ -447,7 +489,6 @@ def register_trigger_routes(app, db, kafkaHandler):
     @app.route('/api/triggers/<int:trigger_id>', methods=['DELETE'])
     @handle_api_errors
     def delete_trigger(trigger_id):
-
         conditions = db.get_trig_conditions_by_trigger(trigger_id)
         for cond in conditions:
             db.delete_trig_condition(cond.id)
@@ -486,25 +527,50 @@ def register_trigger_routes(app, db, kafkaHandler):
     def get_server_commands():
         server_type = db.get_device_type_by_name('serv')
         if not server_type:
+            logger.error("Server device type 'serv' not found in database")
             return jsonify({'error': 'Server type not found'}), 404
 
         try:
-            config = json.loads(server_type.param_name) if server_type.param_name else {}
-            sending_commands = config.get('sending_commands', {})
+            # Проверяем оба возможных имени поля
+            param_data = None
+            if hasattr(server_type, 'param_name') and server_type.param_name:
+                param_data = server_type.param_name
+            elif hasattr(server_type, 'param_names') and server_type.param_names:
+                param_data = server_type.param_names
+
+            if not param_data:
+                logger.error("Server type has no param_name/param_names field")
+                return jsonify({'error': 'Server type has no param data'}), 500
+
+            config = json.loads(param_data) if isinstance(param_data, str) else param_data
+            logger.info(f"Server config loaded: {config}")
+
+            # В вашем JSON структура: param_names.sending_commands
+            # Но может быть и param_names напрямую
+            if 'sending_commands' in config:
+                sending_commands = config.get('sending_commands', {})
+            elif 'param_names' in config:
+                sending_commands = config['param_names'].get('sending_commands', {})
+            else:
+                sending_commands = {}
+
             all_commands = []
             if sending_commands.get('binary'):
                 for cmd in sending_commands['binary']:
-                    cmd['type'] = 'binary'
-                    all_commands.append(cmd)
+                    cmd_copy = dict(cmd)
+                    cmd_copy['type'] = 'binary'
+                    all_commands.append(cmd_copy)
             if sending_commands.get('numeric'):
                 for cmd in sending_commands['numeric']:
-                    cmd['type'] = 'numeric'
-                    all_commands.append(cmd)
+                    cmd_copy = dict(cmd)
+                    cmd_copy['type'] = 'numeric'
+                    all_commands.append(cmd_copy)
+
+            logger.info(f"Returning server commands: {all_commands}")
             return jsonify(all_commands)
         except Exception as e:
-            logger.error(f"Error parsing server commands: {e}")
+            logger.error(f"Error parsing server commands: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
-
 
     @app.route('/api/triggers/<int:trigger_id>', methods=['GET'])
     @handle_api_errors
@@ -521,8 +587,6 @@ def register_trigger_routes(app, db, kafkaHandler):
             device = db.get_device_by_id(cond.device_id)
             if device:
                 device_type = db.get_device_type_by_id(device.type_id)
-                # Парсим строку условия
-                parts = cond.condition.split('/')
                 condition_info = parse_condition_string(cond.condition)
                 conditions_data.append({
                     'id': cond.id,
@@ -548,7 +612,6 @@ def register_trigger_routes(app, db, kafkaHandler):
             if device:
                 device_type = db.get_device_type_by_id(device.type_id)
                 parts = resp.resp.split('/')
-                # Парсим строку ответа
                 command = parts[2] if len(parts) > 2 else ''
                 value = parts[3] if len(parts) > 3 else ''
                 responses_data.append({
@@ -559,6 +622,24 @@ def register_trigger_routes(app, db, kafkaHandler):
                     'controller_id': device.controller_id,
                     'dst_controller_id': device.controller_id,
                     'port': device.port,
+                    'command': command,
+                    'value': value,
+                    'action_string': resp.resp
+                })
+            else:
+                # ИЗМЕНЕНИЕ: Для сервера device может быть не найден
+                # Парсим строку ответа: serv/0/command/value
+                parts = resp.resp.split('/')
+                command = parts[2] if len(parts) > 2 else ''
+                value = parts[3] if len(parts) > 3 else ''
+                responses_data.append({
+                    'id': resp.id,
+                    'device_id': resp.device_id,
+                    'device_name': 'Сервер',
+                    'device_type': 'serv',
+                    'controller_id': SERVER_ID,
+                    'dst_controller_id': SERVER_ID,
+                    'port': '0',
                     'command': command,
                     'value': value,
                     'action_string': resp.resp
@@ -579,7 +660,6 @@ def register_trigger_routes(app, db, kafkaHandler):
             'conditions': conditions_data,
             'responses': responses_data
         })
-
 
     def parse_condition_string(condition_str):
         """Парсит строку условия для получения структурированных данных"""

@@ -631,7 +631,7 @@
                         <option value="">Выберите контроллер</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group action-device-group">
                     <label>Устройство (исполнитель)</label>
                     <select class="action-device" data-index="${index}" onchange="onActionDeviceChange(this)">
                         <option value="">Сначала выберите контроллер</option>
@@ -703,14 +703,45 @@
             const block = selectElement.closest('.action-block');
             const controllerId = selectElement.value;
             const deviceSelect = block.querySelector('.action-device');
-            if (!controllerId) { deviceSelect.innerHTML = '<option value="">Сначала выберите контроллер</option>'; return; }
-            await populateDeviceSelect(deviceSelect, controllerId);
+            const deviceGroup = block.querySelector('.action-device-group');
             const commandSelect = block.querySelector('.action-command');
+
             commandSelect.innerHTML = '<option value="">Сначала выберите устройство</option>';
             const valueField = block.querySelector('.value-field');
             if (valueField) valueField.classList.remove('show');
             const paramsField = block.querySelector('.param-field');
             if (paramsField) { paramsField.innerHTML = ''; paramsField.classList.remove('show'); }
+
+            if (!controllerId) {
+                deviceSelect.innerHTML = '<option value="">Сначала выберите контроллер</option>';
+                if (deviceGroup) deviceGroup.style.display = 'block';
+                return;
+            }
+
+            if (parseInt(controllerId) === SERVER_ID) {
+                // Для сервера скрываем выбор устройства и сразу заполняем команды
+                if (deviceGroup) deviceGroup.style.display = 'none';
+                deviceSelect.innerHTML = '<option value="">Сервер не имеет устройств</option>';
+
+                commandSelect.innerHTML = '<option value="">Выберите команду</option>';
+                serverCommands.forEach(cmd => {
+                    const option = document.createElement('option');
+                    option.value = cmd.sending_name || cmd.system_name;
+                    option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
+                    if (cmd.dataType) option.dataset.dataType = cmd.dataType;
+                    if (cmd.params) option.dataset.params = JSON.stringify(cmd.params);
+                    commandSelect.appendChild(option);
+                });
+                if (serverCommands.length === 1) {
+                    commandSelect.value = serverCommands[0].sending_name || serverCommands[0].system_name;
+                    onActionCommandChange(commandSelect);
+                }
+                return;
+            }
+
+            // Для обычного контроллера показываем выбор устройства
+            if (deviceGroup) deviceGroup.style.display = 'block';
+            await populateDeviceSelect(deviceSelect, controllerId);
         }
 
         async function onActionDeviceChange(selectElement) {
@@ -720,9 +751,10 @@
             const paramsContainer = block.querySelector('.param-field');
             paramsContainer.innerHTML = '';
             paramsContainer.classList.remove('show');
-            if (!deviceId) { commandSelect.innerHTML = '<option value="">Выберите устройство</option>'; return; }
+
             const controllerSelect = block.querySelector('.action-controller');
             const controllerId = controllerSelect.value;
+
             if (parseInt(controllerId) === SERVER_ID) {
                 commandSelect.innerHTML = '<option value="">Выберите команду</option>';
                 serverCommands.forEach(cmd => {
@@ -735,6 +767,12 @@
                 });
                 return;
             }
+
+            if (!deviceId) {
+                commandSelect.innerHTML = '<option value="">Выберите устройство</option>';
+                return;
+            }
+
             const device = findDeviceInCache(parseInt(deviceId));
             if (!device) { commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>'; return; }
             const sendingCommands = getDeviceSendingCommands(parseInt(deviceId));
@@ -772,12 +810,14 @@
             paramsContainer.classList.remove('show');
             valueField.classList.remove('show');
             if (!command) return;
+
             if (parseInt(controllerId) === SERVER_ID) {
                 const dataType = selectedOption?.dataset?.dataType;
                 if (dataType === 'boolT') return;
                 valueField.classList.add('show');
                 return;
             }
+
             const cmdType = selectedOption?.dataset?.cmdType;
             const cmdData = selectedOption?.dataset?.cmdData ? JSON.parse(selectedOption.dataset.cmdData) : {};
             if (cmdType === 'binary') { valueField.classList.remove('show'); return; }
@@ -826,6 +866,8 @@
             const isComplex = srcControllers.size > 1 || dstControllers.size > 1 || hasServer;
             return isComplex ? 'complex' : 'simple';
         }
+
+
 
         async function saveScene() {
             const name = document.getElementById('sceneName').value;
@@ -906,16 +948,29 @@
                     });
                 }
                 if (Object.keys(params).length > 0) { value = JSON.stringify(params); }
+
                 const deviceId = deviceSelect.value;
-                if (deviceId && command && dstControllerId) {
-                    const device = findDeviceInCache(parseInt(deviceId));
+                const isServer = parseInt(dstControllerId) === SERVER_ID;
+
+                // ИЗМЕНЕНИЕ: Разрешаем сохранение для сервера без device_id
+                if (command && dstControllerId && (deviceId || isServer)) {
+                    let device = null;
+                    if (deviceId) {
+                        device = findDeviceInCache(parseInt(deviceId));
+                    }
+                    if (isServer) {
+                        device = {
+                            type_name: 'serv',
+                            port: '0',
+                            id: 0
+                        };
+                    }
                     if (device) {
-                        const isServer = parseInt(dstControllerId) === SERVER_ID;
                         const finalCommand = isServer ? 'serv' : command;
                         let actionStr = `${device.type_name}/${device.port}/${finalCommand}`;
                         if (value) actionStr += `/${value}`;
                         responses.push({
-                            device_id: parseInt(deviceId),
+                            device_id: isServer ? 0 : parseInt(deviceId),
                             dst_controller_id: parseInt(dstControllerId),
                             command: finalCommand,
                             value: value,
@@ -980,99 +1035,187 @@
             }
         }
 
-        function renderScenesTable(scenes) {
-            const tbody = document.getElementById('scenesTableBody');
-            tbody.innerHTML = '';
-            if (scenes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;">📭 Нет созданных сценариев</td></tr>';
-                return;
+         function getCompareLabel(compare) {
+        const map = {
+            'equal': 'равно',
+            'more': 'больше',
+            'less': 'меньше',
+            'changed': 'изменение',
+            'onChange': 'изменение',
+            'time': 'время'
+        };
+        return map[compare] || compare || '—';
+    }
+
+    function getTypeDisplayNameById(typeId) {
+        // typeId может быть именем типа ('serv', 'relay' и т.п.) или числовым ID
+        if (typeof typeId === 'string' && isNaN(typeId)) {
+            // Уже имя типа — пробуем найти отображаемое имя
+            for (const id in deviceTypesMap) {
+                if (deviceTypesMap[id].name === typeId) {
+                    return getTypeDisplayName(parseInt(id));
+                }
             }
-            scenes.forEach(scene => {
-                const row = tbody.insertRow();
-                row.insertCell(0).innerText = scene.id;
-                row.insertCell(1).innerText = scene.name;
+            return typeId;
+        }
+        return getTypeDisplayName(typeId);
+    }
 
-                const conditionsCell = row.insertCell(2);
-                if (scene.conditions && scene.conditions.length > 0) {
-                    const subTable = document.createElement('table');
-                    subTable.className = 'sub-table';
-                    scene.conditions.forEach(cond => {
-                        const device = findDeviceInCache(cond.device_id);
-                        const subRow = subTable.insertRow();
-                        const cell = subRow.insertCell(0);
-                        if (device) {
-                            const typeDisplayName = getTypeDisplayName(device.type_id);
-                            cell.innerHTML = `
-                                <div class="cond-detail">
-                                    <span class="device-name">${device.name}</span>
-                                    <span class="type-name">(${typeDisplayName})</span>
-                                    <span class="command-info">→ ${cond.command || '—'}</span>
-                                    ${cond.value ? `<span class="command-info">значение: ${cond.value}</span>` : ''}
-                                </div>
-                            `;
-                        } else {
-                            cell.innerHTML = `<span class="cond-detail">Устройство ID: ${cond.device_id} (не найдено)</span>`;
-                        }
-                    });
-                    conditionsCell.appendChild(subTable);
+        function renderScenesTable(scenes) {
+    const tbody = document.getElementById('scenesTableBody');
+    tbody.innerHTML = '';
+    if (scenes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;">📭 Нет созданных сценариев</td></tr>';
+        return;
+    }
+    scenes.forEach(scene => {
+        const row = tbody.insertRow();
+        row.insertCell(0).innerText = scene.id;
+        row.insertCell(1).innerText = scene.name;
+
+        // ============ УСЛОВИЯ ============
+        const conditionsCell = row.insertCell(2);
+        if (scene.conditions && scene.conditions.length > 0) {
+            const subTable = document.createElement('table');
+            subTable.className = 'sub-table';
+            scene.conditions.forEach(cond => {
+                const subRow = subTable.insertRow();
+                const cell = subRow.insertCell(0);
+
+                let typeName = 'Unknown';
+                let compare = '—';
+                let value = '—';
+
+                // Определяем тип устройства
+                if (cond.device_id && cond.device_id !== 0 && cond.device_id !== null) {
+                    const device = findDeviceInCache(cond.device_id);
+                    if (device) {
+                        typeName = getTypeDisplayName(device.type_id);
+                    } else if (cond.device_type) {
+                        typeName = cond.device_type;
+                    }
                 } else {
-                    conditionsCell.innerText = '—';
+                    // Сервер или неизвестное устройство
+                    if (cond.device_type) {
+                        typeName = getTypeDisplayNameById(cond.device_type);
+                    } else {
+                        typeName = 'Сервер';
+                    }
                 }
 
-                const actionsCell = row.insertCell(3);
-                if (scene.responses && scene.responses.length > 0) {
-                    const subTable = document.createElement('table');
-                    subTable.className = 'sub-table';
-                    scene.responses.forEach(resp => {
-                        const device = findDeviceInCache(resp.device_id);
-                        const subRow = subTable.insertRow();
-                        const cell = subRow.insertCell(0);
-                        if (device) {
-                            const typeDisplayName = getTypeDisplayName(device.type_id);
-                            cell.innerHTML = `
-                                <div class="resp-detail">
-                                    <span class="device-name">${device.name}</span>
-                                    <span class="type-name">(${typeDisplayName})</span>
-                                    <span class="command-info">→ ${resp.command || '—'}</span>
-                                    ${resp.value ? `<span class="command-info">значение: ${resp.value}</span>` : ''}
-                                </div>
-                            `;
-                        } else {
-                            cell.innerHTML = `<span class="resp-detail">Устройство ID: ${resp.device_id} (не найдено)</span>`;
-                        }
-                    });
-                    actionsCell.appendChild(subTable);
+                // Определяем тип сравнения и значение
+                if (cond.trigger_type === 'time') {
+                    compare = 'время';
+                    value = cond.time ? `${cond.time} мс` : '—';
+                } else if (cond.trigger_type === 'changed') {
+                    compare = 'изменение';
+                    value = '—';
                 } else {
-                    actionsCell.innerText = '—';
+                    compare = getCompareLabel(cond.compare);
+                    value = cond.value !== undefined && cond.value !== null && cond.value !== ''
+                        ? cond.value
+                        : '—';
                 }
 
-                const statusCell = row.insertCell(4);
-                const isActive = scene.is_active !== undefined ? scene.is_active : true;
-                statusCell.innerHTML = `
-                    <div class="status-label">
-                        <label class="toggle-switch">
-                            <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleScene(${scene.id}, this.checked)">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="${isActive ? 'active' : 'inactive'}">${isActive ? 'Включен' : 'Выключен'}</span>
+                cell.innerHTML = `
+                    <div class="cond-detail">
+                        <span class="device-name">${typeName}</span>
+                        <span class="command-info">→ ${compare}: ${value}</span>
                     </div>
                 `;
-
-                const actionCell = row.insertCell(5);
-                const editBtn = document.createElement('button');
-                editBtn.innerText = '✏️';
-                editBtn.className = 'edit-scene-btn';
-                editBtn.title = 'Редактировать';
-                editBtn.onclick = () => editScene(scene.id);
-                actionCell.appendChild(editBtn);
-                const delBtn = document.createElement('button');
-                delBtn.innerText = '🗑️';
-                delBtn.className = 'delete-scene-btn';
-                delBtn.title = 'Удалить';
-                delBtn.onclick = () => deleteScene(scene.id);
-                actionCell.appendChild(delBtn);
             });
+            conditionsCell.appendChild(subTable);
+        } else {
+            conditionsCell.innerText = '—';
         }
+
+        // ============ ДЕЙСТВИЯ ============
+        const actionsCell = row.insertCell(3);
+        if (scene.responses && scene.responses.length > 0) {
+            const subTable = document.createElement('table');
+            subTable.className = 'sub-table';
+            scene.responses.forEach(resp => {
+                const subRow = subTable.insertRow();
+                const cell = subRow.insertCell(0);
+
+                let typeName = 'Unknown';
+                let value = '—';
+
+                // Определяем тип устройства
+                if (resp.device_id && resp.device_id !== 0 && resp.device_id !== null) {
+                    const device = findDeviceInCache(resp.device_id);
+                    if (device) {
+                        typeName = getTypeDisplayName(device.type_id);
+                    } else if (resp.device_type) {
+                        typeName = resp.device_type;
+                    }
+                } else {
+                    // Сервер
+                    if (resp.device_type) {
+                        typeName = getTypeDisplayNameById(resp.device_type);
+                    } else {
+                        typeName = 'Сервер';
+                    }
+                }
+
+                // Значение действия (если есть)
+                if (resp.value !== undefined && resp.value !== null && resp.value !== '') {
+                    // Если value — JSON с параметрами, показываем как есть или разворачиваем
+                    try {
+                        const parsed = JSON.parse(resp.value);
+                        if (typeof parsed === 'object' && parsed !== null) {
+                            value = Object.entries(parsed)
+                                .map(([k, v]) => `${k}=${v}`)
+                                .join(', ');
+                        } else {
+                            value = resp.value;
+                        }
+                    } catch (e) {
+                        value = resp.value;
+                    }
+                }
+
+                cell.innerHTML = `
+                    <div class="resp-detail">
+                        <span class="device-name">${typeName}</span>
+                        <span class="command-info">→ ${value}</span>
+                    </div>
+                `;
+            });
+            actionsCell.appendChild(subTable);
+        } else {
+            actionsCell.innerText = '—';
+        }
+
+        // ============ СТАТУС ============
+        const statusCell = row.insertCell(4);
+        const isActive = scene.is_active !== undefined ? scene.is_active : true;
+        statusCell.innerHTML = `
+            <div class="status-label">
+                <label class="toggle-switch">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleScene(${scene.id}, this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="${isActive ? 'active' : 'inactive'}">${isActive ? 'Включен' : 'Выключен'}</span>
+            </div>
+        `;
+
+        // ============ УПРАВЛЕНИЕ ============
+        const actionCell = row.insertCell(5);
+        const editBtn = document.createElement('button');
+        editBtn.innerText = '✏️';
+        editBtn.className = 'edit-scene-btn';
+        editBtn.title = 'Редактировать';
+        editBtn.onclick = () => editScene(scene.id);
+        actionCell.appendChild(editBtn);
+        const delBtn = document.createElement('button');
+        delBtn.innerText = '🗑️';
+        delBtn.className = 'delete-scene-btn';
+        delBtn.title = 'Удалить';
+        delBtn.onclick = () => deleteScene(scene.id);
+        actionCell.appendChild(delBtn);
+    });
+}
 
         async function toggleScene(sceneId, isActive) {
             try {

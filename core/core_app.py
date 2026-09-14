@@ -1,4 +1,5 @@
 import json
+import re
 import threading
 import time
 from datetime import datetime
@@ -49,8 +50,8 @@ class Core:
         self.mac_wait_request_init = []  # Список MAC контроллеров ожидающих init
         self.mac_wait_request_update = []  # Список устройств ожидающих update
 
-        self.TIMEOUT_SECONDS = 5
-        self.GET_VALUES_DELAY = 10
+        self.TIMEOUT_SECONDS = 10
+        self.GET_VALUES_DELAY = 60
         self.MAX_FAILURES = 3
 
         self._init_states_from_db()
@@ -132,6 +133,9 @@ class Core:
             elif parts[1] == "initResp":
                 self._parse_init_response(parts)
 
+            elif parts[1] == "trigResp":
+                self._parse_trig_response(parts)
+
     def _parse_exec_response(self, parts):
         mac = parts[0]
         devices = self.db.get_devices_by_controller(mac)
@@ -140,12 +144,9 @@ class Core:
         while index < len(parts) - 1:
             status = parts[index]
 
-            if status == "ok" or status == "values":
+            if status == "ok":
                 device_type = parts[index + 1]
                 device_port = parts[index + 2] if index + 2 < len(parts) else None
-
-                if status == "values":
-                    self.parse_states(parts)
 
                 for device in devices:
                     if device.port == device_port and device.type == device_type:
@@ -162,12 +163,67 @@ class Core:
                         break
                 index += 3
 
-            # elif status == "values":
-            #     self.parse_states(parts)
-            #     index += 1
+            elif status == "values":
+                self.parse_states(parts)
+                index += 1
             else:
                 print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
                 break
+
+    def parse_error_content(self, content):
+
+        content = content.strip()
+        original = content
+
+        patterns = [
+            r'Trigger\s+[\'"]?(\d+)[\'"]?',
+            r'trigger\s+[\'"]?(\d+)[\'"]?',
+            r'"(\d+)"',  # "1", "5"
+            r"'(\d+)'",  # '3'
+            r'\[(\d+)\]',  # [5]
+            r'\((\d+)\)',  # (2)
+            r'\b(\d+)\b'  # Любое отдельное число (в конце, чтобы не сработать случайно)
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                trig_num = match.group(1)
+                # Удаляем ВСЮ найденную подстроку (а не только число)
+                start, end = match.span()
+                # Убираем эту часть из текста
+                cleaned_text = content[:start] + content[end:]
+                # Чистим от лишних пробелов и символов
+                cleaned_text = re.sub(r'[/:;,.]$', '', cleaned_text).strip()
+                return trig_num, cleaned_text
+
+        return None, original.strip()
+
+    def _parse_trig_response(self, parts):
+        mac = parts[0]
+
+        if request["mac"] == mac:
+            triggers = self.db.get_triggers_by_controller(mac)
+            index = 2
+
+            while index < len(parts) - 1:
+                status = parts[index]
+
+                if status == "ok":
+                    trig_num = parts[index + 1]
+                    print(f"[Core] Триггер: {triggers[trig_num-1].id} создан")
+
+                elif status == "error":
+                    num, text = self.parse_error_content(parts[index + 1])
+
+                    if num:
+                        print(f"[Core error] Триггер: {triggers[num - 1].id} не создан, ошибка {text}")
+                    else:
+                        print(f"[Core error] Ошибка при создании триггера на контроллере {mac}: {text}")
+
+                else:
+                    print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
+                    break
 
     def _parse_init_response(self, parts):
         """Обработка ответа на инициализацию"""
@@ -505,7 +561,7 @@ class Core:
                     ctrl_time_since_resp = (current_time - ctrl_state.prev_resp_time).total_seconds()
 
                     if ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
-                            message = f'exec/getAllValues/next'
+                            message = f'exec/getAllValues/'
                             self.mqtt_client.publish(mac, message)
 
                             ctrl_state.prev_resp_time = datetime.now()
