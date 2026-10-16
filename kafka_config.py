@@ -19,7 +19,7 @@ TOPICS = {
     'UPD_DEVICE_STATUS': 'device_status_update_app',
 }
 
-def create_kafka_producer(bootstrap_servers='localhost:9092'):
+def create_kafka_producer(bootstrap_servers='127.0.0.1:9092'):
     return KafkaProducer(
         bootstrap_servers=[bootstrap_servers],
         value_serializer=lambda x: json.dumps(x, default=str).encode('utf-8'),
@@ -29,7 +29,7 @@ def create_kafka_producer(bootstrap_servers='localhost:9092'):
         max_in_flight_requests_per_connection=1
     )
 
-def create_kafka_consumer(topics, group_id, bootstrap_servers='localhost:9092'):
+def create_kafka_consumer(topics, group_id, bootstrap_servers='127.0.0.1:9092'):
     return KafkaConsumer(
         *topics,
         bootstrap_servers=[bootstrap_servers],

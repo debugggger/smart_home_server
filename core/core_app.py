@@ -26,10 +26,17 @@ class DeviceState:
     is_waiting_confirm: bool = False
     prev_resp_time: datetime = field(default_factory=datetime.now)
     failures_count: int = 0
-    #offline_count: int = 0
     is_active: bool = True
-    #is_offline: bool = False  # Оффлайн ли устройство
     last_message: str = ""
+    params_count: int = 0
+
+
+def parse_number(value):
+    try:
+        f = float(value)
+    except (ValueError, TypeError):
+        return value
+    return int(f) if f.is_integer() else f
 
 
 class Core:
@@ -50,8 +57,8 @@ class Core:
         self.mac_wait_request_init = []  # Список MAC контроллеров ожидающих init
         self.mac_wait_request_update = []  # Список устройств ожидающих update
 
-        self.TIMEOUT_SECONDS = 10
-        self.GET_VALUES_DELAY = 60
+        self.TIMEOUT_SECONDS = 3
+        self.GET_VALUES_DELAY = 60*1
         self.MAX_FAILURES = 3
 
         self._init_states_from_db()
@@ -66,10 +73,10 @@ class Core:
                 is_waiting_confirm=False,
                 prev_resp_time=datetime.now(),
                 failures_count=0,
-                #offline_count=0,
                 is_active=True,
-                #is_offline=False,
-                last_message=""
+                last_message="",
+                params_count=0
+
             )
 
             if device.controller_mac not in self.controllers_state:
@@ -140,8 +147,9 @@ class Core:
         mac = parts[0]
         devices = self.db.get_devices_by_controller(mac)
 
-        index = 2
-        while index < len(parts) - 1:
+        index = 1
+        while index < len(parts) - 2:
+            index += 1
             status = parts[index]
 
             if status == "ok":
@@ -155,17 +163,20 @@ class Core:
                             dev_state.is_waiting_confirm = False
                             dev_state.prev_resp_time = datetime.now()
                             dev_state.failures_count = 0
-                            #dev_state.offline_count = 0
-                            if not dev_state.is_active:
-                                dev_state.is_active = True
-                                if self.kafka_handler:
-                                    self.kafka_handler.send_device_status(device.id, True)
+                            dev_state.is_active = True
+                            if self.kafka_handler:
+                                self.kafka_handler.send_device_status(device.id, True)
                         break
-                index += 3
+                #index += 4
+                while parts[index] != "next":
+                    if index == len(parts):
+                        print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
+                        break
+                    index += 1
 
             elif status == "values":
                 self.parse_states(parts)
-                index += 1
+                break
             else:
                 print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
                 break
@@ -202,28 +213,38 @@ class Core:
     def _parse_trig_response(self, parts):
         mac = parts[0]
 
-        if request["mac"] == mac:
-            triggers = self.db.get_triggers_by_controller(mac)
-            index = 2
+        # if request["mac"] == mac:
+        triggers = self.db.get_triggers_by_controller(mac)
+        index = 1
 
-            while index < len(parts) - 1:
-                status = parts[index]
+        while index < len(parts) - 2:
+            index += 1
+            if parts[index] == "":
+                index += 1
+            status = parts[index]
 
-                if status == "ok":
-                    trig_num = parts[index + 1]
-                    print(f"[Core] Триггер: {triggers[trig_num-1].id} создан")
+            index += 1
 
-                elif status == "error":
-                    num, text = self.parse_error_content(parts[index + 1])
+            if status == "ok":
+                trig_num = parts[index]
+                #print(f"[Core] Триггер: {triggers[int(trig_num)-1].id} создан")
 
-                    if num:
-                        print(f"[Core error] Триггер: {triggers[num - 1].id} не создан, ошибка {text}")
-                    else:
-                        print(f"[Core error] Ошибка при создании триггера на контроллере {mac}: {text}")
+            elif status == "error":
+                num, text = self.parse_error_content(parts[index])
 
-                else:
+                if not num:
+                    #print(f"[Core error] Триггер: {triggers[num - 1].id} не создан, ошибка {text}")
+                    print(f"[Core error] Ошибка при создании триггера на контроллере {mac}: {text}")
+
+            else:
+                print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
+                break
+            while parts[index] != "next":
+                if index == len(parts):
                     print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
                     break
+                index += 1
+
 
     def _parse_init_response(self, parts):
         """Обработка ответа на инициализацию"""
@@ -234,9 +255,10 @@ class Core:
             if request["mac"] == mac:
                 devices = self.db.get_devices_by_controller(mac)
                 error_devices = []
-                index = 2
+                index = 1
 
-                while index < len(parts) - 1:
+                while index < len(parts) - 2:
+                    index += 1
                     status = parts[index]
 
                     if status == "ok":
@@ -246,8 +268,15 @@ class Core:
                         for j, device in enumerate(devices):
                             if device.port == device_port and device.type == device_type:
                                 del devices[j]
+                                dev_state = self._get_device_state(device.id)
+                                dev_state.params_count = int(parts[index + 3])
+
                                 break
-                        index += 3
+                        # while parts[index] != "next":
+                        #     if index == len(parts):
+                        #         print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
+                        #         break
+                        #     index += 1
 
                     elif status == "error":
                         device_type = parts[index + 1]
@@ -273,10 +302,17 @@ class Core:
                                 if device.port == device_port and device.type == device_type:
                                     del devices[j]
                                     break
-                        index += 4
+
                     else:
                         print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
                         break
+
+                    # index += 4
+                    while parts[index] != "next":
+                        if index == len(parts):
+                            print(f"[Core Warning] Неожиданный формат ответа: {parts[index:]}")
+                            break
+                        index += 1
 
                 # Проверяем оставшиеся устройства
                 if len(devices) != 0:
@@ -309,7 +345,7 @@ class Core:
                         timestamp = message.get('timestamp', time.time())
 
                         time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S.%f')[:-3]
-                        print(f"[Core] Обработка сообщения из очереди: {time_str} - {topic}: {payload}")
+                        #print(f"[Core] Обработка сообщения из очереди: {time_str} - {topic}: {payload}")
 
                         self.parse(topic, payload)
                     else:
@@ -339,6 +375,7 @@ class Core:
 
         if self.kafka_handler:
             self.kafka_handler.set_init_callback(self.parse_init)
+            self.kafka_handler.set_recall_triggers(self.parse_triggers)
 
         # Инициализация устройств
         self.init_devices()
@@ -378,10 +415,20 @@ class Core:
             req_parts.append(device.type)
             if device.port:
                 req_parts.append(device.port)
-            if device.params and isinstance(device.params, dict):
+            if device.params:
+                if isinstance(device.params, str):
+                    device.params = json.loads(device.params)
+                for key, value in device.params.items():
+                    if value not in (None, "", []):
+                        req_parts.append(str(value))
 
-                params = '/'.join(device.params.values())
-                req_parts.append(params)
+                # dev_state = self._get_device_state(device.id)
+                # if dev_state:
+                #     dev_state.is_waiting_confirm = True
+                #     dev_state.prev_resp_time = datetime.now()
+                #     dev_state.last_message = "init"  # или специфичная команда для устройства
+                #     dev_state.failures_count = 0
+
             req_parts.append("next")
 
         req = "/".join(req_parts)
@@ -403,11 +450,57 @@ class Core:
         triggers = self.db.get_triggers_by_controller(mac)
 
         for trigger in triggers:
-            req_parts.append(trigger.trig)
-            req_parts.append("next")
+            if trigger.is_active:
+                req_parts.append(trigger.trig)
+                req_parts.append("next")
+
+        changed_pairs = set()  # используем set кортежей для быстрой проверки
+
+        scenes = self.db.get_all_scenes()
+        for scene in scenes:
+            resp = scene.responses
+            cond = scene.conditions
+
+            if isinstance(cond, str):
+                cond = json.loads(cond)
+            if isinstance(resp, str):
+                resp = json.loads(resp)
+
+            has_change_cmd = any(
+                r.get("command") in ("changeVal/plus", "changeVal/minus")
+                for r in resp
+            )
+            if not has_change_cmd:
+                continue
+
+            for c in cond:
+                if c.get("compare_type") == "changed":
+                    device_id = c.get("device_id")
+                    param_num = c.get("param_num")
+                    if device_id is not None and param_num is not None:
+                        changed_pairs.add((device_id, param_num))
+
+        devices = self.db.get_devices_by_controller(mac)
+
+        for device in devices:
+            dev_state = self._get_device_state(device.id)
+
+            for param_num in range(dev_state.params_count):
+                if (device.id, param_num) in changed_pairs:
+                    continue
+
+                req_parts.append(device.type)
+                req_parts.append(device.port)
+                req_parts.append(f"value/{param_num}/onChange/do")
+                req_parts.append(device.controller_mac)
+                req_parts.append("getValue")
+                req_parts.append(device.type)
+                req_parts.append(device.port)
+                req_parts.append(f"{param_num}/next")
+
 
         req = "/".join(req_parts)
-        if len(parts) > 2:
+        if len(req_parts) >= 2:
             self.mqtt_client.publish(mac, req)
 
     def parse_states(self, parts):
@@ -418,20 +511,20 @@ class Core:
 
         startValIdx = 1
         for i in range(len(parts)):
-            if parts[i] == "next" and i - startValIdx == 4:
-                startValIdx = i
+            if parts[i] == "next":
+                startValIdx = i-5
                 for device in devices:
-                    if device.type == parts[i - 4] and device.port == parts[i - 3]:
+                    if device.type == parts[i - 5] and device.port == parts[i - 4]:
                         # Обновляем значения
                         param_idx = int(parts[i - 2]) if parts[i - 2].isdigit() else parts[i - 2]
+
                         if isinstance(device.current_values, list):
                             if isinstance(param_idx, int) and param_idx < len(device.current_values):
-                                device.current_values[param_idx] = parts[i - 1]
+                                device.current_values[param_idx] = parse_number(parts[i - 1])
                             else:
-                                # Если индекс не подходит, добавляем как новое значение
-                                device.current_values.append(parts[i - 1])
+                                device.current_values.append(parse_number(parts[i - 1]))
                         else:
-                            device.current_values = [parts[i - 1]]
+                            device.current_values[0] = [parse_number(parts[i - 1])]
 
                         dev_with_values[device.id] = device
 
@@ -442,6 +535,7 @@ class Core:
             if self.kafka_handler:
                 self.kafka_handler.send_device_value_update(device_id, device.current_values)
 
+
             self.check_scene(device_id)
 
             # Сбрасываем счетчики ошибок устройства
@@ -451,10 +545,10 @@ class Core:
                 #dev_state.offline_count = 0
                 dev_state.prev_resp_time = datetime.now()
 
-                if not dev_state.is_active:
-                    dev_state.is_active = True
-                    if self.kafka_handler:
-                        self.kafka_handler.send_device_status(device_id, True)
+                #if not dev_state.is_active:
+                dev_state.is_active = True
+                if self.kafka_handler:
+                    self.kafka_handler.send_device_status(device_id, True)
 
     def parse_changes(self, parts):
         """Обработка изменений от контроллера"""
@@ -552,25 +646,68 @@ class Core:
                             dev_state.is_waiting_confirm = False
                             dev_state.failures_count = 0
 
-
-                # === 2. Проверка контроллеров - принудительный запрос состояний ===
                 for mac in all_controllers_mac:
                     ctrl_state = self._get_controller_state(mac)
                     if not ctrl_state:
                         continue
                     ctrl_time_since_resp = (current_time - ctrl_state.prev_resp_time).total_seconds()
 
-                    if ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
-                            message = f'exec/getAllValues/'
-                            self.mqtt_client.publish(mac, message)
+                    # === 2.1. Проверка ожидания инициализации контроллера ===
+                    if ctrl_state.is_waiting_init and ctrl_time_since_resp > self.TIMEOUT_SECONDS:
+                        if ctrl_state.failures_count < self.MAX_FAILURES and ctrl_state.is_active:
 
+                            ctrl_state.failures_count += 1
+                            ctrl_state.last_message = f"Повторная инициализация (попытка {ctrl_state.failures_count})"
+                            self.parse_init(mac)
                             ctrl_state.prev_resp_time = datetime.now()
+                            print(
+                                f"[Core] Повторная инициализация контроллера {mac} "
+                                f"(попытка {ctrl_state.failures_count}/{self.MAX_FAILURES})"
+                            )
+                        elif ctrl_state.failures_count >= self.MAX_FAILURES and ctrl_state.is_active:
+                            if self.kafka_handler and ctrl_state.is_active:
+                                self.kafka_handler.send_notification(
+                                    f"Контроллер {mac} деактивирован: не подтвердил инициализацию "
+                                    f"после {self.MAX_FAILURES} попыток",
+                                    'error'
+                                )
+                            print(
+                                f"[Core] Контроллер {mac} деактивирован после "
+                                f"{self.MAX_FAILURES} неудачных попыток инициализации"
+                            )
+                            ctrl_state.is_active = False
+                            ctrl_state.is_waiting_init = False
+                            ctrl_state.failures_count = 0
 
-                            # dev_state.is_waiting_confirm = True
-                            # dev_state.prev_resp_time = datetime.now()
-                            # dev_state.last_message = message
+                            for device in self.db.get_devices_by_controller(mac):
+                                dev_state = self._get_device_state(device.id)
+                                if dev_state and dev_state.is_active:
+                                    dev_state.is_active = False
+                                    dev_state.is_waiting_confirm = False
+                                    dev_state.failures_count = 0
 
-                            print(f"[Core] Принудительный запрос состояния: {message} -> {mac}")
+                                    if self.kafka_handler:
+                                        self.kafka_handler.send_device_status(device.id, False)
+                                    print(f"[Core] Устройство {device.id} деактивировано (контроллер {mac} недоступен)")
+
+                            self.mac_wait_request_init = [
+                                r for r in self.mac_wait_request_init if r["mac"] != mac
+                            ]
+                            continue
+
+
+
+                    if ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
+                        message = f'exec/getAllValues/'
+                        self.mqtt_client.publish(mac, message)
+
+                        ctrl_state.prev_resp_time = datetime.now()
+
+                        # dev_state.is_waiting_confirm = True
+                        # dev_state.prev_resp_time = datetime.now()
+                        # dev_state.last_message = message
+
+                        print(f"[Core] Принудительный запрос состояния: {message} -> {mac}")
 
                 # === 3. Проверка контроллеров на активность ===
                     if ctrl_state.is_active:
@@ -653,39 +790,47 @@ class Core:
                 if not conditions:
                     continue
 
-                all_conditions_met = True
+                #all_conditions_met = True
+
+                executed_count = 0
+
+
 
                 for condition in conditions:
                     cond_device_id = condition.get('device_id')
                     param_num = condition.get('param_num')
                     is_execute = condition.get('is_execute', True)
 
-                    if not is_execute:
-                        continue
+                    # if not is_execute:
+                    #     continue
 
                     if cond_device_id == device_id:
                         if param_num is not None and param_num < len(current_values):
                             check_value = current_values[param_num]
                         else:
                             check_value = None
+
+                        is_execute = self._check_condition_value(condition, check_value)
+                        condition['is_execute'] = is_execute
+                        if not is_execute:
+                            #all_conditions_met = False
+                            break
+                        executed_count += 1
                     else:
-                        check_value = self._get_device_parameter_value(cond_device_id, param_num)
+                        continue
+                        #check_value = self._get_device_parameter_value(cond_device_id, param_num)
 
-                    if not self._check_condition_value(condition, check_value):
-                        all_conditions_met = False
-                        break
-
-                if all_conditions_met:
+                if executed_count == len(conditions):
+                #if all_conditions_met:
                     if not scene.is_executed:
                         self._execute_scene_actions(scene)
                         self.db.update_scene_executed(scene.id, True)
                         print(f"[Core] Scene {scene.id} executed successfully")
-                        if self.kafka_handler:
-                            self.kafka_handler.send_notification(
-                                'SCENE_EXECUTED',
-                                f'Сценарий выполнен',
-                                {'scene_id': scene.id}
-                            )
+                        # if self.kafka_handler:
+                        #     self.kafka_handler.send_notification(
+                        #         'SCENE_EXECUTED',
+                        #         f'Сценарий выполнен'
+                        #     )
                 else:
                     if scene.is_executed:
                         self.db.update_scene_executed(scene.id, False)
@@ -710,8 +855,8 @@ class Core:
         value = condition.get('value')
         is_execute = condition.get('is_execute', False)
 
-        if not is_execute:
-            return True
+        # if not is_execute:
+        #     return True
 
         if compare_type == 'changed':
             return True
@@ -769,7 +914,7 @@ class Core:
                 value = response.get('value')
 
                 if mac and command:
-                    cmd_parts = [device_type, device_port, command]
+                    cmd_parts = ["exec", device_type, device_port, command]
                     if value:
                         cmd_parts.append(value)
                     cmd_str = "/".join(cmd_parts)

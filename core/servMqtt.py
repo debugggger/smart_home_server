@@ -19,12 +19,22 @@ class servMqtt:
         self.mosquittoThread = None
         self.clientThread = None
 
+    # def start(self):
+    #     # self.mosquittoThread = threading.Thread(target=self.startBroker)
+    #     # self.mosquittoThread.start()
+    #     # time.sleep(0.1)
+    #     self.clientThread = threading.Thread(target=self.startClient)
+    #     self.clientThread.start()
+
     def start(self):
-        # self.mosquittoThread = threading.Thread(target=self.startBroker)
-        # self.mosquittoThread.start()
-        # time.sleep(0.1)
-        self.clientThread = threading.Thread(target=self.startClient)
-        self.clientThread.start()
+        try:
+            self.client = mqtt.Client()
+            self.client.on_connect = self.on_connect
+            self.client.on_message = self.on_message
+            self.client.connect(self.broker_address, self.port, 60)
+            self.client.loop_start()
+        except Exception as e:
+            print(f"Ошибка при запуске клиента: {e}")
 
     def on_connect(self, client, userdata, flags, rc):
         print("MQTT Соединение установлено с кодом результата: " + str(rc))
@@ -35,14 +45,15 @@ class servMqtt:
         else:
             print(f"Ошибка подключения: {rc}")
 
+
     def on_message(self, client, userdata, message):
         try:
-            print(f"New message")
-            print(f"from {client}")
-            print(f"on topic: {message.topic}")
-
+            # print(f"New message ")
+            # print(f"from {client}")
+            # print(f"on topic: {message.topic}")
+            #
             payload = message.payload.decode()
-            print(f"value: {payload}")
+            print(f"New message: {payload}")
 
             self.message_queue.put({
                 'topic': message.topic,
@@ -62,8 +73,11 @@ class servMqtt:
         if self.connected:
             try:
                 result = self.client.publish(topic, message, qos=qos, retain=retain)
+
+                result.wait_for_publish()
+
                 if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                    #print(f"Сообщение отправлено: топик='{topic}', сообщение='{message}'")
+                    print(f"Сообщение отправлено: топик='{topic}', сообщение='{message}'")
                     return True
                 else:
                     print(f"Ошибка отправки сообщения: {result.rc}")

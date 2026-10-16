@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 import uuid
@@ -12,7 +13,7 @@ from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 class AppKafkaHandler:
 
-    def __init__(self, db, bootstrap_servers='localhost:9092'):
+    def __init__(self, db, bootstrap_servers='127.0.0.1:9092'):
         self.db = db
         self.bootstrap_servers = bootstrap_servers
 
@@ -79,21 +80,91 @@ class AppKafkaHandler:
             else:
                 print(f"[Interface Kafka] Unknown or unhandled event: {event_type}")
 
+
     def _handle_upd_value(self, message):
         data = message.get('data', {})
         print(f"[App Kafka] Updating device table with data: {data}")
 
         try:
-            id = data.get('device_id')
-            value = data.get('value')
-            self.db.update_device_current_values(id, value)
+            device_id = data.get('device_id')
+            value = data.get('value')  # ожидаем массив, например ['0']
+
+            if device_id is None or value is None:
+                print("[App Kafka] Missing device_id or value")
+                return
+
+            # Приводим value к списку, если пришла не-массив
+            if not isinstance(value, (list, tuple)):
+                value = [value]
+
+            current_values_json = self._build_current_values_json(device_id, value)
+
+            self.db.update_device_current_values(device_id, json.dumps(current_values_json, ensure_ascii=False))
 
             if self.app_api_device_value_update_callback:
-                self.app_api_device_value_update_callback(id, value)
+                self.app_api_device_value_update_callback(device_id, current_values_json)
 
             print(f"[App Kafka] Device table updated successfully")
         except Exception as e:
             print(f"[App Kafka] Error updating device table: {e}")
+
+    def _build_current_values_json(self, device_id, values):
+        """
+        Формирует словарь вида {system_name: value, ...} на основе:
+          - device.type_id -> device_types.param_name (JSON с reading_commands)
+          - parameter_number из reading_commands сопоставляется с индексом в values
+        Если для индекса нет соответствующего parameter_number/system_name,
+        используется ключ unknown_value{N}.
+        """
+        device = self.db.get_device_by_id(device_id)
+        if not device:
+            # fallback — без маппинга
+            return {f"unknown_value{i + 1}": v for i, v in enumerate(values)}
+
+        device_type = self.db.get_device_type_by_id(device.type_id)
+        if not device_type:
+            return {f"unknown_value{i + 1}": v for i, v in enumerate(values)}
+
+        # Парсим JSON с описанием типа
+        param_config = {}
+        raw = device_type.param_name  # в БД колонка param_names
+        if raw:
+            try:
+                param_config = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError) as e:
+                print(f"[App Kafka] Failed to parse param_names for type {device_type.id}: {e}")
+                param_config = {}
+
+        # Строим маппинг parameter_number -> system_name
+        number_to_system_name = {}
+        reading_commands = param_config.get('reading_commands', []) or []
+        for cmd in reading_commands:
+            if not isinstance(cmd, dict):
+                continue
+            num = cmd.get('parameter_number')
+            sys_name = cmd.get('system_name')
+            if num is None or sys_name is None:
+                continue
+            number_to_system_name[num] = sys_name
+
+        result = {}
+        unknown_counter = 0
+
+        for index, val in enumerate(values):
+            system_name = number_to_system_name.get(index)
+            if system_name is None:
+                unknown_counter += 1
+                system_name = f"unknown_value{unknown_counter}"
+
+            # если system_name вдруг повторяется — не перезаписываем, добавляем unknown
+            # (на случай дубликатов в reading_commands)
+            if system_name in result:
+                unknown_counter += 1
+                system_name = f"unknown_value{unknown_counter}"
+
+            result[system_name] = val
+
+        return result
 
     def _handle_upd_status(self, message):
         data = message.get('data', {})

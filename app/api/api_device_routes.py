@@ -7,6 +7,45 @@ from database import Device
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_current_values(raw):
+    """
+    Приводит current_values из БД к объекту dict.
+    Поддерживает:
+      - None -> {}
+      - dict -> как есть
+      - str (JSON) -> распарсенный dict
+      - list -> конвертирует в {unknown_value1: ..., unknown_value2: ...}
+        (на случай старых данных)
+    """
+    if raw is None:
+        return {}
+
+    if isinstance(raw, dict):
+        return raw
+
+    if isinstance(raw, (list, tuple)):
+        return {f"unknown_value{i + 1}": v for i, v in enumerate(raw)}
+
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return {}
+        try:
+            parsed = json.loads(s)
+        except (TypeError, ValueError):
+            logger.warning("Failed to parse current_values JSON: %r", raw)
+            return {}
+
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, (list, tuple)):
+            return {f"unknown_value{i + 1}": v for i, v in enumerate(parsed)}
+        return {}
+
+    return {}
+
+
 def register_device_routes(app, db, kafkaHandler):
 
     @app.route('/api/devices/all', methods=['GET'])
@@ -32,12 +71,7 @@ def register_device_routes(app, db, kafkaHandler):
             if controller:
                 room = db.get_room_by_id(controller.room_id)
 
-            current_values = None
-            if d.current_values:
-                try:
-                    current_values = json.loads(d.current_values)
-                except:
-                    current_values = []
+            current_values = _parse_current_values(d.current_values)
 
             result.append({
                 'id': d.id,
@@ -69,7 +103,7 @@ def register_device_routes(app, db, kafkaHandler):
                 'port': d.port,
                 'params': d.params,
                 'is_online': d.is_online,
-                'current_values': d.current_values
+                'current_values': _parse_current_values(d.current_values)
             })
         return jsonify(result)
 
@@ -88,7 +122,7 @@ def register_device_routes(app, db, kafkaHandler):
                 'port': device.port,
                 'params': device.params,
                 'is_online': device.is_online,
-                'current_values': device.current_values
+                'current_values': _parse_current_values(device.current_values)
             })
         return jsonify(result)
 
@@ -97,13 +131,24 @@ def register_device_routes(app, db, kafkaHandler):
     def add_device():
 
         data = request.json
+
+        # current_values приходит с фронта как объект (dict) или не приходит вовсе.
+        # Если пришёл список — конвертируем в {unknown_valueN: v}.
+        raw_cv = data.get('current_values', {})
+        if isinstance(raw_cv, (list, tuple)):
+            raw_cv = {f"unknown_value{i + 1}": v for i, v in enumerate(raw_cv)}
+        elif not isinstance(raw_cv, dict):
+            raw_cv = {}
+
+        current_values_json = json.dumps(raw_cv, ensure_ascii=False)
+
         device = Device(
             name=data['name'],
             controller_id=data['controller_id'],
             type_id=data['type_id'],
             port=data.get('port', ''),
             params=data.get('params', '{}'),
-            current_values=data.get('current_values', [])
+            current_values=current_values_json
         )
         device_id = db.add_device(device)
 
@@ -135,6 +180,7 @@ def register_device_routes(app, db, kafkaHandler):
 
         command = data.get('command')
         value = data.get('value')
+        complex_data = data.get('complex_data')
 
         if not command:
             return jsonify({'error': 'command is required'}), 400
@@ -146,6 +192,41 @@ def register_device_routes(app, db, kafkaHandler):
         controller = db.get_controller_by_id(device.controller_id)
         if not controller:
             return jsonify({'success': False, 'error': 'Controller not found'}), 404
+
+        if isinstance(complex_data, list) and complex_data:
+            current_values = device.current_values or {}
+
+            if isinstance(current_values, str):
+                try:
+                    current_values = json.loads(current_values) if current_values.strip() else {}
+                except (ValueError, TypeError):
+                    current_values = {}
+            if not isinstance(current_values, dict):
+                current_values = {}
+
+            extra_parts = []
+            for item in complex_data:
+                if not isinstance(item, dict):
+                    continue
+
+                for name, meta in item.items():
+                    if name in current_values:
+                        extra_parts.append(str(current_values[name]))
+                    else:
+                        default_value = None
+                        if isinstance(meta, dict):
+                            default_value = meta.get('defaultValue')
+                        if default_value is None:
+                            extra_parts.append('None')
+                        else:
+                            extra_parts.append(str(default_value))
+
+            base = '' if value is None else str(value)
+            if base == '':
+                value = '/'.join(extra_parts)
+            else:
+                value = base + '/' + '/'.join(extra_parts)
+
 
         success, offset = kafkaHandler.send_command(controller.mac, device_id, command, value)
 
@@ -188,20 +269,22 @@ def register_device_routes(app, db, kafkaHandler):
 
     def get_device_data_for_core(device):
 
-        controller_mac = db.get_controller_by_id(device.controller_id).mac
-        device_type = db.get_device_type_by_id(device.type_id).name
+        controller = db.get_controller_by_id(device.controller_id)
+        device_type = db.get_device_type_by_id(device.type_id)
 
+        if not controller or not device_type:
+            return None
 
-
-
+        # device.current_values — уже JSON-строка (см. add_device).
+        # Для Kafka отдаём как есть — ядро само решит, что делать.
         device_data_for_core = {
             'command_type': 'ADD',
             'id': device.id,
-            'controller_mac': controller_mac,
+            'controller_mac': controller.mac,
             'port': device.port,
             'params': device.params,
             'current_values': device.current_values,
-            'type': device_type
+            'type': device_type.name
         }
         return device_data_for_core
 
@@ -211,15 +294,19 @@ def register_device_routes(app, db, kafkaHandler):
         if not device_type:
             return jsonify({'error': 'Device type not found'}), 404
 
+        # У DeviceType в БД поле param_name (см. dataclass), а не params.
+        # Раньше тут было device_type.params — это всегда None.
+        raw = getattr(device_type, 'param_name', None) or getattr(device_type, 'params', None)
+
         try:
-            if device_type.params:
-                config = json.loads(device_type.params)
+            if raw:
+                config = json.loads(raw) if isinstance(raw, str) else raw
             else:
                 config = {}
-        except:
+        except (TypeError, ValueError):
             config = {}
 
-        fields = config.get('input_fields', [])
+        fields = config.get('input_fields', []) if isinstance(config, dict) else []
 
         return jsonify({
             'type_id': type_id,

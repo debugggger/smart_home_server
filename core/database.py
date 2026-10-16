@@ -9,6 +9,8 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+
+
 @dataclass
 class Device:
     """Только данные из БД, без состояний"""

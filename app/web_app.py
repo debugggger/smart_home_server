@@ -1,4 +1,4 @@
-
+import os
 import threading
 import webbrowser
 import time
@@ -46,9 +46,13 @@ class WebInterface:
             self.kafkaHandler.app_api_device_status_update_callback = self._on_device_status_update
 
     def _create_app(self):
+        BASE_DIR = os.path.abspath(os.path.dirname(__file__))
         app = Flask(__name__)
         app.config['SECRET_KEY'] = self.secret_key
+        app.config['FIRMWARE_UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'temp', 'firmware')
         CORS(app, origins="*")
+
+        os.makedirs(app.config['FIRMWARE_UPLOAD_FOLDER'], exist_ok=True)
 
         register_base_routes(app, self.db)
         register_device_routes(app, self.db, self.kafkaHandler)

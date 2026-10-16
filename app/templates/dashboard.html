@@ -381,6 +381,53 @@
             font-size: 13px;
         }
 
+        /* ===== ВЫПАДАЮЩИЙ СПИСОК (spinT) ===== */
+        .spin-select-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .spin-select-group select {
+            padding: 6px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+            color: #1e293b;
+            cursor: pointer;
+            min-width: 140px;
+            max-width: 220px;
+        }
+
+        .spin-select-group select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ===== СТРОКОВОЕ ПОЛЕ (strT) ===== */
+        .str-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .str-input-group input {
+            padding: 6px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            min-width: 140px;
+            max-width: 220px;
+            color: #1e293b;
+            background: white;
+        }
+
+        .str-input-group input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .toggle-switch {
             position: relative;
             display: inline-block;
@@ -483,9 +530,6 @@
         </div>
     </div>
 
-    <!-- Контейнер для уведомлений создается автоматически через notifications.js -->
-    <!-- Счетчик уведомлений также создается автоматически -->
-
     <script src="/static/js/notifications.js"></script>
     <script>
         // ============ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============
@@ -496,11 +540,9 @@
         // ============ ПОДПИСКА НА ОБНОВЛЕНИЯ ============
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Подписываемся на уведомления
             if (notificationManager) {
                 notificationManager.addListener('notification', function(data) {
                     console.log('[Dashboard] Уведомление:', data);
-                    // Обновляем данные если нужно
                     if (data.type === 'error' || data.type === 'ok') {
                         if (data.data && data.data.devices) {
                             setTimeout(loadAllData, 500);
@@ -534,9 +576,49 @@
                 });
             }
 
-            // Загружаем данные
             loadAllData();
         });
+
+        // ============ УТИЛИТЫ ПАРСИНГА ============
+
+        function normalizeCurrentValues(raw) {
+            if (raw === null || raw === undefined) return {};
+            if (typeof raw === 'object') return raw;
+            if (typeof raw === 'string') {
+                const trimmed = raw.trim();
+                if (!trimmed) return {};
+                try {
+                    return JSON.parse(trimmed);
+                } catch (e) {
+                    console.warn('[Dashboard] Не удалось распарсить current_values:', raw);
+                    return {};
+                }
+            }
+            return {};
+        }
+
+        /**
+         * Приводит массив values из spinT-команды к плоскому виду:
+         *   [{ key: "0", description: "выключена" }, ...]
+         */
+        function parseSpinValues(values) {
+            if (!Array.isArray(values)) return [];
+            const result = [];
+            values.forEach(item => {
+                if (!item || typeof item !== 'object') return;
+                Object.keys(item).forEach(key => {
+                    const entry = item[key];
+                    let description = key;
+                    if (entry && typeof entry === 'object' && entry.description !== undefined) {
+                        description = entry.description;
+                    } else if (entry !== undefined && entry !== null) {
+                        description = String(entry);
+                    }
+                    result.push({ key: String(key), description: String(description) });
+                });
+            });
+            return result;
+        }
 
         // ============ ОБРАБОТКА ОБНОВЛЕНИЙ ============
 
@@ -553,7 +635,7 @@
 
         function handleDeviceValueUpdate(data) {
             const deviceId = data.device_id;
-            const currentValues = data.current_values;
+            const currentValues = normalizeCurrentValues(data.current_values);
 
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].current_values = currentValues;
@@ -568,14 +650,12 @@
             const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
             if (!card) return;
 
-            // Обновляем класс карточки
             if (isOnline) {
                 card.classList.remove('offline');
             } else {
                 card.classList.add('offline');
             }
 
-            // Обновляем badge
             const nameSpan = card.querySelector('.device-name');
             if (nameSpan) {
                 const oldBadge = nameSpan.querySelector('.offline-badge');
@@ -588,7 +668,6 @@
                 }
             }
 
-            // Обновляем статус в информации
             const infoRows = card.querySelectorAll('.info-row');
             infoRows.forEach(row => {
                 const label = row.querySelector('.info-label');
@@ -604,7 +683,6 @@
                 }
             });
 
-            // Обновляем индикатор в секции показаний
             const readingsSection = card.querySelector('.readings-section');
             if (readingsSection) {
                 let indicator = readingsSection.querySelector('.readings-offline-indicator');
@@ -620,46 +698,130 @@
                 }
             }
 
-            // Блокируем/разблокируем кнопки
-            const controls = card.querySelectorAll('.control-btn');
-            controls.forEach(btn => {
-                btn.disabled = !isOnline;
-                if (!isOnline) {
-                    btn.title = 'Устройство офлайн';
-                } else {
-                    btn.title = '';
-                }
+            const controls = card.querySelectorAll(
+                '.control-btn, .toggle-switch input, .numeric-input-group input, .spin-select-group select, .str-input-group input'
+            );
+            controls.forEach(el => {
+                el.disabled = !isOnline;
+                el.title = isOnline ? '' : 'Устройство офлайн';
             });
         }
 
-        function updateDeviceCardValues(deviceId, currentValues) {
+        function updateDeviceCardValues(deviceId, currentValuesRaw) {
             const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
             if (!card) return;
-
-            const readingsSection = card.querySelector('.readings-section');
-            if (!readingsSection) return;
 
             const device = deviceDataCache[deviceId];
             if (!device) return;
 
             const config = deviceTypesConfig[device.type_id];
-            if (!config || !config.reading_commands) return;
+            if (!config) return;
 
-            const readingItems = readingsSection.querySelectorAll('.reading-item');
-            readingItems.forEach((item, index) => {
-                if (index < config.reading_commands.length) {
-                    const reading = config.reading_commands[index];
+            const currentValues = normalizeCurrentValues(currentValuesRaw);
+
+            // --- обновление показаний (readings) ---
+            const readingsSection = card.querySelector('.readings-section');
+            if (readingsSection && config.reading_commands) {
+                const readingItems = readingsSection.querySelectorAll('.reading-item');
+                readingItems.forEach(item => {
+                    const sysName = item.dataset.systemName;
+                    if (!sysName) return;
+
+                    const reading = config.reading_commands.find(r => r.system_name === sysName);
+                    if (!reading) return;
+
                     const valueElement = item.querySelector('.reading-value');
-                    if (valueElement) {
-                        const displayValue = getDisplayValue(reading, currentValues, config.returning_values);
-                        const oldValue = valueElement.textContent;
-                        const newValue = String(displayValue);
-                        if (oldValue !== newValue) {
-                            valueElement.textContent = newValue;
-                            item.classList.add('updating');
-                            setTimeout(() => item.classList.remove('updating'), 500);
-                        }
+                    if (!valueElement) return;
+
+                    const displayValue = getDisplayValue(reading, currentValues);
+                    const newValue = String(displayValue);
+
+                    if (valueElement.textContent !== newValue) {
+                        valueElement.textContent = newValue;
+                        item.classList.add('updating');
+                        setTimeout(() => item.classList.remove('updating'), 500);
                     }
+                });
+            }
+
+            // --- синхронизация выпадающих списков (spinT) ---
+            applyCurrentSpinValues(card, config, currentValues);
+
+            // --- синхронизация строковых полей (strT) ---
+            applyCurrentStringValues(card, config, currentValues);
+        }
+
+        /**
+         * Для каждого <select data-spin-name="..."> выставляет текущее значение,
+         * если в currentValues есть соответствующее поле.
+         */
+        function applyCurrentSpinValues(card, config, currentValues) {
+            const selects = card.querySelectorAll('select.spin-select[data-spin-name]');
+            if (!selects.length) return;
+
+            selects.forEach(select => {
+                const sysName = select.dataset.spinName;
+                if (!sysName) return;
+
+                let rawValue;
+                if (Array.isArray(currentValues)) {
+                    const cmd = (config.sending_commands?.numeric || [])
+                        .concat(config.sending_commands?.binary || [])
+                        .find(c => c.system_name === sysName || c.sending_name === sysName);
+                    if (!cmd || cmd.parameter_number === undefined || cmd.parameter_number === null) return;
+                    if (cmd.parameter_number >= currentValues.length) return;
+                    rawValue = currentValues[cmd.parameter_number];
+                } else if (currentValues && typeof currentValues === 'object') {
+                    if (!(sysName in currentValues)) return;
+                    rawValue = currentValues[sysName];
+                } else {
+                    return;
+                }
+
+                if (rawValue === null || rawValue === undefined) return;
+                const key = String(rawValue);
+
+                const optionExists = Array.from(select.options).some(o => o.value === key);
+                if (optionExists && select.value !== key) {
+                    select.value = key;
+                }
+            });
+        }
+
+        /**
+         * Для каждого <input data-str-name="..."> обновляет value,
+         * если в currentValues пришло новое значение (например после опроса устройства).
+         * Не трогаем поле, если пользователь в него сейчас печатает (в фокусе).
+         */
+        function applyCurrentStringValues(card, config, currentValues) {
+            const inputs = card.querySelectorAll('input.str-input[data-str-name]');
+            if (!inputs.length) return;
+
+            inputs.forEach(input => {
+                if (document.activeElement === input) return; // не мешаем вводу
+
+                const sysName = input.dataset.strName;
+                if (!sysName) return;
+
+                let rawValue;
+                if (Array.isArray(currentValues)) {
+                    const cmd = (config.sending_commands?.numeric || [])
+                        .concat(config.sending_commands?.binary || [])
+                        .find(c => c.system_name === sysName || c.sending_name === sysName);
+                    if (!cmd || cmd.parameter_number === undefined || cmd.parameter_number === null) return;
+                    if (cmd.parameter_number >= currentValues.length) return;
+                    rawValue = currentValues[cmd.parameter_number];
+                } else if (currentValues && typeof currentValues === 'object') {
+                    if (!(sysName in currentValues)) return;
+                    rawValue = currentValues[sysName];
+                } else {
+                    return;
+                }
+
+                if (rawValue === null || rawValue === undefined) return;
+                const strValue = String(rawValue);
+                if (input.value !== strValue) {
+                    input.value = strValue;
                 }
             });
         }
@@ -682,14 +844,14 @@
                         }
                         if (!config.reading_commands) config.reading_commands = [];
                         if (!config.sending_commands) config.sending_commands = { binary: [], numeric: [] };
-                        if (!config.returning_values) config.returning_values = [];
+                        if (!config.sending_commands.binary) config.sending_commands.binary = [];
+                        if (!config.sending_commands.numeric) config.sending_commands.numeric = [];
                         deviceTypesConfig[type.id] = config;
                     } catch (e) {
                         console.error('Ошибка парсинга для типа', type.id, e);
                         deviceTypesConfig[type.id] = {
                             reading_commands: [],
-                            sending_commands: { binary: [], numeric: [] },
-                            returning_values: []
+                            sending_commands: { binary: [], numeric: [] }
                         };
                     }
                 });
@@ -705,6 +867,7 @@
                 const devices = await response.json();
 
                 devices.forEach(device => {
+                    device.current_values = normalizeCurrentValues(device.current_values);
                     deviceDataCache[device.id] = device;
                 });
 
@@ -737,28 +900,49 @@
 
         // ============ ПОЛУЧЕНИЕ ЗНАЧЕНИЙ ============
 
-        function getDisplayValue(readingCommand, currentValues, returningValues) {
-            if (!currentValues || !Array.isArray(currentValues)) return '—';
-            const paramNumber = readingCommand.parameter_number;
-            if (paramNumber === undefined || paramNumber >= currentValues.length) return '—';
-            const value = currentValues[paramNumber];
-            if (value === null || value === undefined) return '—';
-            if (returningValues && Array.isArray(returningValues) && returningValues.length > 0) {
+        function getDisplayValue(readingCommand, currentValues) {
+            if (!currentValues) return '—';
+
+            let rawValue;
+
+            if (Array.isArray(currentValues)) {
+                const paramNumber = readingCommand.parameter_number;
+                if (paramNumber === undefined || paramNumber === null) return '—';
+                if (paramNumber >= currentValues.length) return '—';
+                rawValue = currentValues[paramNumber];
+            } else if (typeof currentValues === 'object') {
+                const sysName = readingCommand.system_name;
+                if (!sysName || !(sysName in currentValues)) return '—';
+                rawValue = currentValues[sysName];
+            } else {
+                return '—';
+            }
+
+            if (rawValue === null || rawValue === undefined || rawValue === '') return '—';
+
+            const returningValues = readingCommand.returning_values;
+            if (Array.isArray(returningValues) && returningValues.length > 0) {
                 const returnMap = returningValues[0];
-                if (returnMap && returnMap[value] && returnMap[value].description) {
-                    return returnMap[value].description;
-                }
-                if (returnMap && returnMap[value]) {
-                    return returnMap[value];
+                if (returnMap && typeof returnMap === 'object') {
+                    const key = String(rawValue);
+                    if (returnMap[key] && returnMap[key].description !== undefined) {
+                        return returnMap[key].description;
+                    }
+                    if (returnMap[key] !== undefined) {
+                        return returnMap[key];
+                    }
                 }
             }
-            return value;
+
+            return rawValue;
         }
 
         // ============ ОТПРАВКА КОМАНД ============
 
         async function sendCommand(device, command, value = null) {
             try {
+                const actualDevice = deviceDataCache[device.id] || device;
+
                 const payload = {
                     command: command.sending_name || command.system_name
                 };
@@ -766,14 +950,18 @@
                     payload.value = value;
                 }
 
-                const response = await fetch(`/api/devices/${device.id}/command`, {
+                // ---- complex_data: массив строк, передаётся как есть ----
+                if (Array.isArray(command.complex_data) && command.complex_data.length > 0) {
+                    payload.complex_data = command.complex_data;
+                }
+
+                const response = await fetch(`/api/devices/${actualDevice.id}/command`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
                 if (response.ok) {
-                    // Уведомление будет показано через глобальную систему
                     if (notificationManager) {
                         notificationManager.showToast({
                             type: 'ok',
@@ -815,6 +1003,44 @@
             }
         }
 
+        /**
+         * Для spinT: читает выбранное значение (key) из <select> и шлёт его в бэкенд.
+         */
+        function sendSpinValue(device, command, selectElement) {
+            if (!selectElement) return;
+            const value = selectElement.value;
+            if (value === '' || value === null || value === undefined) {
+                if (notificationManager) {
+                    notificationManager.showToast({
+                        type: 'warning',
+                        message: '❌ Выберите значение'
+                    });
+                }
+                return;
+            }
+            sendCommand(device, command, value);
+        }
+
+        /**
+         * Для strT: берёт строку из <input type="text"> и отправляет в бэкенд как есть.
+         * Поле очищается после успешной отправки.
+         */
+        function sendStringValue(device, command, inputElement) {
+            if (!inputElement) return;
+            const value = inputElement.value;
+            if (value !== '' && value !== null && value !== undefined) {
+                sendCommand(device, command, value);
+                inputElement.value = '';
+            } else {
+                if (notificationManager) {
+                    notificationManager.showToast({
+                        type: 'warning',
+                        message: '❌ Введите значение'
+                    });
+                }
+            }
+        }
+
         function onToggleChange(checkbox, device, command) {
             sendCommand(device, command, checkbox.checked ? 1 : 0);
         }
@@ -822,7 +1048,7 @@
         // ============ ОТОБРАЖЕНИЕ ============
 
         function escapeHtml(str) {
-            if (!str) return '';
+            if (str === null || str === undefined) return '';
             return String(str)
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
@@ -861,8 +1087,7 @@
                     const isOnline = device.is_online !== undefined ? device.is_online : true;
                     const config = deviceTypesConfig[device.type_id] || {
                         reading_commands: [],
-                        sending_commands: { binary: [], numeric: [] },
-                        returning_values: []
+                        sending_commands: { binary: [], numeric: [] }
                     };
 
                     const hasReadings = config.reading_commands && config.reading_commands.length > 0;
@@ -903,10 +1128,11 @@
                                 <div class="readings-title">📊 Показания</div>
                         `;
                         for (const reading of config.reading_commands) {
-                            const displayValue = getDisplayValue(reading, device.current_values, config.returning_values);
+                            const displayValue = getDisplayValue(reading, device.current_values);
+                            const sysName = reading.system_name || '';
                             html += `
-                                <div class="reading-item">
-                                    <span class="reading-name">${escapeHtml(reading.display_name)}:</span>
+                                <div class="reading-item" data-system-name="${escapeHtml(sysName)}">
+                                    <span class="reading-name">${escapeHtml(reading.display_name || sysName)}:</span>
                                     <span class="reading-value">${escapeHtml(String(displayValue))}</span>
                                 </div>
                             `;
@@ -921,6 +1147,7 @@
                                 <div class="device-controls">
                         `;
 
+                        // ----- binary: обычные кнопки -----
                         if (hasBinary) {
                             for (const cmd of config.sending_commands.binary) {
                                 const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
@@ -933,11 +1160,13 @@
                             }
                         }
 
+                        // ----- numeric: boolT (тумблер), spinT (селект), strT (строка), число -----
                         if (hasNumeric) {
                             for (const cmd of config.sending_commands.numeric) {
-                                const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`.replace(/[^a-zA-Z0-9_]/g, '_');
                                 const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
                                 const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+                                const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`
+                                    .replace(/[^a-zA-Z0-9_]/g, '_');
 
                                 if (cmd.dataType === 'boolT') {
                                     html += `
@@ -949,7 +1178,45 @@
                                             <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
                                         </div>
                                     `;
+                                } else if (cmd.dataType === 'spinT') {
+                                    const spinOptions = parseSpinValues(cmd.values);
+                                    const sysName = cmd.system_name || cmd.sending_name || '';
+                                    let optionsHtml = '';
+                                    spinOptions.forEach(opt => {
+                                        optionsHtml += `
+                                            <option value="${escapeHtml(opt.key)}">${escapeHtml(opt.description)}</option>
+                                        `;
+                                    });
+                                    html += `
+                                        <div class="spin-select-group">
+                                            <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}:</span>
+                                            <select class="spin-select"
+                                                    data-spin-name="${escapeHtml(sysName)}"
+                                                    onchange='sendSpinValue(${deviceJson}, ${cmdJson}, this)'
+                                                    ${!isOnline ? 'disabled' : ''}>
+                                                ${optionsHtml}
+                                            </select>
+                                        </div>
+                                    `;
+                                } else if (cmd.dataType === 'strT') {
+                                    const sysName = cmd.system_name || cmd.sending_name || '';
+                                    html += `
+                                        <div class="str-input-group">
+                                            <input type="text"
+                                                   id="${inputId}"
+                                                   class="str-input"
+                                                   data-str-name="${escapeHtml(sysName)}"
+                                                   placeholder="${escapeHtml(cmd.display_name)}"
+                                                   ${!isOnline ? 'disabled' : ''}>
+                                            <button class="control-btn primary"
+                                                    onclick='sendStringValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))'
+                                                    ${!isOnline ? 'disabled' : ''}>
+                                                ${escapeHtml(cmd.display_name)}
+                                            </button>
+                                        </div>
+                                    `;
                                 } else {
+                                    // обычное числовое поле
                                     html += `
                                         <div class="numeric-input-group">
                                             <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
@@ -975,13 +1242,13 @@
 
         // ============ ИНИЦИАЛИЗАЦИЯ ============
 
-        // Делаем функции глобальными для HTML
         window.sendCommand = sendCommand;
         window.sendNumericValue = sendNumericValue;
+        window.sendSpinValue = sendSpinValue;
+        window.sendStringValue = sendStringValue;
         window.onToggleChange = onToggleChange;
         window.forceRefresh = forceRefresh;
 
-        // Автообновление через 30 секунд (только если нет соединения)
         setInterval(() => {
             const statusDot = document.getElementById('statusDot');
             if (statusDot && statusDot.classList.contains('offline')) {

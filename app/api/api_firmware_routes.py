@@ -1,6 +1,8 @@
 import os
 import tempfile
 import logging
+import uuid
+
 from flask import request, jsonify, render_template
 from werkzeug.utils import secure_filename
 from .api_utils import handle_api_errors, forward_to_core
@@ -63,8 +65,39 @@ def register_firmware_routes(app, db, kafkaHandler):
             'version_exists': version_exists
         })
 
+    # @app.route('/api/upload-firmware', methods=['POST'])
+    # @handle_api_errors
+    # def upload_firmware():
+    #     if 'firmware' not in request.files or 'version' not in request.files:
+    #         return jsonify({'error': 'Файлы не найдены'}), 400
+    #
+    #     firmware = request.files['firmware']
+    #     version = request.files['version']
+    #
+    #     temp_dir = tempfile.mkdtemp()
+    #
+    #     firmware_filename = secure_filename(firmware.filename)
+    #     version_filename = secure_filename(version.filename)
+    #
+    #     firmware_path = os.path.join(temp_dir, firmware_filename)
+    #     version_path = os.path.join(temp_dir, version_filename)
+    #
+    #     firmware.save(firmware_path)
+    #     version.save(version_path)
+    #
+    #     success, offset = kafkaHandler.load_files(firmware_path, version_path)
+    #
+    #     if success:
+    #         return jsonify({
+    #             'success': True,
+    #             'message': 'Files load request sent via Kafka',
+    #             'kafka_offset': offset
+    #         }), 200
+    #     else:
+    #         return jsonify({'error': 'Failed to send load files request'}), 500
+
+
     @app.route('/api/upload-firmware', methods=['POST'])
-    @handle_api_errors
     def upload_firmware():
         if 'firmware' not in request.files or 'version' not in request.files:
             return jsonify({'error': 'Файлы не найдены'}), 400
@@ -72,13 +105,18 @@ def register_firmware_routes(app, db, kafkaHandler):
         firmware = request.files['firmware']
         version = request.files['version']
 
-        temp_dir = tempfile.mkdtemp()
+        # Базовая папка из конфига
+        upload_root = app.config['FIRMWARE_UPLOAD_FOLDER']
+
+        # Уникальная подпапка для этой пары файлов
+        session_dir = os.path.join(upload_root, uuid.uuid4().hex)
+        os.makedirs(session_dir, exist_ok=True)
 
         firmware_filename = secure_filename(firmware.filename)
         version_filename = secure_filename(version.filename)
 
-        firmware_path = os.path.join(temp_dir, firmware_filename)
-        version_path = os.path.join(temp_dir, version_filename)
+        firmware_path = os.path.join(session_dir, firmware_filename)
+        version_path = os.path.join(session_dir, version_filename)
 
         firmware.save(firmware_path)
         version.save(version_path)
@@ -89,7 +127,9 @@ def register_firmware_routes(app, db, kafkaHandler):
             return jsonify({
                 'success': True,
                 'message': 'Files load request sent via Kafka',
-                'kafka_offset': offset
+                'kafka_offset': offset,
+                'firmware_absolute_path': os.path.abspath(firmware_path),
+                'version_absolute_path': os.path.abspath(version_path)
             }), 200
         else:
             return jsonify({'error': 'Failed to send load files request'}), 500

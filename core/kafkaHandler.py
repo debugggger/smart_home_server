@@ -1,3 +1,4 @@
+import json
 import threading
 from datetime import datetime
 import uuid
@@ -6,9 +7,24 @@ from kafka.errors import KafkaError
 from core.database import Device, Trigger, Scene
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
+
+def get_params(params):
+
+    if not params:
+        return False
+
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    return isinstance(params, dict) and len(params) > 0
+
+
 class CoreKafkaHandler:
 
-    def __init__(self, db, mqtt_client, ota_server, bootstrap_servers='localhost:9092'):
+    def __init__(self, db, mqtt_client, ota_server, bootstrap_servers='127.0.0.1:9092'):
         self.db = db
         self.mqtt_client = mqtt_client
         self.ota_server = ota_server
@@ -21,6 +37,8 @@ class CoreKafkaHandler:
         self.consumer_thread = None
 
         self.init_callback = None
+        #self.recall_connections = None
+        self.recall_triggers = None
 
     def start(self):
         self.producer = create_kafka_producer(self.bootstrap_servers)
@@ -62,6 +80,12 @@ class CoreKafkaHandler:
     def set_init_callback(self, callback):
         self.init_callback = callback
 
+    def set_recall_triggers(self, callback):
+        self.recall_triggers = callback
+    #
+    # def set_recall_connections(self, callback):
+    #     self.recall_connections = callback
+
     def _consume_messages(self):
         for message in self.consumer:
             if not self.running:
@@ -91,7 +115,6 @@ class CoreKafkaHandler:
             elif topic == TOPICS['UPD_SCENE_TABLE']:
                 self._handle_update_scene_table(event_data)
 
-
     def _handle_send_command(self, message):
         data = message.get('data', {})
         controller_mac = data.get('controller_mac')
@@ -113,8 +136,11 @@ class CoreKafkaHandler:
             req_parts.append(device.type)
             if device.port:
                 req_parts.append(device.port)
-            if device.params:
-                req_parts.append(device.params)
+            # params = get_params(device.params)
+            # if params:
+            #     for value in params.values():
+            #         if value not in (None, "", []):
+            #             req_parts.append(str(value))
             req_parts.append(command)
             if value:
                 req_parts.append(str(value))
@@ -201,8 +227,10 @@ class CoreKafkaHandler:
         print(f"[Core Kafka] Updating device table with data: {data}")
 
         try:
+            work_device = None
             if data.get('command_type') == 'DELETE':
                 id = data.get('id')
+                work_device = self.db.get_device_by_id(id)
                 self.db.delete_device(id)
             else:
                 device = Device(
@@ -213,9 +241,13 @@ class CoreKafkaHandler:
                     type=data.get('type')
                 )
                 self.db.add_device(device)
+                work_device = device
                 pass
 
             print(f"[Core Kafka] Device table updated successfully")
+
+            if self.init_callback and work_device:
+                self.init_callback([work_device.controller_mac])
         except Exception as e:
             print(f"[Core Kafka] Error updating device table: {e}")
 
@@ -223,12 +255,15 @@ class CoreKafkaHandler:
         data = message.get('data', {})
         print(f"[Core Kafka] Updating trigger table with data: {data}")
 
+        work_trig = None
         try:
             if data.get('command_type') == 'DELETE':
                 id=data.get('id')
+                work_trig = self.db.get_trigger_by_id(id)
                 self.db.delete_trigger(id)
             elif data.get('command_type') == 'UPD_STATUS':
-                self.db.update_trig_status(data.get('id'), data.get('status'))
+                work_trig = self.db.get_trigger_by_id(data.get('id'))
+                self.db.update_trig_status(data.get('id'), data.get('is_active'))
             else:
                 trig = Trigger(
                     id=data.get('id'),
@@ -237,9 +272,13 @@ class CoreKafkaHandler:
                     is_active=data.get('is_active')
                 )
                 self.db.add_trigger(trig)
+                work_trig = trig
+
+                print(f"[Core Kafka] Trigger table updated successfully")
                 pass
 
-            print(f"[Core Kafka] Trigger table updated successfully")
+            if self.recall_triggers and work_trig:
+                self.recall_triggers([work_trig.controller_mac])
         except Exception as e:
             print(f"[Core Kafka] Error updating trigger table: {e}")
 
@@ -249,21 +288,21 @@ class CoreKafkaHandler:
 
         try:
             if data.get('command_type') == 'DELETE':
-                id=data.get('scene_id')
+                id=data.get('id')
                 self.db.delete_scene(id)
             elif data.get('command_type') == 'UPD_STATUS':
-                self.db.update_scene_status(data.get('scene_id'), data.get('status'))
+                self.db.update_scene_status(data.get('id'), data.get('is_active'))
             else:
                 scene = Scene(
-                    id=data.get('scene_id'),
+                    id=data.get('id'),
                     conditions=data.get('conditions'),
                     responses=data.get('responses'),
                     is_active=data.get('is_active', True)
                 )
                 self.db.add_scene(scene)
                 pass
-
             print(f"[Core Kafka] Scene table updated successfully")
+
         except Exception as e:
             print(f"[Core Kafka] Error updating scene table: {e}")
 
@@ -306,7 +345,7 @@ class CoreKafkaHandler:
     def _kafka_handler_send_message(self, topic, key, message):
         try:
             future = self.producer.send(topic, key=key, value=message)
-            record_metadata = future.get(timeout=10)
+            record_metadata = future.get(timeout=35)
             print(f"[Interface Kafka] Sent {message['event_type']} to {topic}, offset: {record_metadata.offset}")
             return True, record_metadata.offset
         except KafkaError as e:
