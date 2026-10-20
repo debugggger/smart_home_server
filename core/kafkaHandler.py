@@ -132,25 +132,24 @@ class CoreKafkaHandler:
                 print(f"[Core Kafka] Device {device_id} not found")
                 return
 
-            req_parts = ['exec']
+            req_parts = []
+            if controller_mac != 'serv':
+                req_parts.append('exec')
+            else:
+                req_parts.append(device.controller_mac)
+                req_parts.append('changeVal')
+
             req_parts.append(device.type)
             if device.port:
                 req_parts.append(device.port)
-            # params = get_params(device.params)
-            # if params:
-            #     for value in params.values():
-            #         if value not in (None, "", []):
-            #             req_parts.append(str(value))
+
             req_parts.append(command)
             if value:
                 req_parts.append(str(value))
             req = "/".join(req_parts)
 
-            #self.db.set_device_waiting(device_id) # состояние в core
-
             self.mqtt_client.publish(controller_mac, req)
             print(f"[Core Kafka] MQTT command sent to {controller_mac}: {req}")
-
 
 
         except Exception as e:
@@ -292,6 +291,25 @@ class CoreKafkaHandler:
                 self.db.delete_scene(id)
             elif data.get('command_type') == 'UPD_STATUS':
                 self.db.update_scene_status(data.get('id'), data.get('is_active'))
+                scene = self.db.get_scene_by_id(data.get('id'))
+                resp = scene.responses
+                if isinstance(resp, str):
+                    resp = json.loads(resp)
+                has_change_cmd = any(
+                    r.get("command") in ("changeVal/plus", "changeVal/minus")
+                    for r in resp
+                )
+                if has_change_cmd:
+                    cond = scene.conditions
+                    if isinstance(cond, str):
+                        cond = json.loads(cond)
+                    for c in cond:
+                        device_id = c.get("device_id")
+                        param_num = c.get("param_num")
+                        if device_id is not None and param_num is not None:
+                            device = self.db.get_device_by_id(device_id)
+                            if self.recall_triggers:
+                                self.recall_triggers([device.controller_mac])
             else:
                 scene = Scene(
                     id=data.get('id'),

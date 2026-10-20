@@ -454,31 +454,46 @@ class Core:
                 req_parts.append(trigger.trig)
                 req_parts.append("next")
 
-        changed_pairs = set()  # используем set кортежей для быстрой проверки
-
-        scenes = self.db.get_all_scenes()
-        for scene in scenes:
-            resp = scene.responses
-            cond = scene.conditions
-
-            if isinstance(cond, str):
-                cond = json.loads(cond)
-            if isinstance(resp, str):
-                resp = json.loads(resp)
-
-            has_change_cmd = any(
-                r.get("command") in ("changeVal/plus", "changeVal/minus")
-                for r in resp
-            )
-            if not has_change_cmd:
-                continue
-
-            for c in cond:
-                if c.get("compare_type") == "changed":
-                    device_id = c.get("device_id")
-                    param_num = c.get("param_num")
-                    if device_id is not None and param_num is not None:
-                        changed_pairs.add((device_id, param_num))
+        # changed_pairs = set()  # используем set кортежей для быстрой проверки
+        #
+        # scenes = self.db.get_all_scenes()
+        # for scene in scenes:
+        #     if scene.is_active:
+        #         resp = scene.responses
+        #         cond = scene.conditions
+        #
+        #         if isinstance(cond, str):
+        #             cond = json.loads(cond)
+        #         if isinstance(resp, str):
+        #             resp = json.loads(resp)
+        #
+        #         has_change_cmd = any(
+        #             r.get("command") in ("changeVal/plus", "changeVal/minus")
+        #             for r in resp
+        #         )
+        #         if not has_change_cmd:
+        #             continue
+        #
+        #         for c in cond:
+        #             device_id = c.get("device_id")
+        #             param_num = c.get("param_num")
+        #             if device_id is not None and param_num is not None:
+        #                 device = self.db.get_device_by_id(device_id)
+        #                 if device is not None and device.controller_mac == mac:
+        #                     changed_pairs.add((device_id, param_num))
+        #                     req_parts.append(device.type)
+        #                     req_parts.append(device.port)
+        #                     req_parts.append(c.get("value_type"))
+        #                     req_parts.append(str(c.get("param_num")))
+        #                     if c.get("compare_type"):
+        #                         req_parts.append(c.get("compare_type"))
+        #                     if c.get("value"):
+        #                         req_parts.append(c.get("value"))
+        #
+        #                     req_parts.append(f"do/serv")
+        #                     req_parts.append(resp[0].get("command"))
+        #                     req_parts.append(resp[0].get("value"))
+        #                     req_parts.append(f"{param_num}/next")
 
         devices = self.db.get_devices_by_controller(mac)
 
@@ -486,8 +501,8 @@ class Core:
             dev_state = self._get_device_state(device.id)
 
             for param_num in range(dev_state.params_count):
-                if (device.id, param_num) in changed_pairs:
-                    continue
+                # if (device.id, param_num) in changed_pairs:
+                #     continue
 
                 req_parts.append(device.type)
                 req_parts.append(device.port)
@@ -557,11 +572,19 @@ class Core:
 
         for device in devices:
             if device.type == parts[2] and device.port == parts[3]:
-                if len(parts) > 5 and parts[5] == 'addOne':
-                    param_idx = int(parts[4]) if parts[4].isdigit() else 0
-                    if isinstance(device.current_values, list) and param_idx < len(device.current_values):
+                if len(parts) > 6:
+                    param_idx = int(parts[4])
+                    while param_idx >= len(device.current_values):
+                        device.current_values.append("0")
+                    if isinstance(device.current_values, list):
                         try:
-                            device.current_values[param_idx] = str(int(device.current_values[param_idx]) + 1)
+                            if parts[5] == 'plus':
+                                device.current_values[param_idx] = str(int(device.current_values[param_idx]) + int(parts[6]))
+                            elif parts[5] == 'minus':
+                                device.current_values[param_idx] = str(
+                                    int(device.current_values[param_idx]) - int(parts[5]))
+                            elif parts[5] == 'setStartValue':
+                                device.current_values[param_idx] = str(int(parts[6]))
                         except:
                             device.current_values[param_idx] = "0"
                     else:
@@ -913,7 +936,17 @@ class Core:
                 command = response.get('command')
                 value = response.get('value')
 
-                if mac and command:
+                if mac == "serv":
+                    device = self.db.get_device_by_id(response.get('target_device_id'))
+                    device_param = response.get('param_num')
+                    if device and device_param:
+                        command = command.split("/")[-1]
+                        self.parse_changes([device.controller_mac, 'changeVal', device.type, device.port, device_param, command, value])
+
+
+
+
+                elif mac and command:
                     cmd_parts = ["exec", device_type, device_port, command]
                     if value:
                         cmd_parts.append(value)

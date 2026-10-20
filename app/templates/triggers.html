@@ -147,13 +147,8 @@
         const SERVER_ID = -1;
         const SERVER_NAME = 'Сервер';
 
-        function showLoading() {
-            document.getElementById('loadingOverlay').classList.add('active');
-        }
-
-        function hideLoading() {
-            document.getElementById('loadingOverlay').classList.remove('active');
-        }
+        function showLoading() { document.getElementById('loadingOverlay').classList.add('active'); }
+        function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
 
         async function loadDeviceTypes() {
             try {
@@ -185,9 +180,7 @@
             try {
                 const response = await fetch('/api/controllers');
                 controllersList = await response.json();
-            } catch (error) {
-                console.error('Error loading controllers:', error);
-            }
+            } catch (error) { console.error('Error loading controllers:', error); }
         }
 
         async function loadAllDevices() {
@@ -199,14 +192,10 @@
                 allDevices.forEach(device => {
                     allDevicesMap[device.id] = device;
                     const controllerId = device.controller_id;
-                    if (!devicesCache[controllerId]) {
-                        devicesCache[controllerId] = [];
-                    }
+                    if (!devicesCache[controllerId]) devicesCache[controllerId] = [];
                     devicesCache[controllerId].push(device);
                 });
-            } catch (error) {
-                console.error('Error loading all devices:', error);
-            }
+            } catch (error) { console.error('Error loading all devices:', error); }
         }
 
         async function loadDevicesForController(controllerId) {
@@ -217,9 +206,7 @@
                 const response = await fetch(`/api/devices/by-controller/${controllerId}`);
                 const devices = await response.json();
                 devicesCache[controllerId] = devices;
-                devices.forEach(device => {
-                    allDevicesMap[device.id] = device;
-                });
+                devices.forEach(device => { allDevicesMap[device.id] = device; });
                 return devices;
             } catch (error) { console.error('Error loading devices:', error); return []; }
         }
@@ -230,7 +217,16 @@
                 return;
             }
             if (parseInt(controllerId) === SERVER_ID) {
-                selectElement.innerHTML = '<option value="">Сервер не имеет устройств</option>';
+                // Для сервера — все устройства
+                selectElement.innerHTML = '<option value="">Выберите устройство</option>';
+                Object.values(allDevicesMap).forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    const typeDisplayName = getTypeDisplayName(device.type_id);
+                    option.textContent = `${device.name} (${typeDisplayName}, порт: ${device.port || '—'})`;
+                    if (selectedDeviceId && device.id == selectedDeviceId) option.selected = true;
+                    selectElement.appendChild(option);
+                });
                 return;
             }
             const devices = await loadDevicesForController(controllerId);
@@ -269,9 +265,7 @@
             return { binary: [], numeric: [] };
         }
 
-        function findDeviceInCache(deviceId) {
-            return allDevicesMap[deviceId] || null;
-        }
+        function findDeviceInCache(deviceId) { return allDevicesMap[deviceId] || null; }
 
         function createParamFields(container, params) {
             container.innerHTML = '';
@@ -509,61 +503,55 @@
         }
 
         function onConditionReadingCommandChange(selectElement) {
-    const block = selectElement.closest('.condition-block');
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
-    const valueSelect = block.querySelector('.condition-value-select');
-    const valueField = block.querySelector('.condition-value-field');
-    const compareSelect = block.querySelector('.condition-compare');
-    const dataType = selectedOption?.dataset?.dataType || 'intT';
-    const paramNumber = selectedOption?.dataset?.parameterNumber || 0;
-
-    // Сохраняем paramNumber в dataset select
-    selectElement.dataset.parameterNumber = paramNumber;
-
-    valueSelect.innerHTML = '<option value="">Выберите значение</option>';
-    if (valueField) valueField.classList.remove('show');
-    compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
-
-    if (dataType === 'boolT') {
-        const option = document.createElement('option');
-        option.value = 'equal';
-        option.textContent = 'равно';
-        compareSelect.appendChild(option);
-    } else {
-        ['equal', 'more', 'less'].forEach(opt => {
-            const option = document.createElement('option');
-            option.value = opt;
-            option.textContent = opt === 'equal' ? 'равно' : opt === 'more' ? 'больше' : 'меньше';
-            compareSelect.appendChild(option);
-        });
-    }
-
-    const returningValuesData = selectedOption?.dataset?.returningValues;
-    if (returningValuesData) {
-        try {
-            const returningValues = JSON.parse(returningValuesData);
-            if (returningValues && returningValues.length > 0 && returningValues[0]) {
-                valueSelect.innerHTML = '<option value="">Выберите значение</option>';
-                const returnMap = returningValues[0];
-                Object.keys(returnMap).forEach(key => {
+            const block = selectElement.closest('.condition-block');
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const valueSelect = block.querySelector('.condition-value-select');
+            const valueField = block.querySelector('.condition-value-field');
+            const compareSelect = block.querySelector('.condition-compare');
+            const dataType = selectedOption?.dataset?.dataType || 'intT';
+            const paramNumber = selectedOption?.dataset?.parameterNumber || 0;
+            selectElement.dataset.parameterNumber = paramNumber;
+            valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+            if (valueField) valueField.classList.remove('show');
+            compareSelect.innerHTML = '<option value="">Выберите сравнение</option>';
+            if (dataType === 'boolT') {
+                const option = document.createElement('option');
+                option.value = 'equal';
+                option.textContent = 'равно';
+                compareSelect.appendChild(option);
+            } else {
+                ['equal', 'more', 'less'].forEach(opt => {
                     const option = document.createElement('option');
-                    option.value = key;
-                    const desc = returnMap[key];
-                    option.textContent = desc.description || desc || key;
-                    valueSelect.appendChild(option);
+                    option.value = opt;
+                    option.textContent = opt === 'equal' ? 'равно' : opt === 'more' ? 'больше' : 'меньше';
+                    compareSelect.appendChild(option);
                 });
-                return;
             }
-        } catch (e) { console.error('Error parsing returning_values:', e); }
-    }
-
-    if (valueField) {
-        valueField.classList.add('show');
-        const input = block.querySelector('.condition-value-input');
-        if (input) input.value = '';
-    }
-    valueSelect.innerHTML = '<option value="">Введите число в поле ниже</option>';
-}
+            const returningValuesData = selectedOption?.dataset?.returningValues;
+            if (returningValuesData) {
+                try {
+                    const returningValues = JSON.parse(returningValuesData);
+                    if (returningValues && returningValues.length > 0 && returningValues[0]) {
+                        valueSelect.innerHTML = '<option value="">Выберите значение</option>';
+                        const returnMap = returningValues[0];
+                        Object.keys(returnMap).forEach(key => {
+                            const option = document.createElement('option');
+                            option.value = key;
+                            const desc = returnMap[key];
+                            option.textContent = desc.description || desc || key;
+                            valueSelect.appendChild(option);
+                        });
+                        return;
+                    }
+                } catch (e) { console.error('Error parsing returning_values:', e); }
+            }
+            if (valueField) {
+                valueField.classList.add('show');
+                const input = block.querySelector('.condition-value-input');
+                if (input) input.value = '';
+            }
+            valueSelect.innerHTML = '<option value="">Введите число в поле ниже</option>';
+        }
 
         function onTriggerTypeChange(radioElement) {
             const block = radioElement.closest('.condition-block');
@@ -675,30 +663,41 @@
 
             if (actionData) {
                 const controllerId = actionData.dst_controller_id || actionData.controller_id;
-                if (controllerId) {
+                if (controllerId !== undefined && controllerId !== null) {
                     controllerSelect.value = controllerId;
                     await onActionControllerChange(controllerSelect);
                 }
                 const deviceSelect = div.querySelector('.action-device');
                 if (actionData.device_id) {
+                    await new Promise(r => setTimeout(r, 50));
                     deviceSelect.value = actionData.device_id;
                     await onActionDeviceChange(deviceSelect);
                 }
+                // Для серверных ответов — установить param_num
+                if (parseInt(controllerId) === SERVER_ID && actionData.param_num !== undefined) {
+                    await new Promise(r => setTimeout(r, 50));
+                    const paramSelect = div.querySelector('.action-target-param');
+                    if (paramSelect) {
+                        paramSelect.value = actionData.param_num;
+                        onServerTargetParamChange(paramSelect);
+                    }
+                }
                 const commandSelect = div.querySelector('.action-command');
                 if (actionData.command) {
+                    await new Promise(r => setTimeout(r, 50));
                     commandSelect.value = actionData.command;
                     onActionCommandChange(commandSelect);
                 }
                 if (actionData.value) {
                     const valueInput = div.querySelector('.action-value-input');
-                    valueInput.value = actionData.value;
+                    const valueField = div.querySelector('.value-field');
+                    if (valueField) valueField.classList.add('show');
+                    if (valueInput) valueInput.value = actionData.value;
                 }
                 if (actionData.params) {
                     const paramsContainer = div.querySelector(`#action-params-${index}`);
                     const params = Object.keys(actionData.params).map(key => ({
-                        name: key,
-                        display_name: key,
-                        value: actionData.params[key]
+                        name: key, display_name: key, value: actionData.params[key]
                     }));
                     createParamFields(paramsContainer, params);
                 }
@@ -717,6 +716,8 @@
             if (valueField) valueField.classList.remove('show');
             const paramsField = block.querySelector('.param-field');
             if (paramsField) { paramsField.innerHTML = ''; paramsField.classList.remove('show'); }
+            const existingParamSelect = block.querySelector('.action-target-param-group');
+            if (existingParamSelect) existingParamSelect.remove();
 
             if (!controllerId) {
                 deviceSelect.innerHTML = '<option value="">Сначала выберите контроллер</option>';
@@ -724,29 +725,8 @@
                 return;
             }
 
-            if (parseInt(controllerId) === SERVER_ID) {
-                // Для сервера скрываем выбор устройства и сразу заполняем команды
-                if (deviceGroup) deviceGroup.style.display = 'none';
-                deviceSelect.innerHTML = '<option value="">Сервер не имеет устройств</option>';
-
-                commandSelect.innerHTML = '<option value="">Выберите команду</option>';
-                serverCommands.forEach(cmd => {
-                    const option = document.createElement('option');
-                    option.value = cmd.sending_name || cmd.system_name;
-                    option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    if (cmd.dataType) option.dataset.dataType = cmd.dataType;
-                    if (cmd.params) option.dataset.params = JSON.stringify(cmd.params);
-                    commandSelect.appendChild(option);
-                });
-                if (serverCommands.length === 1) {
-                    commandSelect.value = serverCommands[0].sending_name || serverCommands[0].system_name;
-                    onActionCommandChange(commandSelect);
-                }
-                return;
-            }
-
-            // Для обычного контроллера показываем выбор устройства
             if (deviceGroup) deviceGroup.style.display = 'block';
+
             await populateDeviceSelect(deviceSelect, controllerId);
         }
 
@@ -755,42 +735,62 @@
             const deviceId = selectElement.value;
             const commandSelect = block.querySelector('.action-command');
             const paramsContainer = block.querySelector('.param-field');
-            paramsContainer.innerHTML = '';
-            paramsContainer.classList.remove('show');
-
             const controllerSelect = block.querySelector('.action-controller');
             const controllerId = controllerSelect.value;
 
-            if (parseInt(controllerId) === SERVER_ID) {
-                commandSelect.innerHTML = '<option value="">Выберите команду</option>';
-                serverCommands.forEach(cmd => {
-                    const option = document.createElement('option');
-                    option.value = cmd.sending_name || cmd.system_name;
-                    option.textContent = cmd.display_name || cmd.sending_name || cmd.system_name;
-                    if (cmd.dataType) option.dataset.dataType = cmd.dataType;
-                    if (cmd.params) option.dataset.params = JSON.stringify(cmd.params);
-                    commandSelect.appendChild(option);
-                });
-                return;
-            }
+            paramsContainer.innerHTML = '';
+            paramsContainer.classList.remove('show');
+            commandSelect.innerHTML = '<option value="">Выберите команду</option>';
 
-            if (!deviceId) {
-                commandSelect.innerHTML = '<option value="">Выберите устройство</option>';
-                return;
-            }
+            const existingParamGroup = block.querySelector('.action-target-param-group');
+            if (existingParamGroup) existingParamGroup.remove();
+
+            if (!deviceId) return;
 
             const device = findDeviceInCache(parseInt(deviceId));
-            if (!device) { commandSelect.innerHTML = '<option value="">Тип устройства не найден</option>'; return; }
+            if (!device) { commandSelect.innerHTML = '<option value="">Устройство не найдено</option>'; return; }
+
+            if (parseInt(controllerId) === SERVER_ID) {
+                // === СЕРВЕР ===
+                const readingCommands = getDeviceReadingCommands(parseInt(deviceId));
+                const paramGroup = document.createElement('div');
+                paramGroup.className = 'form-group action-target-param-group';
+                paramGroup.innerHTML = `
+                    <label>Параметр (param_num)</label>
+                    <select class="action-target-param" onchange="onServerTargetParamChange(this)">
+                        <option value="">Выберите параметр</option>
+                    </select>
+                `;
+                const paramSelect = paramGroup.querySelector('.action-target-param');
+                readingCommands.forEach(rc => {
+                    const opt = document.createElement('option');
+                    opt.value = rc.parameter_number !== undefined ? rc.parameter_number : 0;
+                    opt.textContent = `${rc.display_name} (param_num: ${opt.value})`;
+                    opt.dataset.paramNumber = opt.value;
+                    paramSelect.appendChild(opt);
+                });
+                const deviceGroup = block.querySelector('.action-device-group');
+                if (deviceGroup && deviceGroup.parentNode) {
+                    deviceGroup.parentNode.insertBefore(paramGroup, deviceGroup.nextSibling);
+                }
+                if (readingCommands.length === 1) {
+                    paramSelect.selectedIndex = 1;
+                    onServerTargetParamChange(paramSelect);
+                }
+                return;
+            }
+
+            // === ОБЫЧНОЕ УСТРОЙСТВО ===
             const sendingCommands = getDeviceSendingCommands(parseInt(deviceId));
             const allCommands = [];
             if (sendingCommands.binary) {
                 sendingCommands.binary.forEach(cmd => {
-                    allCommands.push({ value: cmd.sending_name, label: cmd.display_name || cmd.sending_name, data: cmd, type: 'binary' });
+                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: cmd.display_name || cmd.sending_name, data: cmd, type: 'binary' });
                 });
             }
             if (sendingCommands.numeric) {
                 sendingCommands.numeric.forEach(cmd => {
-                    allCommands.push({ value: cmd.sending_name, label: cmd.display_name || cmd.sending_name, data: cmd, type: 'numeric' });
+                    allCommands.push({ value: cmd.sending_name || cmd.system_name, label: cmd.display_name || cmd.sending_name, data: cmd, type: 'numeric' });
                 });
             }
             commandSelect.innerHTML = '<option value="">Выберите команду</option>';
@@ -802,6 +802,53 @@
                 option.dataset.cmdType = cmd.type;
                 commandSelect.appendChild(option);
             });
+        }
+
+        function onServerTargetParamChange(selectElement) {
+            const block = selectElement.closest('.action-block');
+            const deviceSelect = block.querySelector('.action-device');
+            const commandSelect = block.querySelector('.action-command');
+            const deviceId = deviceSelect.value;
+            const paramValue = selectElement.value;
+
+            commandSelect.innerHTML = '<option value="">Выберите команду</option>';
+            const valueField = block.querySelector('.value-field');
+            if (valueField) valueField.classList.remove('show');
+            const paramsField = block.querySelector('.param-field');
+            if (paramsField) { paramsField.innerHTML = ''; paramsField.classList.remove('show'); }
+
+            if (!deviceId || paramValue === '') return;
+
+            const sendingCommands = getDeviceSendingCommands(parseInt(deviceId));
+            const allCommands = [];
+            if (sendingCommands.binary) {
+                sendingCommands.binary.forEach(cmd => {
+                    if (cmd.is_on_serv === true) {
+                        allCommands.push({ value: cmd.sending_name || cmd.system_name, label: cmd.display_name || cmd.sending_name, data: cmd, type: 'binary' });
+                    }
+                });
+            }
+            if (sendingCommands.numeric) {
+                sendingCommands.numeric.forEach(cmd => {
+                    if (cmd.is_on_serv === true) {
+                        allCommands.push({ value: cmd.sending_name || cmd.system_name, label: cmd.display_name || cmd.sending_name, data: cmd, type: 'numeric' });
+                    }
+                });
+            }
+
+            allCommands.forEach(cmd => {
+                const option = document.createElement('option');
+                option.value = cmd.value;
+                option.textContent = cmd.label;
+                option.dataset.cmdData = JSON.stringify(cmd.data || {});
+                option.dataset.cmdType = cmd.type;
+                commandSelect.appendChild(option);
+            });
+
+            if (allCommands.length === 1) {
+                commandSelect.value = allCommands[0].value;
+                onActionCommandChange(commandSelect);
+            }
         }
 
         function onActionCommandChange(selectElement) {
@@ -855,232 +902,201 @@
             const srcControllers = new Set();
             const dstControllers = new Set();
             conditions.forEach(cond => {
-                const block = document.querySelector(`.condition-block[data-index="${cond.blockIndex}"]`);
-                if (block) {
-                    const controllerSelect = block.querySelector('.condition-controller');
-                    if (controllerSelect && controllerSelect.value) srcControllers.add(parseInt(controllerSelect.value));
-                }
+                if (cond.src_controller_id !== undefined) srcControllers.add(parseInt(cond.src_controller_id));
             });
             responses.forEach(resp => {
-                const block = document.querySelector(`.action-block[data-index="${resp.blockIndex}"]`);
-                if (block) {
-                    const controllerSelect = block.querySelector('.action-controller');
-                    if (controllerSelect && controllerSelect.value) dstControllers.add(parseInt(controllerSelect.value));
-                }
+                if (resp.dst_controller_id !== undefined) dstControllers.add(parseInt(resp.dst_controller_id));
             });
             const hasServer = dstControllers.has(SERVER_ID);
             const isComplex = srcControllers.size > 1 || dstControllers.size > 1 || hasServer;
             return isComplex ? 'complex' : 'simple';
         }
 
-
         async function saveScene() {
-    const name = document.getElementById('sceneName').value;
-    if (!name) {
-        if (window.notificationManager) {
-            window.notificationManager.showToast({ type: 'warning', message: '❌ Введите название сценария' });
-        } else { showToast('❌ Введите название сценария'); }
-        return;
-    }
-
-    // === СБОР УСЛОВИЙ ===
-const conditions = [];
-document.querySelectorAll('.condition-block').forEach((block, index) => {
-    const controllerSelect = block.querySelector('.condition-controller');
-    const deviceSelect = block.querySelector('.condition-device');
-    const readingSelect = block.querySelector('.condition-reading-command');
-    const readingCommand = readingSelect.value;
-    const compareSelect = block.querySelector('.condition-compare');
-    const compare = compareSelect ? compareSelect.value : 'equal';
-    const valueSelect = block.querySelector('.condition-value-select');
-    const valueInput = block.querySelector('.condition-value-input');
-    const timeInput = block.querySelector('.condition-time-input');
-    const radio = block.querySelector('input[name^="trigger-type-"]:checked');
-    const triggerType = radio ? radio.value : 'value';
-
-    let value = '';
-    let time = 0;
-    if (triggerType === 'time') {
-        time = timeInput ? parseFloat(timeInput.value) || 0 : 0;
-    } else if (triggerType === 'changed') {
-        value = 'onChange';
-    } else {
-        value = (valueSelect && valueSelect.value) || (valueInput ? valueInput.value : '');
-    }
-
-    const deviceId = deviceSelect.value;
-    const srcControllerId = controllerSelect.value;
-
-    if (deviceId && readingCommand && srcControllerId) {
-        const device = findDeviceInCache(parseInt(deviceId));
-        const readingCommands = getDeviceReadingCommands(parseInt(deviceId));
-        const readingCmd = readingCommands.find(c => c.display_name === readingCommand);
-
-        if (device && readingCmd) {
-            // Приоритет: dataset.parameterNumber (если был установлен), иначе из JSON
-            const paramNumber = readingSelect.dataset.parameterNumber !== undefined
-                ? parseInt(readingSelect.dataset.parameterNumber)
-                : (readingCmd.parameter_number !== undefined ? parseInt(readingCmd.parameter_number) : 0);
-
-            const conditionString = buildConditionString(
-                device.type_name || 'unknown',
-                device.port || '0',
-                paramNumber,
-                triggerType,
-                compare,
-                value,
-                time
-            );
-
-            conditions.push({
-                device_id: parseInt(deviceId),
-                src_controller_id: parseInt(srcControllerId),
-                command: readingCommand,
-                param_num: paramNumber,           // ← ДОБАВЛЕНО: param_num
-                value: value,
-                time: time,
-                trigger_type: triggerType,
-                compare: compare,
-                condition_string: conditionString,
-                blockIndex: index
-            });
-        }
-    }
-});
-
-    // === СБОР ДЕЙСТВИЙ ===
-    const responses = [];
-    const actionBlocks = document.querySelectorAll('.action-block');
-
-    for (let index = 0; index < actionBlocks.length; index++) {
-        const block = actionBlocks[index];
-        const controllerSelect = block.querySelector('.action-controller');
-        const deviceSelect = block.querySelector('.action-device');
-        const commandSelect = block.querySelector('.action-command');
-        const command = commandSelect.value;
-        const valueInput = block.querySelector('.action-value-input');
-        let value = valueInput ? valueInput.value : '';
-        const dstControllerId = controllerSelect.value;
-        const paramsContainer = block.querySelector('.param-field');
-        const params = {};
-        if (paramsContainer) {
-            paramsContainer.querySelectorAll('.param-input').forEach(input => {
-                const name = input.dataset.paramName || 'value';
-                params[name] = input.value || '';
-            });
-        }
-        if (Object.keys(params).length > 0) { value = JSON.stringify(params); }
-
-        const isServer = parseInt(dstControllerId) === SERVER_ID;
-
-        if (isServer) {
-            // === СЕРВЕРНАЯ КОМАНДА ===
-            // Устройство не выбирается, deviceId не требуется
-            if (command && dstControllerId) {
-                const selectedOption = commandSelect.options[commandSelect.selectedIndex];
-                // Берём device_type и device_port из данных команды, если они есть в JSON
-                let cmdData = {};
-                if (selectedOption?.dataset?.params) {
-                    try {
-                        cmdData = JSON.parse(selectedOption.dataset.params);
-                    } catch (e) { console.error('Error parsing cmd params:', e); }
-                }
-                if (selectedOption?.dataset?.cmdData) {
-                    try {
-                        const fullData = JSON.parse(selectedOption.dataset.cmdData);
-                        cmdData = { ...cmdData, ...fullData };
-                    } catch (e) { console.error('Error parsing cmdData:', e); }
-                }
-
-                const deviceType = cmdData.device_type || selectedOption?.dataset?.deviceType || 'serv';
-                const devicePort = cmdData.device_port || selectedOption?.dataset?.devicePort || '0';
-
-                let actionStr = `${deviceType}/${devicePort}/${command}`;
-                if (value) actionStr += `/${value}`;
-
-                responses.push({
-                    device_id: null,
-                    dst_controller_id: parseInt(dstControllerId),
-                    command: command,           // ← РЕАЛЬНОЕ имя команды из JSON, НЕ 'serv'
-                    value: value,
-                    action_string: actionStr,
-                    device_type: deviceType,
-                    device_port: devicePort,
-                    blockIndex: index
-                });
+            const name = document.getElementById('sceneName').value;
+            if (!name) {
+                if (window.notificationManager) window.notificationManager.showToast({ type: 'warning', message: '❌ Введите название сценария' });
+                else showToast('❌ Введите название сценария');
+                return;
             }
-        } else {
-            // === ОБЫЧНАЯ КОМАНДА ДЛЯ УСТРОЙСТВА ===
-            const deviceId = deviceSelect.value;
-            if (deviceId && command && dstControllerId) {
-                const device = await findDeviceInCache(parseInt(deviceId));
-                if (device) {
-                    let actionStr = `${device.type_name}/${device.port}/${command}`;
-                    if (value) actionStr += `/${value}`;
-                    responses.push({
-                        device_id: parseInt(deviceId),
-                        dst_controller_id: parseInt(dstControllerId),
-                        command: command,
-                        value: value,
-                        action_string: actionStr,
-                        blockIndex: index
+
+            const conditions = [];
+            document.querySelectorAll('.condition-block').forEach((block, index) => {
+                const controllerSelect = block.querySelector('.condition-controller');
+                const deviceSelect = block.querySelector('.condition-device');
+                const readingSelect = block.querySelector('.condition-reading-command');
+                const readingCommand = readingSelect.value;
+                const compareSelect = block.querySelector('.condition-compare');
+                const compare = compareSelect ? compareSelect.value : 'equal';
+                const valueSelect = block.querySelector('.condition-value-select');
+                const valueInput = block.querySelector('.condition-value-input');
+                const timeInput = block.querySelector('.condition-time-input');
+                const radio = block.querySelector('input[name^="trigger-type-"]:checked');
+                const triggerType = radio ? radio.value : 'value';
+
+                let value = '';
+                let time = 0;
+                if (triggerType === 'time') {
+                    time = timeInput ? parseFloat(timeInput.value) || 0 : 0;
+                } else if (triggerType === 'changed') {
+                    value = 'onChange';
+                } else {
+                    value = (valueSelect && valueSelect.value) || (valueInput ? valueInput.value : '');
+                }
+
+                const deviceId = deviceSelect.value;
+                const srcControllerId = controllerSelect.value;
+
+                if (deviceId && readingCommand && srcControllerId) {
+                    const device = findDeviceInCache(parseInt(deviceId));
+                    const readingCommands = getDeviceReadingCommands(parseInt(deviceId));
+                    const readingCmd = readingCommands.find(c => c.display_name === readingCommand);
+
+                    if (device && readingCmd) {
+                        const paramNumber = readingSelect.dataset.parameterNumber !== undefined
+                            ? parseInt(readingSelect.dataset.parameterNumber)
+                            : (readingCmd.parameter_number !== undefined ? parseInt(readingCmd.parameter_number) : 0);
+
+                        const conditionString = buildConditionString(
+                            device.type_name || 'unknown',
+                            device.port || '0',
+                            paramNumber,
+                            triggerType,
+                            compare,
+                            value,
+                            time
+                        );
+
+                        conditions.push({
+                            device_id: parseInt(deviceId),
+                            src_controller_id: parseInt(srcControllerId),
+                            command: readingCommand,
+                            param_num: paramNumber,
+                            value: value,
+                            time: time,
+                            trigger_type: triggerType,
+                            compare: compare,
+                            condition_string: conditionString,
+                            blockIndex: index
+                        });
+                    }
+                }
+            });
+
+            const responses = [];
+            const actionBlocks = document.querySelectorAll('.action-block');
+
+            for (let index = 0; index < actionBlocks.length; index++) {
+                const block = actionBlocks[index];
+                const controllerSelect = block.querySelector('.action-controller');
+                const deviceSelect = block.querySelector('.action-device');
+                const commandSelect = block.querySelector('.action-command');
+                const command = commandSelect.value;
+                const valueInput = block.querySelector('.action-value-input');
+                let value = valueInput ? valueInput.value : '';
+                const dstControllerId = controllerSelect.value;
+                const paramsContainer = block.querySelector('.param-field');
+                const params = {};
+                if (paramsContainer) {
+                    paramsContainer.querySelectorAll('.param-input').forEach(input => {
+                        const name = input.dataset.paramName || 'value';
+                        params[name] = input.value || '';
                     });
                 }
+                if (Object.keys(params).length > 0) { value = JSON.stringify(params); }
+
+                const isServer = parseInt(dstControllerId) === SERVER_ID;
+
+                if (isServer) {
+                    const deviceId = deviceSelect.value;
+                    const paramSelect = block.querySelector('.action-target-param');
+                    const paramNum = paramSelect ? paramSelect.value : '';
+
+                    if (deviceId && command && paramNum !== '' && dstControllerId) {
+                        const device = findDeviceInCache(parseInt(deviceId));
+                        if (device) {
+                            const typeName = device.type_name || 'unknown';
+                            const port = device.port || '0';
+
+                            let actionStr = `serv/${typeName}/${port}/${paramNum}/${command}`;
+                            if (value) actionStr += `/${value}`;
+
+                            responses.push({
+                                device_id: parseInt(deviceId),
+                                dst_controller_id: parseInt(dstControllerId),
+                                command: command,
+                                value: value,
+                                param_num: parseInt(paramNum),
+                                device_type: typeName,
+                                device_port: port,
+                                action_string: actionStr,
+                                blockIndex: index
+                            });
+                        }
+                    }
+                } else {
+                    const deviceId = deviceSelect.value;
+                    if (deviceId && command && dstControllerId) {
+                        const device = await findDeviceInCache(parseInt(deviceId));
+                        if (device) {
+                            let actionStr = `${device.type_name}/${device.port}/${command}`;
+                            if (value) actionStr += `/${value}`;
+                            responses.push({
+                                device_id: parseInt(deviceId),
+                                dst_controller_id: parseInt(dstControllerId),
+                                command: command,
+                                value: value,
+                                action_string: actionStr,
+                                blockIndex: index
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (conditions.length === 0) {
+                if (window.notificationManager) window.notificationManager.showToast({ type: 'warning', message: '❌ Добавьте хотя бы одно условие' });
+                else showToast('❌ Добавьте хотя бы одно условие');
+                return;
+            }
+            if (responses.length === 0) {
+                if (window.notificationManager) window.notificationManager.showToast({ type: 'warning', message: '❌ Добавьте хотя бы одно действие' });
+                else showToast('❌ Добавьте хотя бы одно действие');
+                return;
+            }
+
+            const sceneType = determineSceneType(conditions, responses);
+            const data = { name, conditions, responses, type: sceneType };
+            if (sceneType === 'simple') {
+                data.src_controller_id = conditions[0]?.src_controller_id;
+                data.dst_controller_id = responses[0]?.dst_controller_id;
+            }
+
+            const url = currentEditId ? `/api/triggers/${currentEditId}` : '/api/triggers';
+            const method = currentEditId ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    if (window.notificationManager) window.notificationManager.showToast({ type: 'ok', message: currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан' });
+                    else showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан');
+                    closeModal();
+                    loadScenes();
+                } else {
+                    const error = await response.json();
+                    if (window.notificationManager) window.notificationManager.showToast({ type: 'error', message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}` });
+                    else showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                }
+            } catch (error) {
+                console.error('Error saving scene:', error);
+                if (window.notificationManager) window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка сохранения сценария' });
+                else showToast('❌ Ошибка сохранения сценария');
             }
         }
-    }
-
-    // === ВАЛИДАЦИЯ ===
-    if (conditions.length === 0) {
-        if (window.notificationManager) {
-            window.notificationManager.showToast({ type: 'warning', message: '❌ Добавьте хотя бы одно условие' });
-        } else { showToast('❌ Добавьте хотя бы одно условие'); }
-        return;
-    }
-    if (responses.length === 0) {
-        if (window.notificationManager) {
-            window.notificationManager.showToast({ type: 'warning', message: '❌ Добавьте хотя бы одно действие' });
-        } else { showToast('❌ Добавьте хотя бы одно действие'); }
-        return;
-    }
-
-    // === ФОРМИРОВАНИЕ ЗАПРОСА ===
-    const sceneType = determineSceneType(conditions, responses);
-    const data = { name, conditions, responses, type: sceneType };
-    if (sceneType === 'simple') {
-        data.src_controller_id = conditions[0]?.src_controller_id;
-        data.dst_controller_id = responses[0]?.dst_controller_id;
-    }
-
-    const url = currentEditId ? `/api/triggers/${currentEditId}` : '/api/triggers';
-    const method = currentEditId ? 'PUT' : 'POST';
-
-    try {
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (response.ok) {
-            if (window.notificationManager) {
-                window.notificationManager.showToast({ type: 'ok', message: currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан' });
-            } else { showToast(currentEditId ? '✅ Сценарий обновлен' : '✅ Сценарий создан'); }
-            closeModal();
-            loadScenes();
-        } else {
-            const error = await response.json();
-            if (window.notificationManager) {
-                window.notificationManager.showToast({ type: 'error', message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}` });
-            } else { showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`); }
-        }
-    } catch (error) {
-        console.error('Error saving scene:', error);
-        if (window.notificationManager) {
-            window.notificationManager.showToast({ type: 'error', message: '❌ Ошибка сохранения сценария' });
-        } else { showToast('❌ Ошибка сохранения сценария'); }
-    }
-}
-
 
         async function loadScenes() {
             try {
@@ -1093,354 +1109,232 @@ document.querySelectorAll('.condition-block').forEach((block, index) => {
             }
         }
 
-         function getCompareLabel(compare) {
-        const map = {
-            'equal': 'равно',
-            'more': 'больше',
-            'less': 'меньше',
-            'changed': 'изменение',
-            'onChange': 'изменение',
-            'time': 'время'
-        };
-        return map[compare] || compare || '—';
-    }
+        function getCompareLabel(compare) {
+            const map = { 'equal': 'равно', 'more': 'больше', 'less': 'меньше', 'changed': 'изменение', 'onChange': 'изменение', 'time': 'время' };
+            return map[compare] || compare || '—';
+        }
 
-    function getTypeDisplayNameById(typeId) {
-        // typeId может быть именем типа ('serv', 'relay' и т.п.) или числовым ID
-        if (typeof typeId === 'string' && isNaN(typeId)) {
-            // Уже имя типа — пробуем найти отображаемое имя
-            for (const id in deviceTypesMap) {
-                if (deviceTypesMap[id].name === typeId) {
-                    return getTypeDisplayName(parseInt(id));
+        function getTypeDisplayNameById(typeId) {
+            if (typeof typeId === 'string' && isNaN(typeId)) {
+                for (const id in deviceTypesMap) {
+                    if (deviceTypesMap[id].name === typeId) return getTypeDisplayName(parseInt(id));
+                }
+                return typeId;
+            }
+            return getTypeDisplayName(typeId);
+        }
+
+        function getCommandDisplayName(deviceId, commandSystemName, deviceTypeName = null) {
+            if (!commandSystemName) return commandSystemName;
+            let device = deviceId ? findDeviceInCache(parseInt(deviceId)) : null;
+            let type = null;
+            if (device) type = findTypeById(device.type_id);
+            else if (deviceTypeName) {
+                for (const id in deviceTypesMap) {
+                    if (deviceTypesMap[id].name === deviceTypeName) { type = deviceTypesMap[id]; break; }
                 }
             }
-            return typeId;
-        }
-        return getTypeDisplayName(typeId);
-    }
-
-      // Находит sending_command по system_name/sending_name и возвращает его display_name
-function getCommandDisplayName(deviceId, commandSystemName, deviceTypeName = null) {
-    if (!commandSystemName) return commandSystemName;
-
-    // Пытаемся найти устройство
-    let device = null;
-    if (deviceId) {
-        device = findDeviceInCache(parseInt(deviceId));
-    }
-
-    // Если устройство не найдено, но есть имя типа — ищем тип по имени
-    let type = null;
-    if (device) {
-        type = findTypeById(device.type_id);
-    } else if (deviceTypeName) {
-        for (const id in deviceTypesMap) {
-            if (deviceTypesMap[id].name === deviceTypeName) {
-                type = deviceTypesMap[id];
-                break;
+            if (!type) return commandSystemName;
+            let paramNames = type.param_names || type.param_name;
+            if (typeof paramNames === 'string') {
+                try { paramNames = JSON.parse(paramNames); } catch (e) { return commandSystemName; }
             }
-        }
-    }
-
-    if (!type) return commandSystemName;
-
-    // Достаём param_names (может быть строкой или объектом)
-    let paramNames = type.param_names || type.param_name;
-    if (typeof paramNames === 'string') {
-        try { paramNames = JSON.parse(paramNames); } catch (e) { return commandSystemName; }
-    }
-    if (!paramNames) return commandSystemName;
-
-    // Ищем в sending_commands
-    const sending = paramNames.sending_commands || {};
-    const allCommands = [
-        ...(sending.binary || []),
-        ...(sending.numeric || [])
-    ];
-
-    for (const cmd of allCommands) {
-        // Сравниваем по sending_name, system_name или display_name
-        if (cmd.sending_name === commandSystemName
-            || cmd.system_name === commandSystemName
-            || cmd.display_name === commandSystemName) {
-            return cmd.display_name || cmd.sending_name || cmd.system_name || commandSystemName;
-        }
-    }
-
-    return commandSystemName;
-}
-
-// Находит описание значения в returning_values команды чтения
-// Для условий: command = display_name команды чтения, value = ключ возврата
-function getConditionValueDisplayName(deviceId, commandName, valueKey, deviceTypeName = null) {
-    if (valueKey === undefined || valueKey === null || valueKey === '') return valueKey;
-    if (valueKey === 'onChange') return 'изменение';
-
-    let device = null;
-    if (deviceId) {
-        device = findDeviceInCache(parseInt(deviceId));
-    }
-
-    let type = null;
-    if (device) {
-        type = findTypeById(device.type_id);
-    } else if (deviceTypeName) {
-        for (const id in deviceTypesMap) {
-            if (deviceTypesMap[id].name === deviceTypeName) {
-                type = deviceTypesMap[id];
-                break;
-            }
-        }
-    }
-
-    if (!type) return valueKey;
-
-    let paramNames = type.param_names || type.param_name;
-    if (typeof paramNames === 'string') {
-        try { paramNames = JSON.parse(paramNames); } catch (e) { return valueKey; }
-    }
-    if (!paramNames) return valueKey;
-
-    const reading = paramNames.reading_commands || [];
-    for (const rc of reading) {
-        if (rc.display_name === commandName) {
-            const returningValues = rc.returning_values;
-            if (returningValues && returningValues.length > 0 && returningValues[0]) {
-                const map = returningValues[0];
-                if (map[valueKey]) {
-                    const desc = map[valueKey];
-                    return desc.description || desc || valueKey;
+            if (!paramNames) return commandSystemName;
+            const sending = paramNames.sending_commands || {};
+            const allCommands = [...(sending.binary || []), ...(sending.numeric || [])];
+            for (const cmd of allCommands) {
+                if (cmd.sending_name === commandSystemName || cmd.system_name === commandSystemName || cmd.display_name === commandSystemName) {
+                    return cmd.display_name || cmd.sending_name || cmd.system_name || commandSystemName;
                 }
             }
+            return commandSystemName;
         }
-    }
 
-    return valueKey;
-}
-
-// Находит описание значения для действия (sending_command)
-// Например setHigh → включить
-function getActionValueDisplayName(deviceId, commandSystemName, value, deviceTypeName = null) {
-    if (value === undefined || value === null || value === '') return value;
-
-    let device = null;
-    if (deviceId) {
-        device = findDeviceInCache(parseInt(deviceId));
-    }
-
-    let type = null;
-    if (device) {
-        type = findTypeById(device.type_id);
-    } else if (deviceTypeName) {
-        for (const id in deviceTypesMap) {
-            if (deviceTypesMap[id].name === deviceTypeName) {
-                type = deviceTypesMap[id];
-                break;
-            }
-        }
-    }
-
-    if (!type) return value;
-
-    let paramNames = type.param_names || type.param_name;
-    if (typeof paramNames === 'string') {
-        try { paramNames = JSON.parse(paramNames); } catch (e) { return value; }
-    }
-    if (!paramNames) return value;
-
-    const sending = paramNames.sending_commands || {};
-    const allCommands = [
-        ...(sending.binary || []),
-        ...(sending.numeric || [])
-    ];
-
-    for (const cmd of allCommands) {
-        if (cmd.sending_name === commandSystemName
-            || cmd.system_name === commandSystemName
-            || cmd.display_name === commandSystemName) {
-
-            // Если есть returning_values — ищем описание значения
-            if (cmd.returning_values && cmd.returning_values.length > 0 && cmd.returning_values[0]) {
-                const map = cmd.returning_values[0];
-                if (map[value]) {
-                    const desc = map[value];
-                    return desc.description || desc || value;
+        function getConditionValueDisplayName(deviceId, commandName, valueKey, deviceTypeName = null) {
+            if (valueKey === undefined || valueKey === null || valueKey === '') return valueKey;
+            if (valueKey === 'onChange') return 'изменение';
+            let device = deviceId ? findDeviceInCache(parseInt(deviceId)) : null;
+            let type = null;
+            if (device) type = findTypeById(device.type_id);
+            else if (deviceTypeName) {
+                for (const id in deviceTypesMap) {
+                    if (deviceTypesMap[id].name === deviceTypeName) { type = deviceTypesMap[id]; break; }
                 }
             }
-
-            // Если есть options
-            if (cmd.options) {
-                for (const opt of cmd.options) {
-                    if (String(opt.value) === String(value)) {
-                        return opt.label || opt.value;
+            if (!type) return valueKey;
+            let paramNames = type.param_names || type.param_name;
+            if (typeof paramNames === 'string') {
+                try { paramNames = JSON.parse(paramNames); } catch (e) { return valueKey; }
+            }
+            if (!paramNames) return valueKey;
+            const reading = paramNames.reading_commands || [];
+            for (const rc of reading) {
+                if (rc.display_name === commandName) {
+                    const returningValues = rc.returning_values;
+                    if (returningValues && returningValues.length > 0 && returningValues[0]) {
+                        const map = returningValues[0];
+                        if (map[valueKey]) {
+                            const desc = map[valueKey];
+                            return desc.description || desc || valueKey;
+                        }
                     }
                 }
             }
+            return valueKey;
+        }
 
+        function getActionValueDisplayName(deviceId, commandSystemName, value, deviceTypeName = null) {
+            if (value === undefined || value === null || value === '') return value;
+            let device = deviceId ? findDeviceInCache(parseInt(deviceId)) : null;
+            let type = null;
+            if (device) type = findTypeById(device.type_id);
+            else if (deviceTypeName) {
+                for (const id in deviceTypesMap) {
+                    if (deviceTypesMap[id].name === deviceTypeName) { type = deviceTypesMap[id]; break; }
+                }
+            }
+            if (!type) return value;
+            let paramNames = type.param_names || type.param_name;
+            if (typeof paramNames === 'string') {
+                try { paramNames = JSON.parse(paramNames); } catch (e) { return value; }
+            }
+            if (!paramNames) return value;
+            const sending = paramNames.sending_commands || {};
+            const allCommands = [...(sending.binary || []), ...(sending.numeric || [])];
+            for (const cmd of allCommands) {
+                if (cmd.sending_name === commandSystemName || cmd.system_name === commandSystemName || cmd.display_name === commandSystemName) {
+                    if (cmd.returning_values && cmd.returning_values.length > 0 && cmd.returning_values[0]) {
+                        const map = cmd.returning_values[0];
+                        if (map[value]) { const desc = map[value]; return desc.description || desc || value; }
+                    }
+                    if (cmd.options) {
+                        for (const opt of cmd.options) {
+                            if (String(opt.value) === String(value)) return opt.label || opt.value;
+                        }
+                    }
+                    return value;
+                }
+            }
             return value;
         }
-    }
 
-    return value;
-}
+        function renderScenesTable(scenes) {
+            const tbody = document.getElementById('scenesTableBody');
+            tbody.innerHTML = '';
+            if (scenes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;">📭 Нет созданных сценариев</td></tr>';
+                return;
+            }
+            scenes.forEach(scene => {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = scene.id;
+                row.insertCell(1).innerText = scene.name;
 
-function renderScenesTable(scenes) {
-    const tbody = document.getElementById('scenesTableBody');
-    tbody.innerHTML = '';
-    if (scenes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;">📭 Нет созданных сценариев</td></tr>';
-        return;
-    }
-    scenes.forEach(scene => {
-        const row = tbody.insertRow();
-        row.insertCell(0).innerText = scene.id;
-        row.insertCell(1).innerText = scene.name;
-
-        // ============ УСЛОВИЯ ============
-        const conditionsCell = row.insertCell(2);
-        if (scene.conditions && scene.conditions.length > 0) {
-            const subTable = document.createElement('table');
-            subTable.className = 'sub-table';
-            scene.conditions.forEach(cond => {
-                const subRow = subTable.insertRow();
-                const cell = subRow.insertCell(0);
-
-                const deviceName = cond.device_name || 'Неизвестно';
-                let compareText = '';
-                let valueText = '';
-
-                if (cond.trigger_type === 'time') {
-                    compareText = 'время';
-                    valueText = cond.time ? `${cond.time} мс` : '';
-                } else if (cond.trigger_type === 'changed') {
-                    compareText = 'изменение';
-                    valueText = '';
-                } else {
-                    const compareMap = {
-                        'equal': 'равно',
-                        'more': 'больше',
-                        'less': 'меньше'
-                    };
-                    compareText = compareMap[cond.compare] || cond.compare || '';
-
-                    // Преобразуем значение в человекочитаемое
-                    if (cond.value !== undefined && cond.value !== null && cond.value !== '') {
-                        valueText = getConditionValueDisplayName(
-                            cond.device_id,
-                            cond.command,        // display_name команды чтения
-                            cond.value,
-                            cond.device_type
-                        );
-                    }
-                }
-
-                let detailHtml = `<span class="device-name">${deviceName}</span>`;
-                if (compareText) {
-                    detailHtml += ` <span class="command-info">→ ${compareText}`;
-                    if (valueText) {
-                        detailHtml += `: ${valueText}`;
-                    }
-                    detailHtml += `</span>`;
-                }
-
-                cell.innerHTML = `<div class="cond-detail">${detailHtml}</div>`;
-            });
-            conditionsCell.appendChild(subTable);
-        } else {
-            conditionsCell.innerText = '—';
-        }
-
-        // ============ ДЕЙСТВИЯ ============
-        const actionsCell = row.insertCell(3);
-        if (scene.responses && scene.responses.length > 0) {
-            const subTable = document.createElement('table');
-            subTable.className = 'sub-table';
-            scene.responses.forEach(resp => {
-                const subRow = subTable.insertRow();
-                const cell = subRow.insertCell(0);
-
-                const deviceName = resp.device_name || 'Неизвестно';
-
-                // Преобразуем системное имя команды в человекочитаемое
-                const commandDisplay = getCommandDisplayName(
-                    resp.device_id,
-                    resp.command,
-                    resp.device_type
-                );
-
-                // Преобразуем значение, если есть
-                let valueText = '';
-                if (resp.value !== undefined && resp.value !== null && resp.value !== '') {
-                    try {
-                        const parsed = JSON.parse(resp.value);
-                        if (typeof parsed === 'object' && parsed !== null) {
-                            // JSON с параметрами
-                            valueText = Object.entries(parsed)
-                                .map(([k, v]) => `${k}=${v}`)
-                                .join(', ');
+                // УСЛОВИЯ
+                const conditionsCell = row.insertCell(2);
+                if (scene.conditions && scene.conditions.length > 0) {
+                    const subTable = document.createElement('table');
+                    subTable.className = 'sub-table';
+                    scene.conditions.forEach(cond => {
+                        const subRow = subTable.insertRow();
+                        const cell = subRow.insertCell(0);
+                        const deviceName = cond.device_name || 'Неизвестно';
+                        let compareText = '';
+                        let valueText = '';
+                        if (cond.trigger_type === 'time') {
+                            compareText = 'время';
+                            valueText = cond.time ? `${cond.time} мс` : '';
+                        } else if (cond.trigger_type === 'changed') {
+                            compareText = 'изменение';
                         } else {
-                            valueText = getActionValueDisplayName(
-                                resp.device_id,
-                                resp.command,
-                                resp.value,
-                                resp.device_type
-                            );
+                            compareText = getCompareLabel(cond.compare);
+                            if (cond.value !== undefined && cond.value !== null && cond.value !== '') {
+                                valueText = getConditionValueDisplayName(cond.device_id, cond.command, cond.value, cond.device_type);
+                            }
                         }
-                    } catch (e) {
-                        valueText = getActionValueDisplayName(
-                            resp.device_id,
-                            resp.command,
-                            resp.value,
-                            resp.device_type
-                        );
-                    }
-                }
+                        let detailHtml = `<span class="device-name">${deviceName}</span>`;
+                        if (compareText) {
+                            detailHtml += ` <span class="command-info">→ ${compareText}`;
+                            if (valueText) detailHtml += `: ${valueText}`;
+                            detailHtml += `</span>`;
+                        }
+                        cell.innerHTML = `<div class="cond-detail">${detailHtml}</div>`;
+                    });
+                    conditionsCell.appendChild(subTable);
+                } else { conditionsCell.innerText = '—'; }
 
-                let detailHtml = `<span class="device-name">${deviceName}</span>`;
-                if (commandDisplay) {
-                    detailHtml += ` <span class="command-info">→ ${commandDisplay}`;
-                    if (valueText) {
-                        detailHtml += `: ${valueText}`;
-                    }
-                    detailHtml += `</span>`;
-                }
+                // ДЕЙСТВИЯ
+                const actionsCell = row.insertCell(3);
+                if (scene.responses && scene.responses.length > 0) {
+                    const subTable = document.createElement('table');
+                    subTable.className = 'sub-table';
+                    scene.responses.forEach(resp => {
+                        const subRow = subTable.insertRow();
+                        const cell = subRow.insertCell(0);
+                        const deviceName = resp.device_name || 'Неизвестно';
+                        const isServerResp = resp.is_server === true || resp.device_type === 'serv';
 
-                cell.innerHTML = `<div class="resp-detail">${detailHtml}</div>`;
+                        const commandDisplay = getCommandDisplayName(resp.device_id, resp.command, resp.device_type);
+
+                        let valueText = '';
+                        if (resp.value !== undefined && resp.value !== null && resp.value !== '') {
+                            try {
+                                const parsed = JSON.parse(resp.value);
+                                if (typeof parsed === 'object' && parsed !== null) {
+                                    valueText = Object.entries(parsed).map(([k, v]) => `${k}=${v}`).join(', ');
+                                } else {
+                                    valueText = getActionValueDisplayName(resp.device_id, resp.command, resp.value, resp.device_type);
+                                }
+                            } catch (e) {
+                                valueText = getActionValueDisplayName(resp.device_id, resp.command, resp.value, resp.device_type);
+                            }
+                        }
+
+                        let detailHtml = '';
+                        if (isServerResp) {
+                            detailHtml = `<span class="device-name">🖥️ Сервер → ${deviceName}</span>`;
+                        } else {
+                            detailHtml = `<span class="device-name">${deviceName}</span>`;
+                        }
+                        if (commandDisplay) {
+                            detailHtml += ` <span class="command-info">→ ${commandDisplay}`;
+                            if (valueText) detailHtml += `: ${valueText}`;
+                            detailHtml += `</span>`;
+                        }
+                        cell.innerHTML = `<div class="resp-detail">${detailHtml}</div>`;
+                    });
+                    actionsCell.appendChild(subTable);
+                } else { actionsCell.innerText = '—'; }
+
+                // СТАТУС
+                const statusCell = row.insertCell(4);
+                const isActive = scene.is_active !== undefined ? scene.is_active : true;
+                statusCell.innerHTML = `
+                    <div class="status-label">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleScene(${scene.id}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="${isActive ? 'active' : 'inactive'}">${isActive ? 'Включен' : 'Выключен'}</span>
+                    </div>
+                `;
+
+                // УПРАВЛЕНИЕ
+                const actionCell = row.insertCell(5);
+                const editBtn = document.createElement('button');
+                editBtn.innerText = '✏️';
+                editBtn.className = 'edit-scene-btn';
+                editBtn.title = 'Редактировать';
+                editBtn.onclick = () => editScene(scene.id);
+                actionCell.appendChild(editBtn);
+                const delBtn = document.createElement('button');
+                delBtn.innerText = '🗑️';
+                delBtn.className = 'delete-scene-btn';
+                delBtn.title = 'Удалить';
+                delBtn.onclick = () => deleteScene(scene.id);
+                actionCell.appendChild(delBtn);
             });
-            actionsCell.appendChild(subTable);
-        } else {
-            actionsCell.innerText = '—';
         }
-
-        // ============ СТАТУС ============
-        const statusCell = row.insertCell(4);
-        const isActive = scene.is_active !== undefined ? scene.is_active : true;
-        statusCell.innerHTML = `
-            <div class="status-label">
-                <label class="toggle-switch">
-                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleScene(${scene.id}, this.checked)">
-                    <span class="toggle-slider"></span>
-                </label>
-                <span class="${isActive ? 'active' : 'inactive'}">${isActive ? 'Включен' : 'Выключен'}</span>
-            </div>
-        `;
-
-        // ============ УПРАВЛЕНИЕ ============
-        const actionCell = row.insertCell(5);
-        const editBtn = document.createElement('button');
-        editBtn.innerText = '✏️';
-        editBtn.className = 'edit-scene-btn';
-        editBtn.title = 'Редактировать';
-        editBtn.onclick = () => editScene(scene.id);
-        actionCell.appendChild(editBtn);
-        const delBtn = document.createElement('button');
-        delBtn.innerText = '🗑️';
-        delBtn.className = 'delete-scene-btn';
-        delBtn.title = 'Удалить';
-        delBtn.onclick = () => deleteScene(scene.id);
-        actionCell.appendChild(delBtn);
-    });
-}
 
         async function toggleScene(sceneId, isActive) {
             try {
@@ -1452,9 +1346,7 @@ function renderScenesTable(scenes) {
                 if (response.ok) {
                     showToast(`✅ Сценарий ${isActive ? 'активирован' : 'деактивирован'}`);
                     loadScenes();
-                } else {
-                    throw new Error('Failed to toggle scene');
-                }
+                } else throw new Error('Failed to toggle scene');
             } catch (error) {
                 console.error('Error toggling scene:', error);
                 showToast('❌ Ошибка изменения статуса');
@@ -1466,9 +1358,7 @@ function renderScenesTable(scenes) {
             try {
                 showLoading();
                 const response = await fetch(`/api/triggers/${sceneId}`);
-                if (!response.ok) {
-                    throw new Error('Failed to load scene data');
-                }
+                if (!response.ok) throw new Error('Failed to load scene data');
                 const scene = await response.json();
 
                 currentEditId = scene.id;
@@ -1477,18 +1367,12 @@ function renderScenesTable(scenes) {
 
                 document.getElementById('conditionsContainer').innerHTML = '';
                 for (const cond of scene.conditions) {
-                    await addCondition({
-                        ...cond,
-                        src_controller_id: cond.src_controller_id || cond.controller_id
-                    });
+                    await addCondition({ ...cond, src_controller_id: cond.src_controller_id || cond.controller_id });
                 }
 
                 document.getElementById('actionsContainer').innerHTML = '';
                 for (const resp of scene.responses) {
-                    await addAction({
-                        ...resp,
-                        dst_controller_id: resp.dst_controller_id || resp.controller_id
-                    });
+                    await addAction({ ...resp, dst_controller_id: resp.dst_controller_id || resp.controller_id });
                 }
 
                 document.getElementById('sceneModal').classList.add('active');
@@ -1504,12 +1388,8 @@ function renderScenesTable(scenes) {
             if (!confirm('Удалить сценарий? Это действие нельзя отменить.')) return;
             try {
                 const response = await fetch(`/api/triggers/${sceneId}`, { method: 'DELETE' });
-                if (response.ok) {
-                    showToast('✅ Сценарий удален');
-                    loadScenes();
-                } else {
-                    showToast('❌ Ошибка удаления');
-                }
+                if (response.ok) { showToast('✅ Сценарий удален'); loadScenes(); }
+                else showToast('❌ Ошибка удаления');
             } catch (error) {
                 console.error('Error deleting scene:', error);
                 showToast('❌ Ошибка удаления сценария');
@@ -1532,18 +1412,14 @@ function renderScenesTable(scenes) {
         }
 
         function showToast(msg) {
-            if (window.notificationManager) {
-                window.notificationManager.showToast({ type: 'info', message: msg });
-            } else {
+            if (window.notificationManager) window.notificationManager.showToast({ type: 'info', message: msg });
+            else {
                 const toast = document.createElement('div');
                 toast.className = 'toast-msg';
                 toast.textContent = msg;
                 document.body.appendChild(toast);
                 setTimeout(() => toast.classList.add('show'), 10);
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 300);
-                }, 3000);
+                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
             }
         }
 
@@ -1559,18 +1435,10 @@ function renderScenesTable(scenes) {
                     }
                 });
             }
-
             showLoading();
-            Promise.all([
-                loadDeviceTypes(),
-                loadAllDevices(),
-                loadControllers(),
-                loadServerCommands()
-            ]).then(() => {
-                loadScenes();
-            }).finally(() => {
-                hideLoading();
-            });
+            Promise.all([loadDeviceTypes(), loadAllDevices(), loadControllers(), loadServerCommands()])
+                .then(() => loadScenes())
+                .finally(() => hideLoading());
         });
     </script>
 </body>

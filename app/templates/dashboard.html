@@ -72,6 +72,8 @@
             transform: translateY(-2px);
         }
 
+
+
         .connection-status {
             display: flex;
             align-items: center;
@@ -373,12 +375,14 @@
             align-items: center;
         }
 
-        .numeric-input-group input {
-            width: 80px;
+       .numeric-input-group input {
+            flex: 1;
+            min-width: 120px;
             padding: 6px 8px;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
             font-size: 13px;
+            box-sizing: border-box;
         }
 
         /* ===== ВЫПАДАЮЩИЙ СПИСОК (spinT) ===== */
@@ -413,15 +417,16 @@
         }
 
         .str-input-group input {
-            padding: 6px 10px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            font-size: 13px;
-            min-width: 140px;
-            max-width: 220px;
-            color: #1e293b;
-            background: white;
-        }
+        flex: 1;
+        min-width: 140px;
+        padding: 6px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #1e293b;
+        background: white;
+        box-sizing: border-box;
+    }
 
         .str-input-group input:disabled {
             opacity: 0.5;
@@ -1045,6 +1050,28 @@
             sendCommand(device, command, checkbox.checked ? 1 : 0);
         }
 
+        // ============ ОБРАБОТЧИКИ ENTER ============
+
+        /**
+         * Обработчик Enter для числового поля.
+         * Отправляет значение и очищает поле (как делала кнопка).
+         */
+        function handleNumericEnter(event, device, command, inputElement) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            sendNumericValue(device, command, inputElement);
+        }
+
+        /**
+         * Обработчик Enter для строкового поля (strT).
+         * Отправляет значение и очищает поле (как делала кнопка).
+         */
+        function handleStringEnter(event, device, command, inputElement) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            sendStringValue(device, command, inputElement);
+        }
+
         // ============ ОТОБРАЖЕНИЕ ============
 
         function escapeHtml(str) {
@@ -1207,22 +1234,20 @@
                                                    class="str-input"
                                                    data-str-name="${escapeHtml(sysName)}"
                                                    placeholder="${escapeHtml(cmd.display_name)}"
+                                                   onkeydown='handleStringEnter(event, ${deviceJson}, ${cmdJson}, this)'
                                                    ${!isOnline ? 'disabled' : ''}>
-                                            <button class="control-btn primary"
-                                                    onclick='sendStringValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))'
-                                                    ${!isOnline ? 'disabled' : ''}>
-                                                ${escapeHtml(cmd.display_name)}
-                                            </button>
                                         </div>
                                     `;
                                 } else {
-                                    // обычное числовое поле
+                                    // обычное числовое поле — отправка по Enter, без кнопки
                                     html += `
                                         <div class="numeric-input-group">
-                                            <input type="number" id="${inputId}" placeholder="${escapeHtml(cmd.display_name)}" step="any" ${!isOnline ? 'disabled' : ''}>
-                                            <button class="control-btn primary" onclick='sendNumericValue(${deviceJson}, ${cmdJson}, document.getElementById("${inputId}"))' ${!isOnline ? 'disabled' : ''}>
-                                                ${escapeHtml(cmd.display_name)}
-                                            </button>
+                                            <input type="number"
+                                                   id="${inputId}"
+                                                   placeholder="${escapeHtml(cmd.display_name)}"
+                                                   step="any"
+                                                   onkeydown='handleNumericEnter(event, ${deviceJson}, ${cmdJson}, this)'
+                                                   ${!isOnline ? 'disabled' : ''}>
                                         </div>
                                     `;
                                 }
@@ -1247,6 +1272,8 @@
         window.sendSpinValue = sendSpinValue;
         window.sendStringValue = sendStringValue;
         window.onToggleChange = onToggleChange;
+        window.handleNumericEnter = handleNumericEnter;
+        window.handleStringEnter = handleStringEnter;
         window.forceRefresh = forceRefresh;
 
         setInterval(() => {

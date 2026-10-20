@@ -132,8 +132,6 @@ def register_device_routes(app, db, kafkaHandler):
 
         data = request.json
 
-        # current_values приходит с фронта как объект (dict) или не приходит вовсе.
-        # Если пришёл список — конвертируем в {unknown_valueN: v}.
         raw_cv = data.get('current_values', {})
         if isinstance(raw_cv, (list, tuple)):
             raw_cv = {f"unknown_value{i + 1}": v for i, v in enumerate(raw_cv)}
@@ -141,6 +139,7 @@ def register_device_routes(app, db, kafkaHandler):
             raw_cv = {}
 
         current_values_json = json.dumps(raw_cv, ensure_ascii=False)
+
 
         device = Device(
             name=data['name'],
@@ -226,9 +225,24 @@ def register_device_routes(app, db, kafkaHandler):
                 value = '/'.join(extra_parts)
             else:
                 value = base + '/' + '/'.join(extra_parts)
+        device = db.get_device_by_id(device_id)
+        device_type = db.get_device_type_by_id(device.type_id)
+
+        sending_mac = controller.mac
+
+        commands = device_type.param_name.get('sending_commands').get('binary')
+        commands += (device_type.param_name.get('sending_commands').get('numeric'))
+
+        for com in commands:
+            if com.get('sending_name') == command:
+                if com.get('is_on_serv') == True:
+                    sending_mac = "serv"
+                    if com.get('parameter_number'):
+                        command = str(com.get('parameter_number')) + "/" + command
+                break
 
 
-        success, offset = kafkaHandler.send_command(controller.mac, device_id, command, value)
+        success, offset = kafkaHandler.send_command(sending_mac, device_id, command, value)
 
         if success:
             return jsonify({
@@ -239,26 +253,26 @@ def register_device_routes(app, db, kafkaHandler):
         else:
             return jsonify({'error': 'Failed to send command'}), 500
 
-    @app.route('/api/device-commands/<int:device_type_id>', methods=['GET'])
-    @handle_api_errors
-    def get_device_commands(device_type_id):
-        device_type = db.get_device_type_by_id(device_type_id)
-        if not device_type:
-            return jsonify([])
-
-        commands = {
-            'binOut': ['toggle', 'setHigh', 'setLow'],
-            'led': ['turnOn', 'turnOff', 'setColor', 'setBrightness', 'setSpeed', 'setEffect',
-                    'setSoundReaction', 'setSoundWeights', 'setSoundBeatColor', 'setMicro'],
-            'stepper': ['setSpeed', 'setDir', 'startInf', 'startSteps', 'stop']
-        }
-
-        type_name = device_type.name.lower()
-        for key in commands:
-            if key.lower() in type_name:
-                return jsonify(commands[key])
-
-        return jsonify([])
+    # @app.route('/api/device-commands/<int:device_type_id>', methods=['GET'])
+    # @handle_api_errors
+    # def get_device_commands(device_type_id):
+    #     device_type = db.get_device_type_by_id(device_type_id)
+    #     if not device_type:
+    #         return jsonify([])
+    #
+    #     commands = {
+    #         'binOut': ['toggle', 'setHigh', 'setLow'],
+    #         'led': ['turnOn', 'turnOff', 'setColor', 'setBrightness', 'setSpeed', 'setEffect',
+    #                 'setSoundReaction', 'setSoundWeights', 'setSoundBeatColor', 'setMicro'],
+    #         'stepper': ['setSpeed', 'setDir', 'startInf', 'startSteps', 'stop']
+    #     }
+    #
+    #     type_name = device_type.name.lower()
+    #     for key in commands:
+    #         if key.lower() in type_name:
+    #             return jsonify(commands[key])
+    #
+    #     return jsonify([])
 
     @app.route('/api/device-types', methods=['GET'])
     @handle_api_errors
@@ -272,8 +286,15 @@ def register_device_routes(app, db, kafkaHandler):
         controller = db.get_controller_by_id(device.controller_id)
         device_type = db.get_device_type_by_id(device.type_id)
 
+        send_type_name = device_type.name
+
+
         if not controller or not device_type:
             return None
+
+
+        if device_type.param_name.get("parent_name") is not None:
+            send_type_name = device_type.param_name.get("parent_name")
 
         # device.current_values — уже JSON-строка (см. add_device).
         # Для Kafka отдаём как есть — ядро само решит, что делать.
@@ -284,7 +305,7 @@ def register_device_routes(app, db, kafkaHandler):
             'port': device.port,
             'params': device.params,
             'current_values': device.current_values,
-            'type': device_type.name
+            'type': send_type_name
         }
         return device_data_for_core
 
@@ -294,8 +315,6 @@ def register_device_routes(app, db, kafkaHandler):
         if not device_type:
             return jsonify({'error': 'Device type not found'}), 404
 
-        # У DeviceType в БД поле param_name (см. dataclass), а не params.
-        # Раньше тут было device_type.params — это всегда None.
         raw = getattr(device_type, 'param_name', None) or getattr(device_type, 'params', None)
 
         try:
