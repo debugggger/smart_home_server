@@ -11,6 +11,15 @@ from kafka.errors import KafkaError
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 
+def to_values_array(raw):
+    if isinstance(raw, str):
+        data = json.loads(raw)  # JSON-строка
+    elif isinstance(raw, dict):
+        data = raw  # уже словарь
+    else:
+        raise TypeError(f"Неожиданный тип: {type(raw)}")
+    return list(data.values())
+
 class AppKafkaHandler:
 
     def __init__(self, db, bootstrap_servers='127.0.0.1:9092'):
@@ -81,9 +90,9 @@ class AppKafkaHandler:
                 print(f"[Interface Kafka] Unknown or unhandled event: {event_type}")
 
 
+
     def _handle_upd_value(self, message):
         data = message.get('data', {})
-        print(f"[App Kafka] Updating device table with data: {data}")
 
         try:
             device_id = data.get('device_id')
@@ -97,14 +106,20 @@ class AppKafkaHandler:
             if not isinstance(value, (list, tuple)):
                 value = [value]
 
-            current_values_json = self._build_current_values_json(device_id, value)
+            device = self.db.get_device_by_id(device_id)
+            values_array = to_values_array(device.current_values)
 
-            self.db.update_device_current_values(device_id, json.dumps(current_values_json, ensure_ascii=False))
+            if values_array != value:
+                print(f"[App Kafka] Updating device table with data: {data}")
+                current_values_json = self._build_current_values_json(device_id, value)
 
-            if self.app_api_device_value_update_callback:
-                self.app_api_device_value_update_callback(device_id, current_values_json)
+                self.db.update_device_current_values(device_id, json.dumps(current_values_json, ensure_ascii=False))
 
-            print(f"[App Kafka] Device table updated successfully")
+                if self.app_api_device_value_update_callback:
+                    self.app_api_device_value_update_callback(device_id, current_values_json)
+
+                print(f"[App Kafka] Device table updated successfully")
+
         except Exception as e:
             print(f"[App Kafka] Error updating device table: {e}")
 
@@ -168,17 +183,20 @@ class AppKafkaHandler:
 
     def _handle_upd_status(self, message):
         data = message.get('data', {})
-        print(f"[App Kafka] Updating device table with data: {data}")
 
         try:
             id = data.get('device_id')
             status = data.get('status')
-            self.db.update_device_status(id, status)
+            if self.db.get_device_by_id(id).is_online != status:
 
-            if self.app_api_device_status_update_callback:
-                self.app_api_device_status_update_callback(id, status)
+                print(f"[App Kafka] Updating device table with data: {data}")
+                self.db.update_device_status(id, status)
 
-            print(f"[App Kafka] Device table updated successfully")
+                if self.app_api_device_status_update_callback:
+                    self.app_api_device_status_update_callback(id, status)
+
+                print(f"[App Kafka] Device table updated successfully")
+
         except Exception as e:
             print(f"[App Kafka] Error updating device table: {e}")
 

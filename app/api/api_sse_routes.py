@@ -3,109 +3,115 @@ import time
 import json
 import logging
 import queue
-from flask import Response, stream_with_context, jsonify
+import uuid
+import threading
+from flask import Response, stream_with_context, jsonify, request
 
 logger = logging.getLogger(__name__)
 
-active_connections = []
+# Реестр клиентов: client_id -> {"queue": Queue, "connected_at": float}
+_clients = {}
+_clients_lock = threading.Lock()
+
+
+def _broadcast(event_name: str, payload: dict):
+    """Разослать событие ВСЕМ подключённым клиентам."""
+    message = f"event: {event_name}\ndata: {json.dumps(payload)}\n\n"
+    with _clients_lock:
+        dead = []
+        for cid, info in _clients.items():
+            try:
+                info["queue"].put_nowait(message)
+            except queue.Full:
+                # клиент не успевает читать — отключаем его
+                dead.append(cid)
+        for cid in dead:
+            _clients.pop(cid, None)
+            logger.warning(f"SSE клиент отключён (переполнение очереди): {cid}")
 
 
 def register_sse_routes(app, db, kafka_handler=None):
+    # ⚠️ ВАЖНО: регистрируем ОДИН раз глобальные callback'и,
+    # которые рассылают события во ВСЕ клиентские очереди.
+    if kafka_handler is not None:
+        kafka_handler.app_api_notification_callback = (
+            lambda notification: _broadcast("notification", notification)
+        )
+        kafka_handler.app_api_device_value_update_callback = (
+            lambda device_id, current_values: _broadcast(
+                "device_updated",
+                {"device_id": device_id, "current_values": current_values}
+            )
+        )
+        kafka_handler.app_api_device_status_update_callback = (
+            lambda device_id, status: _broadcast(
+                "device_status_update",
+                {"device_id": device_id, "is_online": status}
+            )
+        )
+
     @app.route('/api/sse/events')
     def sse_events():
+        client_id = str(uuid.uuid4())
+        client_queue: queue.Queue = queue.Queue(maxsize=1000)
+
+        with _clients_lock:
+            _clients[client_id] = {
+                "queue": client_queue,
+                "connected_at": time.time(),
+            }
+        logger.info(f"SSE клиент подключён: {client_id} (всего: {len(_clients)})")
 
         def event_stream():
-            client_id = id(stream_with_context)
-            logger.info(f"SSE клиент подключен: {client_id}")
-
-            active_connections.append(client_id)
-
             try:
-                yield f"event: connected\ndata: {json.dumps({'status': 'connected', 'client_id': str(client_id)})}\n\n"
+                # приветственное событие
+                yield (
+                    f"event: connected\ndata: "
+                    f"{json.dumps({'status': 'connected', 'client_id': client_id})}\n\n"
+                )
 
-                notification_queue = queue.Queue()
-                value_update_queue = queue.Queue()
-                status_update_queue = queue.Queue()
-
-                def notification_callback(notification):
-                    try:
-                        notification_queue.put_nowait(notification)
-                    except queue.Full:
-                        pass
-
-                def value_update_callback(device_id, current_values):
-                    try:
-                        value_update_queue.put_nowait({
-                            'device_id': device_id,
-                            'current_values': current_values
-                        })
-                    except queue.Full:
-                        pass
-
-                def status_update_callback(device_id, status):
-                    try:
-                        status_update_queue.put_nowait({
-                            'device_id': device_id,
-                            'is_online': status
-                        })
-                    except queue.Full:
-                        pass
-
-                if kafka_handler:
-                    kafka_handler.app_api_notification_callback = notification_callback
-                    kafka_handler.app_api_device_value_update_callback = value_update_callback
-                    kafka_handler.app_api_device_status_update_callback = status_update_callback
+                last_ping = time.time()
 
                 while True:
                     try:
-                        try:
-                            notification = notification_queue.get(timeout=0.5)
-                            yield f"event: notification\ndata: {json.dumps(notification)}\n\n"
-                            continue
-                        except queue.Empty:
-                            pass
-
-                        try:
-                            value_update = value_update_queue.get(timeout=0.5)
-                            yield f"event: device_updated\ndata: {json.dumps(value_update)}\n\n"
-                            continue
-                        except queue.Empty:
-                            pass
-
-                        try:
-                            status_update = status_update_queue.get(timeout=0.5)
-                            yield f"event: device_status_update\ndata: {json.dumps(status_update)}\n\n"
-                            continue
-                        except queue.Empty:
-                            pass
-
-                        yield f"event: ping\ndata: {json.dumps({'timestamp': time.time()})}\n\n"
-                        time.sleep(1)
-
+                        message = client_queue.get(timeout=1.0)
+                        yield message
                     except queue.Empty:
-                        yield f"event: ping\ndata: {json.dumps({'timestamp': time.time()})}\n\n"
-                        time.sleep(1)
-
+                        # пинг раз в 15 секунд, чтобы соединение не закрывалось прокси
+                        if time.time() - last_ping >= 15:
+                            yield (
+                                f"event: ping\ndata: "
+                                f"{json.dumps({'timestamp': time.time()})}\n\n"
+                            )
+                            last_ping = time.time()
             except GeneratorExit:
-                logger.info(f"SSE клиент отключен: {client_id}")
+                logger.info(f"SSE клиент отключён (GeneratorExit): {client_id}")
+                raise
+            except Exception as e:
+                logger.error(f"SSE ошибка у клиента {client_id}: {e}")
             finally:
-                if client_id in active_connections:
-                    active_connections.remove(client_id)
+                with _clients_lock:
+                    _clients.pop(client_id, None)
+                logger.info(f"SSE клиент удалён: {client_id} (осталось: {len(_clients)})")
 
         return Response(
             stream_with_context(event_stream()),
             mimetype="text/event-stream",
             headers={
                 'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
                 'X-Accel-Buffering': 'no',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
             }
         )
 
     @app.route('/api/sse/status', methods=['GET'])
     def sse_status():
+        with _clients_lock:
+            ids = list(_clients.keys())
         return jsonify({
-            'active_connections': len(active_connections),
+            'active_connections': len(ids),
+            'clients': ids,
             'status': 'running'
         })
 

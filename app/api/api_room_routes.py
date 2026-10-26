@@ -17,7 +17,10 @@ def register_room_routes(app, db, kafkaHandler):
         data = request.json
         room = Room(name=data['name'])
         room_id = db.add_room(room)
-        return jsonify({'success': True, 'id': room_id}) if room_id else jsonify({'success': False}), 400
+        
+        if room_id:
+            return jsonify({'success': True, 'id': room_id})
+        return jsonify({'success': False}), 400
 
     @app.route('/api/rooms/<int:room_id>', methods=['DELETE'])
     @handle_api_errors

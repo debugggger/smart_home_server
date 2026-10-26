@@ -6,7 +6,7 @@ import logging
 
 from flask import Flask
 from flask_cors import CORS
-#from flask_socketio import SocketIO
+from flask_sse import sse
 
 from api.api_sse_routes import register_sse_routes
 from database import Database
@@ -50,7 +50,13 @@ class WebInterface:
         app = Flask(__name__)
         app.config['SECRET_KEY'] = self.secret_key
         app.config['FIRMWARE_UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'temp', 'firmware')
+
+        app.config["REDIS_URL"] = "redis://localhost:6379"  # или ваш Redis
+        app.register_blueprint(sse, url_prefix='/stream')
+
         CORS(app, origins="*")
+
+
 
         os.makedirs(app.config['FIRMWARE_UPLOAD_FOLDER'], exist_ok=True)
 
@@ -76,7 +82,7 @@ class WebInterface:
                 threading.Thread(target=open_browser, daemon=True).start()
 
             logger.info(f"Starting web interface on http://{self.host}:{self.port}")
-            self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False)
+            self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False, threaded=True)
 
             self.socketio.run(self.app, host=self.host, port=self.port)
 

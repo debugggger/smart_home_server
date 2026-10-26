@@ -219,7 +219,7 @@ class Database:
         if result:
             room.id = result[0]
             self._rooms_cache[room.id] = room
-            return result[0]
+            return room.id
         return None
 
     def get_room_by_id(self, room_id: int) -> Optional[Room]:
