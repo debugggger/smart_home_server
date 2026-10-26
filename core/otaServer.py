@@ -14,33 +14,45 @@ class CustomHandler(BaseHTTPRequestHandler):
         print(f"[CONFIGURE] Handler class configured with: {list(file_mapping.keys()) if file_mapping else 'EMPTY'}")
 
     def do_GET(self):
-
-        if self.path in self.file_mapping:
-            filename = self.file_mapping[self.path]['filename']
-            content_type = self.file_mapping[self.path]['content_type']
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'File not found')
+        path = self.path.split('?', 1)[0]
+        entry = self.file_mapping.get(path)
+        if not entry:
+            self._send_404()
             return
+
+        filename = entry['filename']
+        content_type = entry['content_type']
 
         if not os.path.exists(filename):
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'File not found')
+            self._send_404()
             return
 
-        # Отправляем файл
+        size = os.path.getsize(filename)
         self.send_response(200)
-        self.send_header('Content-type', content_type)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(size))
+        self.send_header('Connection', 'close')
         self.end_headers()
 
         with open(filename, 'rb') as f:
-            self.wfile.write(f.read())
+            while chunk := f.read(64 * 1024):
+                self.wfile.write(chunk)
+
+        self.close_connection = True
+
+    def _send_404(self):
+        body = b'File not found'
+        self.send_response(404)
+        self.send_header('Content-Type', 'text/plain')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
 
 
 class OTAServer:
-    def __init__(self, port=8001, host='127.0.0.1', file_mapping=None):
+    def __init__(self, port=8001, host='0.0.0.0', file_mapping=None):
         self.port = port
         self.host = host
         self.onRunningUpdate = []
@@ -129,3 +141,7 @@ class OTAServer:
         if len(self.onRunningUpdate) == 0:
             self.stop()
             print("Все контроллеры обновлены")
+
+    def is_controller_in_update_queue(self, mac: str) -> bool:
+        """Проверка, находится ли контроллер в очереди обновления."""
+        return mac in self.onRunningUpdate

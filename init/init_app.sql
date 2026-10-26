@@ -5,7 +5,7 @@
 -- Dumped from database version 16.0
 -- Dumped by pg_dump version 16.0
 
--- Started on 2026-06-19 17:47:52
+-- Started on 2026-10-23 13:25:16
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -31,7 +31,8 @@ CREATE TABLE public.controllers (
     id bigint NOT NULL,
     mac text NOT NULL,
     room_id bigint,
-    name text
+    name text,
+    is_online boolean DEFAULT false NOT NULL
 );
 
 
@@ -94,7 +95,8 @@ CREATE TABLE public.devices (
     type_id bigint NOT NULL,
     port text,
     params json,
-    current_values text[]
+    current_values json,
+    is_online boolean
 );
 
 
@@ -147,7 +149,7 @@ CREATE SEQUENCE public.events_id_seq
 ALTER SEQUENCE public.events_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4877 (class 0 OID 0)
+-- TOC entry 4878 (class 0 OID 0)
 -- Dependencies: 222
 -- Name: events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -187,7 +189,7 @@ CREATE SEQUENCE public.predictions_id_seq
 ALTER SEQUENCE public.predictions_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4878 (class 0 OID 0)
+-- TOC entry 4879 (class 0 OID 0)
 -- Dependencies: 224
 -- Name: predictions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -225,7 +227,7 @@ CREATE SEQUENCE public.roles_names_id_seq
 ALTER SEQUENCE public.roles_names_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4879 (class 0 OID 0)
+-- TOC entry 4880 (class 0 OID 0)
 -- Dependencies: 226
 -- Name: roles_names_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -293,7 +295,7 @@ CREATE SEQUENCE public.trig_conditions_id_seq
 ALTER SEQUENCE public.trig_conditions_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4880 (class 0 OID 0)
+-- TOC entry 4881 (class 0 OID 0)
 -- Dependencies: 230
 -- Name: trig_conditions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -308,7 +310,7 @@ ALTER SEQUENCE public.trig_conditions_id_seq OWNED BY public.trig_conditions.id;
 
 CREATE TABLE public.trig_responses (
     id bigint NOT NULL,
-    device_id bigint NOT NULL,
+    device_id bigint,
     resp text,
     trigger_id bigint NOT NULL
 );
@@ -332,7 +334,7 @@ CREATE SEQUENCE public.trig_responses_id_seq
 ALTER SEQUENCE public.trig_responses_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4881 (class 0 OID 0)
+-- TOC entry 4882 (class 0 OID 0)
 -- Dependencies: 232
 -- Name: trig_responses_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -347,9 +349,11 @@ ALTER SEQUENCE public.trig_responses_id_seq OWNED BY public.trig_responses.id;
 
 CREATE TABLE public.triggers (
     id integer NOT NULL,
-    controller_id bigint NOT NULL,
+    controller_id bigint,
     controller_resp_id bigint,
-    name text
+    name text,
+    is_active boolean,
+    is_scene boolean
 );
 
 
@@ -372,7 +376,7 @@ CREATE SEQUENCE public.triggers_id_seq
 ALTER SEQUENCE public.triggers_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4882 (class 0 OID 0)
+-- TOC entry 4883 (class 0 OID 0)
 -- Dependencies: 234
 -- Name: triggers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -412,7 +416,7 @@ CREATE SEQUENCE public.users_id_seq
 ALTER SEQUENCE public.users_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4883 (class 0 OID 0)
+-- TOC entry 4884 (class 0 OID 0)
 -- Dependencies: 236
 -- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -421,7 +425,7 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- TOC entry 4684 (class 2604 OID 35751)
+-- TOC entry 4685 (class 2604 OID 35751)
 -- Name: events id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -429,7 +433,7 @@ ALTER TABLE ONLY public.events ALTER COLUMN id SET DEFAULT nextval('public.event
 
 
 --
--- TOC entry 4685 (class 2604 OID 35752)
+-- TOC entry 4686 (class 2604 OID 35752)
 -- Name: predictions id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -437,7 +441,7 @@ ALTER TABLE ONLY public.predictions ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 4686 (class 2604 OID 35753)
+-- TOC entry 4687 (class 2604 OID 35753)
 -- Name: roles_names id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -445,7 +449,7 @@ ALTER TABLE ONLY public.roles_names ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 4687 (class 2604 OID 35754)
+-- TOC entry 4688 (class 2604 OID 35754)
 -- Name: trig_conditions id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -453,7 +457,7 @@ ALTER TABLE ONLY public.trig_conditions ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 4688 (class 2604 OID 35755)
+-- TOC entry 4689 (class 2604 OID 35755)
 -- Name: trig_responses id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -461,7 +465,7 @@ ALTER TABLE ONLY public.trig_responses ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
--- TOC entry 4689 (class 2604 OID 35756)
+-- TOC entry 4690 (class 2604 OID 35756)
 -- Name: triggers id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -469,7 +473,7 @@ ALTER TABLE ONLY public.triggers ALTER COLUMN id SET DEFAULT nextval('public.tri
 
 
 --
--- TOC entry 4690 (class 2604 OID 35757)
+-- TOC entry 4691 (class 2604 OID 35757)
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -477,7 +481,7 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
--- TOC entry 4692 (class 2606 OID 35759)
+-- TOC entry 4693 (class 2606 OID 35759)
 -- Name: controllers controllers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -486,7 +490,7 @@ ALTER TABLE ONLY public.controllers
 
 
 --
--- TOC entry 4694 (class 2606 OID 35761)
+-- TOC entry 4695 (class 2606 OID 35761)
 -- Name: device_types device_types_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -495,7 +499,7 @@ ALTER TABLE ONLY public.device_types
 
 
 --
--- TOC entry 4696 (class 2606 OID 35763)
+-- TOC entry 4697 (class 2606 OID 35763)
 -- Name: devices devices_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -504,7 +508,7 @@ ALTER TABLE ONLY public.devices
 
 
 --
--- TOC entry 4698 (class 2606 OID 35765)
+-- TOC entry 4699 (class 2606 OID 35765)
 -- Name: events events_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -513,7 +517,7 @@ ALTER TABLE ONLY public.events
 
 
 --
--- TOC entry 4700 (class 2606 OID 35767)
+-- TOC entry 4701 (class 2606 OID 35767)
 -- Name: predictions predictions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -522,7 +526,7 @@ ALTER TABLE ONLY public.predictions
 
 
 --
--- TOC entry 4702 (class 2606 OID 35769)
+-- TOC entry 4703 (class 2606 OID 35769)
 -- Name: roles_names roles_names_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -531,7 +535,7 @@ ALTER TABLE ONLY public.roles_names
 
 
 --
--- TOC entry 4704 (class 2606 OID 35771)
+-- TOC entry 4705 (class 2606 OID 35771)
 -- Name: rooms rooms_name_uniq; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -540,7 +544,7 @@ ALTER TABLE ONLY public.rooms
 
 
 --
--- TOC entry 4706 (class 2606 OID 35773)
+-- TOC entry 4707 (class 2606 OID 35773)
 -- Name: rooms rooms_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -549,7 +553,7 @@ ALTER TABLE ONLY public.rooms
 
 
 --
--- TOC entry 4708 (class 2606 OID 35775)
+-- TOC entry 4709 (class 2606 OID 35775)
 -- Name: trig_conditions trig_conditions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -558,7 +562,7 @@ ALTER TABLE ONLY public.trig_conditions
 
 
 --
--- TOC entry 4710 (class 2606 OID 35777)
+-- TOC entry 4711 (class 2606 OID 35777)
 -- Name: trig_responses trig_responses_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -567,7 +571,7 @@ ALTER TABLE ONLY public.trig_responses
 
 
 --
--- TOC entry 4712 (class 2606 OID 35779)
+-- TOC entry 4713 (class 2606 OID 35779)
 -- Name: triggers triggers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -576,7 +580,7 @@ ALTER TABLE ONLY public.triggers
 
 
 --
--- TOC entry 4714 (class 2606 OID 35781)
+-- TOC entry 4715 (class 2606 OID 35781)
 -- Name: users users_name_uniq; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -585,7 +589,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4716 (class 2606 OID 35783)
+-- TOC entry 4717 (class 2606 OID 35783)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -594,7 +598,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4718 (class 2606 OID 35784)
+-- TOC entry 4719 (class 2606 OID 35784)
 -- Name: devices controller_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -603,7 +607,7 @@ ALTER TABLE ONLY public.devices
 
 
 --
--- TOC entry 4720 (class 2606 OID 35789)
+-- TOC entry 4721 (class 2606 OID 35789)
 -- Name: events device_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -612,7 +616,7 @@ ALTER TABLE ONLY public.events
 
 
 --
--- TOC entry 4717 (class 2606 OID 35794)
+-- TOC entry 4718 (class 2606 OID 35794)
 -- Name: controllers id_room; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -621,7 +625,7 @@ ALTER TABLE ONLY public.controllers
 
 
 --
--- TOC entry 4721 (class 2606 OID 35799)
+-- TOC entry 4722 (class 2606 OID 35799)
 -- Name: predictions predictions_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -630,7 +634,7 @@ ALTER TABLE ONLY public.predictions
 
 
 --
--- TOC entry 4728 (class 2606 OID 35804)
+-- TOC entry 4729 (class 2606 OID 35804)
 -- Name: users role_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -639,7 +643,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4722 (class 2606 OID 35809)
+-- TOC entry 4723 (class 2606 OID 35809)
 -- Name: trig_conditions trig_conditions_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -648,7 +652,7 @@ ALTER TABLE ONLY public.trig_conditions
 
 
 --
--- TOC entry 4723 (class 2606 OID 35814)
+-- TOC entry 4724 (class 2606 OID 35814)
 -- Name: trig_conditions trig_conditions_trigger_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -657,7 +661,7 @@ ALTER TABLE ONLY public.trig_conditions
 
 
 --
--- TOC entry 4724 (class 2606 OID 35819)
+-- TOC entry 4725 (class 2606 OID 35819)
 -- Name: trig_responses trig_responses_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -666,7 +670,7 @@ ALTER TABLE ONLY public.trig_responses
 
 
 --
--- TOC entry 4725 (class 2606 OID 35824)
+-- TOC entry 4726 (class 2606 OID 35824)
 -- Name: trig_responses trig_responses_trigger_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -675,7 +679,7 @@ ALTER TABLE ONLY public.trig_responses
 
 
 --
--- TOC entry 4726 (class 2606 OID 35829)
+-- TOC entry 4727 (class 2606 OID 35829)
 -- Name: triggers triggers_controller_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -684,7 +688,7 @@ ALTER TABLE ONLY public.triggers
 
 
 --
--- TOC entry 4727 (class 2606 OID 35834)
+-- TOC entry 4728 (class 2606 OID 35834)
 -- Name: triggers triggers_controller_resp_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -693,7 +697,7 @@ ALTER TABLE ONLY public.triggers
 
 
 --
--- TOC entry 4719 (class 2606 OID 35839)
+-- TOC entry 4720 (class 2606 OID 35839)
 -- Name: devices type; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -701,7 +705,7 @@ ALTER TABLE ONLY public.devices
     ADD CONSTRAINT type FOREIGN KEY (type_id) REFERENCES public.device_types(id) NOT VALID;
 
 
--- Completed on 2026-06-19 17:47:52
+-- Completed on 2026-10-23 13:25:16
 
 --
 -- PostgreSQL database dump complete

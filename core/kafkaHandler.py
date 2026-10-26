@@ -4,7 +4,7 @@ from datetime import datetime
 import uuid
 from kafka.errors import KafkaError
 
-from core.database import Device, Trigger, Scene
+from database import Device, Trigger, Scene
 from kafka_config import TOPICS, create_kafka_producer, create_kafka_consumer
 
 
@@ -241,6 +241,7 @@ class CoreKafkaHandler:
                 )
                 self.db.add_device(device)
                 work_device = device
+                self.db.update_device_current_values(device.id, [0])
                 pass
 
             print(f"[Core Kafka] Device table updated successfully")

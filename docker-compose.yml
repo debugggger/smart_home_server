@@ -114,10 +114,12 @@ services:
       - ADDR_MQTT=${ADDR_MQTT}
       - ADDR_OTA=${ADDR_OTA}
       - ADDR_KAFKA=kafka:9092
+      - FIRMWARE_UPLOAD_FOLDER=/app/temp/firmware
     ports:
       - "8001:8001"
     volumes:
       - ./core/logs:/app/logs
+      - firmware_uploads:/app/temp/firmware
     networks:
       - smart_home_network
     restart: unless-stopped
@@ -144,10 +146,12 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_HOST=kafka
       - KAFKA_PORT=9092
+      - FIRMWARE_UPLOAD_FOLDER=/app/temp/firmware
     ports:
       - "5000:5000"
     volumes:
       - ./app/logs:/app/logs
+      - firmware_uploads:/app/temp/firmware
     networks:
       - smart_home_network
     restart: unless-stopped
@@ -159,3 +163,4 @@ networks:
 volumes:
   core_db_data:
   app_db_data:
+  firmware_uploads:

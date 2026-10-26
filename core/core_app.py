@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import requests
 from flask import Flask, jsonify, request
 
+
 @dataclass
 class ControllerState:
     mac: str
@@ -17,6 +18,8 @@ class ControllerState:
     is_active: bool = True
     failures_count: int = 0
     last_message: str = ""
+    # Ожидание ответа на getFirmwareVersion (для OTA-контроллеров)
+    is_waiting_fw_version: bool = False
 
 
 @dataclass
@@ -58,7 +61,7 @@ class Core:
         self.mac_wait_request_update = []  # Список устройств ожидающих update
 
         self.TIMEOUT_SECONDS = 3
-        self.GET_VALUES_DELAY = 60*1
+        self.GET_VALUES_DELAY = 60 * 1
         self.MAX_FAILURES = 3
 
         self._init_states_from_db()
@@ -76,7 +79,6 @@ class Core:
                 is_active=True,
                 last_message="",
                 params_count=0
-
             )
 
             if device.controller_mac not in self.controllers_state:
@@ -111,6 +113,7 @@ class Core:
     def parse(self, topic, payload):
         print(f"[PARSE] Обработка сообщения: топик={topic}, данные={payload}")
         parts = payload.split('/')
+        parts = [p for p in parts if p.strip()]
 
         if len(parts) >= 2:
             mac = parts[0]
@@ -142,6 +145,9 @@ class Core:
 
             elif parts[1] == "trigResp":
                 self._parse_trig_response(parts)
+
+            elif parts[1] == "getFirmwareVersionResp":
+                self._parse_firmware_version_response(parts)
 
     def _parse_exec_response(self, parts):
         mac = parts[0]
@@ -245,7 +251,6 @@ class Core:
                     break
                 index += 1
 
-
     def _parse_init_response(self, parts):
         """Обработка ответа на инициализацию"""
         mac = parts[0]
@@ -269,6 +274,8 @@ class Core:
                             if device.port == device_port and device.type == device_type:
                                 del devices[j]
                                 dev_state = self._get_device_state(device.id)
+                                if not dev_state:
+                                    self._init_states_from_db()
                                 dev_state.params_count = int(parts[index + 3])
 
                                 break
@@ -332,6 +339,67 @@ class Core:
 
                 self.mac_wait_request_init.pop(i)
                 break
+
+    def _parse_firmware_version_response(self, parts):
+        """
+        Обработка ответа на запрос версии прошивки.
+        Формат: <mac>/getFirmwareVersionResp/<version>
+        """
+        mac = parts[0]
+        version = parts[2] if len(parts) > 2 else None
+
+        print(f"[Core] Контроллер {mac} сообщил версию прошивки: {version}")
+
+        ctrl_state = self._get_controller_state(mac)
+        if ctrl_state:
+            ctrl_state.is_waiting_fw_version = False
+            ctrl_state.prev_resp_time = datetime.now()
+
+        # Если контроллер есть в списке обновляемых — удаляем его
+        if self.otaServ and self.otaServ.is_running:
+            self.otaServ.delete_running_update_controller(mac)
+            print(f"[Core] Контроллер {mac} удалён из очереди обновления после ответа о версии")
+
+        if self.kafka_handler:
+            self.kafka_handler.send_notification(
+                f"Контроллер {mac} версия прошивки: {version}",
+                'info'
+            )
+
+    def _handle_fw_version_timeout(self, mac: str):
+        """
+        Обработка ситуации, когда контроллер не ответил на getFirmwareVersion
+        после MAX_FAILURES попыток. Сообщаем в интерфейс и удаляем из очереди обновления.
+        """
+        print(
+            f"[Core] Контроллер {mac} не ответил на getFirmwareVersion "
+            f"после {self.MAX_FAILURES} попыток — удаляем из очереди обновления"
+        )
+
+        # Сообщение в интерфейс (Kafka)
+        if self.kafka_handler:
+            try:
+                self.kafka_handler.send_notification(
+                    f"Контроллер {mac} не отвечает на запрос версии прошивки "
+                    f"после {self.MAX_FAILURES} попыток. Удалён из очереди обновления.",
+                    'error'
+                )
+            except Exception as e:
+                print(f"[Core] Ошибка отправки уведомления в Kafka: {e}")
+
+        # Удаляем из очереди обновления OTA-сервера
+        if self.otaServ and getattr(self.otaServ, "is_running", False):
+            try:
+                self.otaServ.delete_running_update_controller(mac)
+            except Exception as e:
+                print(f"[Core] Ошибка удаления контроллера {mac} из очереди OTA: {e}")
+
+        # Сбрасываем состояние контроллера
+        ctrl_state = self._get_controller_state(mac)
+        if ctrl_state:
+            ctrl_state.is_waiting_fw_version = False
+            ctrl_state.failures_count = 0
+            ctrl_state.prev_resp_time = datetime.now()
 
     def process_messages(self):
         while not self.stop_event.is_set():
@@ -422,13 +490,6 @@ class Core:
                     if value not in (None, "", []):
                         req_parts.append(str(value))
 
-                # dev_state = self._get_device_state(device.id)
-                # if dev_state:
-                #     dev_state.is_waiting_confirm = True
-                #     dev_state.prev_resp_time = datetime.now()
-                #     dev_state.last_message = "init"  # или специфичная команда для устройства
-                #     dev_state.failures_count = 0
-
             req_parts.append("next")
 
         req = "/".join(req_parts)
@@ -454,56 +515,12 @@ class Core:
                 req_parts.append(trigger.trig)
                 req_parts.append("next")
 
-        # changed_pairs = set()  # используем set кортежей для быстрой проверки
-        #
-        # scenes = self.db.get_all_scenes()
-        # for scene in scenes:
-        #     if scene.is_active:
-        #         resp = scene.responses
-        #         cond = scene.conditions
-        #
-        #         if isinstance(cond, str):
-        #             cond = json.loads(cond)
-        #         if isinstance(resp, str):
-        #             resp = json.loads(resp)
-        #
-        #         has_change_cmd = any(
-        #             r.get("command") in ("changeVal/plus", "changeVal/minus")
-        #             for r in resp
-        #         )
-        #         if not has_change_cmd:
-        #             continue
-        #
-        #         for c in cond:
-        #             device_id = c.get("device_id")
-        #             param_num = c.get("param_num")
-        #             if device_id is not None and param_num is not None:
-        #                 device = self.db.get_device_by_id(device_id)
-        #                 if device is not None and device.controller_mac == mac:
-        #                     changed_pairs.add((device_id, param_num))
-        #                     req_parts.append(device.type)
-        #                     req_parts.append(device.port)
-        #                     req_parts.append(c.get("value_type"))
-        #                     req_parts.append(str(c.get("param_num")))
-        #                     if c.get("compare_type"):
-        #                         req_parts.append(c.get("compare_type"))
-        #                     if c.get("value"):
-        #                         req_parts.append(c.get("value"))
-        #
-        #                     req_parts.append(f"do/serv")
-        #                     req_parts.append(resp[0].get("command"))
-        #                     req_parts.append(resp[0].get("value"))
-        #                     req_parts.append(f"{param_num}/next")
-
         devices = self.db.get_devices_by_controller(mac)
 
         for device in devices:
             dev_state = self._get_device_state(device.id)
 
             for param_num in range(dev_state.params_count):
-                # if (device.id, param_num) in changed_pairs:
-                #     continue
-
                 req_parts.append(device.type)
                 req_parts.append(device.port)
                 req_parts.append(f"value/{param_num}/onChange/do")
@@ -512,7 +529,6 @@ class Core:
                 req_parts.append(device.type)
                 req_parts.append(device.port)
                 req_parts.append(f"{param_num}/next")
-
 
         req = "/".join(req_parts)
         if len(req_parts) >= 2:
@@ -527,7 +543,7 @@ class Core:
         startValIdx = 1
         for i in range(len(parts)):
             if parts[i] == "next":
-                startValIdx = i-5
+                startValIdx = i - 5
                 for device in devices:
                     if device.type == parts[i - 5] and device.port == parts[i - 4]:
                         # Обновляем значения
@@ -550,17 +566,14 @@ class Core:
             if self.kafka_handler:
                 self.kafka_handler.send_device_value_update(device_id, device.current_values)
 
-
             self.check_scene(device_id)
 
             # Сбрасываем счетчики ошибок устройства
             dev_state = self._get_device_state(device_id)
             if dev_state:
                 dev_state.failures_count = 0
-                #dev_state.offline_count = 0
                 dev_state.prev_resp_time = datetime.now()
 
-                #if not dev_state.is_active:
                 dev_state.is_active = True
                 if self.kafka_handler:
                     self.kafka_handler.send_device_status(device_id, True)
@@ -611,6 +624,7 @@ class Core:
         3. При отсутствии ответа 3 раза - меняем is_active устройства
         4. Если все устройства не активны - меняем is_active контроллера
         5. Для неактивных контроллеров раз в период отправки пытаемся отправить запрос состояния
+        6. Если контроллер в очереди OTA-обновления и не отвечает — запрашиваем версию прошивки
         """
         while self.running:
             try:
@@ -718,21 +732,51 @@ class Core:
                             ]
                             continue
 
+                    # === 2.2. Проверка контроллеров в очереди OTA-обновления ===
+                    is_in_ota_queue = (
+                        self.otaServ is not None
+                        and getattr(self.otaServ, "is_running", False)
+                        and self.otaServ.is_controller_in_update_queue(mac)
+                    )
 
+                    if is_in_ota_queue:
+                        if ctrl_state.is_waiting_fw_version:
+                            if ctrl_time_since_resp > self.TIMEOUT_SECONDS:
+                                if ctrl_state.failures_count < self.MAX_FAILURES:
+                                    ctrl_state.failures_count += 1
+                                    message = "getFirmwareVersion"
+                                    self.mqtt_client.publish(mac, message)
+                                    ctrl_state.prev_resp_time = datetime.now()
+                                    print(
+                                        f"[Core] Повторный запрос версии прошивки у контроллера {mac} "
+                                        f"(попытка {ctrl_state.failures_count}/{self.MAX_FAILURES})"
+                                    )
+                                else:
+                                    # Исчерпаны все попытки — сообщаем и удаляем из очереди
+                                    self._handle_fw_version_timeout(mac)
+                            # Пока ждём ответ на getFirmwareVersion — не шлём getAllValues
+                            continue
+                        else:
+                            # Только что обнаружили, что контроллер в OTA-очереди и молчит
+                            if ctrl_time_since_resp > self.GET_VALUES_DELAY:
+                                message = "getFirmwareVersion"
+                                self.mqtt_client.publish(mac, message)
+                                ctrl_state.prev_resp_time = datetime.now()
+                                ctrl_state.is_waiting_fw_version = True
+                                ctrl_state.failures_count = 0
+                                print(f"[Core] Запрос версии прошивки (OTA): {message} -> {mac}")
+                                continue
 
+                    # === 2.3. Обычный запрос состояния (вне OTA) ===
                     if ctrl_state.is_active and ctrl_time_since_resp > self.GET_VALUES_DELAY:
                         message = f'exec/getAllValues/'
                         self.mqtt_client.publish(mac, message)
 
                         ctrl_state.prev_resp_time = datetime.now()
 
-                        # dev_state.is_waiting_confirm = True
-                        # dev_state.prev_resp_time = datetime.now()
-                        # dev_state.last_message = message
-
                         print(f"[Core] Принудительный запрос состояния: {message} -> {mac}")
 
-                # === 3. Проверка контроллеров на активность ===
+                    # === 3. Проверка контроллеров на активность ===
                     if ctrl_state.is_active:
                         active_count = len(active_devices_by_controller.get(mac, []))
 
@@ -750,28 +794,6 @@ class Core:
                         ctrl_state.prev_resp_time = datetime.now()
                         self.parse_init(mac)
                         print(f"[Core] Попытка восстановления контроллера {mac}")
-
-                # # === 5. Проверка очереди ожидания update ===
-                # current_time_ts = time.time()
-                # for request in self.mac_wait_request_update[:]:
-                #     if current_time_ts - request["timestamp"] > self.TIMEOUT_SECONDS:
-                #         device_id = request["device_id"]
-                #         self.mac_wait_request_update.remove(request)
-                #
-                #         dev_state = self._get_device_state(device_id)
-                #         if dev_state:
-                #             dev_state.offline_count += 1
-                #
-                #             if dev_state.offline_count >= self.MAX_FAILURES and not dev_state.is_offline:
-                #                 dev_state.is_offline = True
-                #                 dev_state.is_active = False
-                #                 if self.kafka_handler:
-                #                     self.kafka_handler.send_device_status(device_id, False)
-                #                     self.kafka_handler.send_notification(
-                #                         f"Устройство {device_id} не отвечает",
-                #                         'error'
-                #                     )
-                #                 print(f"[Core] Устройство {device_id} помечено как offline")
 
                 time.sleep(1)  # Проверка раз в секунду
 
@@ -813,19 +835,12 @@ class Core:
                 if not conditions:
                     continue
 
-                #all_conditions_met = True
-
                 executed_count = 0
-
-
 
                 for condition in conditions:
                     cond_device_id = condition.get('device_id')
                     param_num = condition.get('param_num')
                     is_execute = condition.get('is_execute', True)
-
-                    # if not is_execute:
-                    #     continue
 
                     if cond_device_id == device_id:
                         if param_num is not None and param_num < len(current_values):
@@ -836,24 +851,16 @@ class Core:
                         is_execute = self._check_condition_value(condition, check_value)
                         condition['is_execute'] = is_execute
                         if not is_execute:
-                            #all_conditions_met = False
                             break
                         executed_count += 1
                     else:
                         continue
-                        #check_value = self._get_device_parameter_value(cond_device_id, param_num)
 
                 if executed_count == len(conditions):
-                #if all_conditions_met:
                     if not scene.is_executed:
                         self._execute_scene_actions(scene)
                         self.db.update_scene_executed(scene.id, True)
                         print(f"[Core] Scene {scene.id} executed successfully")
-                        # if self.kafka_handler:
-                        #     self.kafka_handler.send_notification(
-                        #         'SCENE_EXECUTED',
-                        #         f'Сценарий выполнен'
-                        #     )
                 else:
                     if scene.is_executed:
                         self.db.update_scene_executed(scene.id, False)
@@ -877,9 +884,6 @@ class Core:
         compare_type = condition.get('compare_type')
         value = condition.get('value')
         is_execute = condition.get('is_execute', False)
-
-        # if not is_execute:
-        #     return True
 
         if compare_type == 'changed':
             return True
@@ -942,9 +946,6 @@ class Core:
                     if device and device_param:
                         command = command.split("/")[-1]
                         self.parse_changes([device.controller_mac, 'changeVal', device.type, device.port, device_param, command, value])
-
-
-
 
                 elif mac and command:
                     cmd_parts = ["exec", device_type, device_port, command]
