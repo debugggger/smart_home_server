@@ -8,10 +8,12 @@ from sh_utils import get_local_ip, get_parsed_addr
 
 
 class servMqtt:
-    def __init__(self, host = '127.0.0.1', port = 1883):
+    def __init__(self, host='127.0.0.1', port=1883, username="", password=""):
         self.client = mqtt.Client()
         self.broker_address = host
         self.port = port
+        self.username = username
+        self.password = password
         #self.broker_address, self.port = get_parsed_addr('ADDR_MQTT')
         self.message_queue = queue.Queue()
         self.message_callback = None
@@ -31,6 +33,7 @@ class servMqtt:
             self.client = mqtt.Client()
             self.client.on_connect = self.on_connect
             self.client.on_message = self.on_message
+            self.client.username_pw_set(self.username, self.password)
             self.client.connect(self.broker_address, self.port, 60)
             self.client.loop_start()
         except Exception as e:

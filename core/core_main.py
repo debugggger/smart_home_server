@@ -23,7 +23,10 @@ if __name__ == '__main__':
     host, port = get_parsed_addr('ADDR_MQTT', env_file)
     if host == 'localhost':
         host = socket.gethostbyname(socket.gethostname())
-    smqtt = servMqtt(host=host, port=port)
+
+
+    smqtt = servMqtt(host=host, port=port, username=get_env_value('USER_MQTT', env_file),
+                     password=get_env_value('PASS_MQTT', env_file))
 
     smqtt.start()
     trying = 0
