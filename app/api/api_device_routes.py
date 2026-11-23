@@ -46,90 +46,59 @@ def _parse_current_values(raw):
     return {}
 
 
+def _device_to_dict(db, d, *, with_controller=False):
+    """Общая сериализация устройства (is_controlled включён, is_active — нет)."""
+    controller = db.get_controller_by_id(d.controller_id)
+    device_type = db.get_device_type_by_id(d.type_id)
+
+    result = {
+        'id': d.id,
+        'name': d.name,
+        'controller_id': d.controller_id,
+        'type_id': d.type_id,
+        'type_name': device_type.name if device_type else 'Unknown',
+        'port': d.port,
+        'params': d.params,
+        'current_values': _parse_current_values(d.current_values),
+        'is_online': d.is_online,
+        'is_controlled': bool(getattr(d, 'is_controlled', True)),
+    }
+    if with_controller:
+        result['controller_name'] = controller.name if controller else 'Unknown'
+        room = db.get_room_by_id(controller.room_id) if controller else None
+        result['room_name'] = room.name if room else 'Не назначено'
+    return result
+
+
 def register_device_routes(app, db, kafkaHandler):
 
     @app.route('/api/devices/all', methods=['GET'])
     @handle_api_errors
     def get_all_devices_with_status():
-        devices = []
-        all_devices = db.get_all_devices()
-
-        for device in all_devices:
-            devices.append(get_device_with_details(db, device))
-
+        devices = [get_device_with_details(db, d) for d in db.get_all_devices()]
         return jsonify(devices)
 
     @app.route('/api/devices', methods=['GET'])
     @handle_api_errors
     def get_devices():
-        devices = db.get_all_devices()
-        result = []
-        for d in devices:
-            controller = db.get_controller_by_id(d.controller_id)
-            device_type = db.get_device_type_by_id(d.type_id)
-            room = None
-            if controller:
-                room = db.get_room_by_id(controller.room_id)
-
-            current_values = _parse_current_values(d.current_values)
-
-            result.append({
-                'id': d.id,
-                'name': d.name,
-                'controller_id': d.controller_id,
-                'controller_name': controller.name if controller else 'Unknown',
-                'room_name': room.name if room else 'Не назначено',
-                'type_id': d.type_id,
-                'type_name': device_type.name if device_type else 'Unknown',
-                'port': d.port,
-                'params': d.params,
-                'current_values': current_values,
-                'is_online': d.is_online
-            })
-        return jsonify(result)
+        return jsonify([_device_to_dict(db, d, with_controller=True)
+                        for d in db.get_all_devices()])
 
     @app.route('/api/devices/controller/<int:controller_id>', methods=['GET'])
     @handle_api_errors
     def get_devices_by_controller(controller_id):
-        devices = db.get_devices_by_controller(controller_id)
-        result = []
-        for d in devices:
-            device_type = db.get_device_type_by_id(d.type_id)
-            result.append({
-                'id': d.id,
-                'name': d.name,
-                'type_id': d.type_id,
-                'type_name': device_type.name if device_type else 'Unknown',
-                'port': d.port,
-                'params': d.params,
-                'is_online': d.is_online,
-                'current_values': _parse_current_values(d.current_values)
-            })
-        return jsonify(result)
+        return jsonify([_device_to_dict(db, d)
+                        for d in db.get_devices_by_controller(controller_id)])
 
     @app.route('/api/devices/by-controller/<int:controller_id>', methods=['GET'])
     @handle_api_errors
     def get_devices_by_controller_id(controller_id):
-        devices = db.get_devices_by_controller(controller_id)
-        result = []
-        for device in devices:
-            device_type = db.get_device_type_by_id(device.type_id)
-            result.append({
-                'id': device.id,
-                'name': device.name,
-                'type_id': device.type_id,
-                'type_name': device_type.name if device_type else 'Unknown',
-                'port': device.port,
-                'params': device.params,
-                'is_online': device.is_online,
-                'current_values': _parse_current_values(device.current_values)
-            })
-        return jsonify(result)
+        return jsonify([_device_to_dict(db, d)
+                        for d in db.get_devices_by_controller(controller_id)])
 
     @app.route('/api/devices', methods=['POST'])
     @handle_api_errors
     def add_device():
-
         data = request.json
 
         raw_cv = data.get('current_values', {})
@@ -137,9 +106,7 @@ def register_device_routes(app, db, kafkaHandler):
             raw_cv = {f"unknown_value{i + 1}": v for i, v in enumerate(raw_cv)}
         elif not isinstance(raw_cv, dict):
             raw_cv = {}
-
         current_values_json = json.dumps(raw_cv, ensure_ascii=False)
-
 
         device = Device(
             name=data['name'],
@@ -147,7 +114,9 @@ def register_device_routes(app, db, kafkaHandler):
             type_id=data['type_id'],
             port=data.get('port', ''),
             params=data.get('params', '{}'),
-            current_values=current_values_json
+            current_values=current_values_json,
+            # is_controlled по умолчанию True — управление разрешено
+            is_controlled=True,
         )
         device_id = db.add_device(device)
 
@@ -170,11 +139,34 @@ def register_device_routes(app, db, kafkaHandler):
         db.delete_device(device_id, kafkaHandler)
         return jsonify({'success': True})
 
+    # ============ ПЕРЕКЛЮЧАТЕЛЬ is_controlled ============
+
+    @app.route('/api/devices/<int:device_id>/toggle-controlled', methods=['PATCH'])
+    @handle_api_errors
+    def toggle_device_controlled(device_id):
+        """Переключение is_controlled.
+        Если тело с is_controlled не передано — инвертирует текущее значение.
+        Кеш в Database.update_device_is_controlled обновляется автоматически."""
+        device = db.get_device_by_id(device_id)
+        if not device:
+            return jsonify({'success': False, 'error': 'Device not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        if 'is_controlled' in data:
+            new_value = bool(data['is_controlled'])
+        else:
+            new_value = not bool(getattr(device, 'is_controlled', True))
+
+        db.update_device_is_controlled(device_id, new_value)
+        return jsonify({'success': True, 'is_controlled': new_value})
+
+    # ============ ОТПРАВКА КОМАНДЫ ============
+
     @app.route('/api/devices/<int:device_id>/command', methods=['POST'])
     @handle_api_errors
     def send_device_command(device_id):
-        data = request.json
-        if not data:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
             return jsonify({'error': 'No JSON data provided'}), 400
 
         command = data.get('command')
@@ -188,10 +180,22 @@ def register_device_routes(app, db, kafkaHandler):
         if not device:
             return jsonify({'success': False, 'error': 'Device not found'}), 404
 
+        # Блокировка управления
+        if not getattr(device, 'is_controlled', True):
+            return jsonify({
+                'success': False,
+                'error': 'Device control is blocked (is_controlled = false)'
+            }), 409
+
         controller = db.get_controller_by_id(device.controller_id)
         if not controller:
             return jsonify({'success': False, 'error': 'Controller not found'}), 404
 
+        device_type = db.get_device_type_by_id(device.type_id)
+        if not device_type:
+            return jsonify({'success': False, 'error': 'Device type not found'}), 404
+
+        # ---------- complex_data -> value ----------
         if isinstance(complex_data, list) and complex_data:
             current_values = device.current_values or {}
 
@@ -207,7 +211,6 @@ def register_device_routes(app, db, kafkaHandler):
             for item in complex_data:
                 if not isinstance(item, dict):
                     continue
-
                 for name, meta in item.items():
                     if name in current_values:
                         extra_parts.append(str(current_values[name]))
@@ -215,32 +218,52 @@ def register_device_routes(app, db, kafkaHandler):
                         default_value = None
                         if isinstance(meta, dict):
                             default_value = meta.get('defaultValue')
-                        if default_value is None:
-                            extra_parts.append('None')
-                        else:
-                            extra_parts.append(str(default_value))
+                        extra_parts.append('None' if default_value is None else str(default_value))
 
             base = '' if value is None else str(value)
             if base == '':
                 value = '/'.join(extra_parts)
             else:
                 value = base + '/' + '/'.join(extra_parts)
-        device = db.get_device_by_id(device_id)
-        device_type = db.get_device_type_by_id(device.type_id)
 
-        sending_mac = controller.mac
+        # ---------- ищем команду в обоих источниках ----------
+        param_name = device_type.param_name
+        if isinstance(param_name, str):
+            try:
+                param_name = json.loads(param_name)
+            except (ValueError, TypeError):
+                param_name = {}
+        if not isinstance(param_name, dict):
+            param_name = {}
 
-        commands = device_type.param_name.get('sending_commands').get('binary')
-        commands += (device_type.param_name.get('sending_commands').get('numeric'))
+        sending_reading = param_name.get('sending_reading_commands') or {}
+        sending_plain = param_name.get('sending_commands') or {}
 
-        for com in commands:
+        all_commands = []
+        for src in (sending_reading, sending_plain):
+            if not isinstance(src, dict):
+                continue
+            for group in ('binary', 'numeric'):
+                group_cmds = src.get(group)
+                if isinstance(group_cmds, list):
+                    all_commands.extend([c for c in group_cmds if isinstance(c, dict)])
+
+        sending_mac = getattr(controller, 'mac', None) or ''
+        matched = None
+        for com in all_commands:
             if com.get('sending_name') == command:
-                if com.get('is_on_serv') == True:
-                    sending_mac = "serv"
-                    if com.get('parameter_number'):
-                        command = str(com.get('parameter_number')) + "/" + command
+                matched = com
                 break
 
+        if matched is not None:
+            if matched.get('is_on_serv') is True:
+                sending_mac = 'serv'
+                pn = matched.get('parameter_number')
+                if pn is not None:
+                    command = str(pn) + '/' + command
+
+        if not sending_mac:
+            return jsonify({'success': False, 'error': 'Controller has no MAC/address'}), 500
 
         success, offset = kafkaHandler.send_command(sending_mac, device_id, command, value)
 
@@ -250,29 +273,9 @@ def register_device_routes(app, db, kafkaHandler):
                 'message': 'Command sent via Kafka',
                 'kafka_offset': offset
             }), 200
-        else:
-            return jsonify({'error': 'Failed to send command'}), 500
+        return jsonify({'error': 'Failed to send command'}), 500
 
-    # @app.route('/api/device-commands/<int:device_type_id>', methods=['GET'])
-    # @handle_api_errors
-    # def get_device_commands(device_type_id):
-    #     device_type = db.get_device_type_by_id(device_type_id)
-    #     if not device_type:
-    #         return jsonify([])
-    #
-    #     commands = {
-    #         'binOut': ['toggle', 'setHigh', 'setLow'],
-    #         'led': ['turnOn', 'turnOff', 'setColor', 'setBrightness', 'setSpeed', 'setEffect',
-    #                 'setSoundReaction', 'setSoundWeights', 'setSoundBeatColor', 'setMicro'],
-    #         'stepper': ['setSpeed', 'setDir', 'startInf', 'startSteps', 'stop']
-    #     }
-    #
-    #     type_name = device_type.name.lower()
-    #     for key in commands:
-    #         if key.lower() in type_name:
-    #             return jsonify(commands[key])
-    #
-    #     return jsonify([])
+    # ============ ТИПЫ УСТРОЙСТВ ============
 
     @app.route('/api/device-types', methods=['GET'])
     @handle_api_errors
@@ -282,22 +285,17 @@ def register_device_routes(app, db, kafkaHandler):
             [{'id': t.id, 'name': t.name, 'description': t.description, 'param_names': t.param_name} for t in types])
 
     def get_device_data_for_core(device):
-
         controller = db.get_controller_by_id(device.controller_id)
         device_type = db.get_device_type_by_id(device.type_id)
 
         send_type_name = device_type.name
 
-
         if not controller or not device_type:
             return None
-
 
         if device_type.param_name.get("parent_name") is not None:
             send_type_name = device_type.param_name.get("parent_name")
 
-        # device.current_values — уже JSON-строка (см. add_device).
-        # Для Kafka отдаём как есть — ядро само решит, что делать.
         device_data_for_core = {
             'command_type': 'ADD',
             'id': device.id,

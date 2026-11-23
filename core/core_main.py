@@ -50,6 +50,7 @@ if __name__ == '__main__':
         kafka_handler.start()
         core.start_processing()
 
+
         try:
             while True:
                 time.sleep(1)

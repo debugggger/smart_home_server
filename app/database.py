@@ -32,6 +32,7 @@ class Device:
     params: json = None
     current_values: json = None
     is_online: bool = False
+    is_controlled: bool = True
 
 @dataclass
 class DeviceType:
@@ -134,7 +135,7 @@ class Database:
             )
 
     def _load_devices_cache(self):
-        query = "SELECT id, name, controller_id, type_id, port, params, current_values, is_online FROM devices"
+        query = "SELECT id, name, controller_id, type_id, port, params, current_values, is_online, is_controlled FROM devices"
         results = self._execute_query(query, fetch_all=True)
         self._devices_cache = {}
         self._devices_by_controller = {}
@@ -143,7 +144,7 @@ class Database:
         for r in results:
             device = Device(
                 id=r[0], name=r[1], controller_id=r[2], type_id=r[3],
-                port=r[4], params=r[5], current_values=r[6], is_online=r[7]
+                port=r[4], params=r[5], current_values=r[6], is_online=r[7], is_controlled=r[8]
             )
             self._devices_cache[r[0]] = device
 
@@ -376,14 +377,14 @@ class Database:
     def add_device(self, device: Device) -> Optional[int]:
         """Добавление устройства"""
         query = """
-            INSERT INTO devices (name, controller_id, type_id, port, params, current_values) 
-            VALUES (%s, %s, %s, %s, %s, %s) 
+            INSERT INTO devices (name, controller_id, type_id, port, params, current_values, is_controlled) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s) 
             RETURNING id
         """
         result = self._execute_query(
             query,
             (device.name, device.controller_id, device.type_id,
-             device.port, device.params, device.current_values),
+             device.port, device.params, device.current_values, device.is_controlled),
             fetch_one=True
         )
         if result:
@@ -440,6 +441,17 @@ class Database:
         device = self._devices_cache.get(device_id)
         if device:
             device.is_online = is_online
+            return True
+        return False
+
+    def update_device_is_controlled(self, device_id: int, is_controlled: bool) -> bool:
+        """Обновление статуса устройства"""
+        query = "UPDATE devices SET is_controlled = %s WHERE id = %s"
+        self._execute_query(query, (is_controlled, device_id))
+
+        device = self._devices_cache.get(device_id)
+        if device:
+            device.is_controlled = is_controlled
             return True
         return False
 

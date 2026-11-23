@@ -5,7 +5,7 @@
 -- Dumped from database version 16.0
 -- Dumped by pg_dump version 16.0
 
--- Started on 2026-10-23 13:24:20
+-- Started on 2026-11-22 18:14:05
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -195,7 +195,7 @@ ALTER TABLE ONLY public.triggers
     ADD CONSTRAINT triggers_pkey PRIMARY KEY (id);
 
 
--- Completed on 2026-10-23 13:24:21
+-- Completed on 2026-11-22 18:14:05
 
 --
 -- PostgreSQL database dump complete

@@ -144,7 +144,7 @@ class CoreKafkaHandler:
                 req_parts.append(device.port)
 
             req_parts.append(command)
-            if value:
+            if value or value == 0:
                 req_parts.append(str(value))
             req = "/".join(req_parts)
 
@@ -220,6 +220,8 @@ class CoreKafkaHandler:
 
         except Exception as e:
             print(f"[Core Kafka] Error starting OTA update: {e}")
+
+
 
     def _handle_update_device_table(self, message):
         data = message.get('data', {})

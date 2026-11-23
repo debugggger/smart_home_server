@@ -5,15 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Управление устройствами - Умный дом</title>
 
-    <!-- ✅ ДОБАВЛЕНО: Подключаем глобальные уведомления -->
     <link rel="stylesheet" href="/static/css/notifications.css">
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -21,10 +16,7 @@
             padding: 20px;
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; }
 
         .header {
             display: flex;
@@ -35,10 +27,7 @@
             gap: 15px;
         }
 
-        h1 {
-            color: #1e2a3a;
-            font-size: 28px;
-        }
+        h1 { color: #1e2a3a; font-size: 28px; }
 
         .header-buttons {
             display: flex;
@@ -47,7 +36,6 @@
             flex-wrap: wrap;
         }
 
-        /* ✅ ДОБАВЛЕНО: Индикатор статуса подключения */
         .connection-status {
             display: flex;
             align-items: center;
@@ -66,23 +54,11 @@
             border-radius: 50%;
             transition: background-color 0.3s;
         }
+        .status-dot.online { background-color: #10b981; }
+        .status-dot.offline { background-color: #ef4444; }
+        .status-dot.error { background-color: #f59e0b; }
 
-        .status-dot.online {
-            background-color: #10b981;
-        }
-
-        .status-dot.offline {
-            background-color: #ef4444;
-        }
-
-        .status-dot.error {
-            background-color: #f59e0b;
-        }
-
-        .status-text {
-            color: #475569;
-            font-weight: 500;
-        }
+        .status-text { color: #475569; font-weight: 500; }
 
         .back-btn, .add-btn {
             padding: 10px 20px;
@@ -93,21 +69,9 @@
             transition: 0.2s;
             font-weight: 500;
         }
-
-        .back-btn {
-            background: #64748b;
-            color: white;
-        }
-
-        .add-btn {
-            background: #4fc3f7;
-            color: #1e2a3a;
-            font-weight: bold;
-        }
-
-        .back-btn:hover, .add-btn:hover {
-            transform: translateY(-2px);
-        }
+        .back-btn { background: #64748b; color: white; }
+        .add-btn { background: #4fc3f7; color: #1e2a3a; font-weight: bold; }
+        .back-btn:hover, .add-btn:hover { transform: translateY(-2px); }
 
         .card {
             background: white;
@@ -121,7 +85,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 14px;
-            min-width: 600px;
+            min-width: 850px;
         }
 
         th {
@@ -148,10 +112,7 @@
             cursor: pointer;
             font-weight: 500;
         }
-
-        .delete-btn:hover {
-            background: #fecaca;
-        }
+        .delete-btn:hover { background: #fecaca; }
 
         .device-status-indicator {
             display: inline-block;
@@ -160,35 +121,15 @@
             border-radius: 50%;
             margin-right: 6px;
         }
+        .device-status-indicator.online { background-color: #10b981; }
+        .device-status-indicator.offline { background-color: #ef4444; }
 
-        .device-status-indicator.online {
-            background-color: #10b981;
-        }
+        .device-row { transition: background-color 0.3s; }
+        .device-row.offline { opacity: 0.6; }
+        .device-row.offline td:first-child::before { content: "🔴 "; font-size: 12px; }
 
-        .device-status-indicator.offline {
-            background-color: #ef4444;
-        }
-
-        .device-row {
-            transition: background-color 0.3s;
-        }
-
-        .device-row.offline {
-            opacity: 0.6;
-        }
-
-        .device-row.offline td:first-child::before {
-            content: "🔴 ";
-            font-size: 12px;
-        }
-
-        .status-online {
-            color: #10b981;
-        }
-
-        .status-offline {
-            color: #ef4444;
-        }
+        .status-online { color: #10b981; }
+        .status-offline { color: #ef4444; }
 
         .empty-state {
             text-align: center;
@@ -196,24 +137,63 @@
             color: #94a3b8;
         }
 
+        /* Toggle-переключатель */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+            vertical-align: middle;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .2s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+        }
+        .switch input:checked + .slider { background-color: #ef4444; }
+        .switch input:checked + .slider:before { transform: translateX(22px); }
+        .switch input:disabled + .slider { opacity: 0.6; cursor: not-allowed; }
+
+        /* Бейдж блокировки */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .badge.ok { background: #dcfce7; color: #15803d; }
+        .badge.warn { background: #fee2e2; color: #b91c1c; }
+        .badge .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
         /* Модальные окна */
         .modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: rgba(0,0,0,0.5);
             z-index: 2000;
             align-items: center;
             justify-content: center;
         }
-
-        .modal.active {
-            display: flex;
-        }
-
+        .modal.active { display: flex; }
         .modal-content {
             background: white;
             padding: 24px;
@@ -223,22 +203,10 @@
             max-height: 90vh;
             overflow-y: auto;
         }
+        .modal-content h3 { margin-bottom: 20px; color: #1e2a3a; }
+        .modal-content .form-description { color: #64748b; font-size: 13px; margin-bottom: 16px; }
 
-        .modal-content h3 {
-            margin-bottom: 20px;
-            color: #1e2a3a;
-        }
-
-        .modal-content .form-description {
-            color: #64748b;
-            font-size: 13px;
-            margin-bottom: 16px;
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-        }
-
+        .form-group { margin-bottom: 16px; }
         .form-group label {
             display: block;
             margin-bottom: 6px;
@@ -246,7 +214,6 @@
             font-weight: 500;
             font-size: 14px;
         }
-
         .form-group input,
         .form-group select {
             width: 100%;
@@ -257,7 +224,6 @@
             font-family: inherit;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
@@ -265,39 +231,16 @@
             box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.15);
         }
 
-        .field-required {
-            color: #ef4444;
-            font-weight: 600;
-        }
+        .field-required { color: #ef4444; font-weight: 600; }
+        .field-hint { display: block; color: #94a3b8; font-size: 12px; margin-top: 4px; }
 
-        .field-hint {
-            display: block;
-            color: #94a3b8;
-            font-size: 12px;
-            margin-top: 4px;
-        }
-
-        .dynamic-field {
-            animation: fadeIn 0.25s ease;
-        }
-
+        .dynamic-field { animation: fadeIn 0.25s ease; }
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-8px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .modal-buttons {
-            display: flex;
-            gap: 12px;
-            margin-top: 20px;
-        }
-
+        .modal-buttons { display: flex; gap: 12px; margin-top: 20px; }
         .modal-buttons button {
             flex: 1;
             padding: 10px;
@@ -308,30 +251,14 @@
             font-size: 14px;
             transition: 0.2s;
         }
-
-        .modal-buttons button:first-child {
-            background: #4fc3f7;
-            color: white;
-        }
-
-        .modal-buttons button:first-child:hover {
-            background: #29b6f6;
-            transform: translateY(-2px);
-        }
-
-        .modal-buttons button:last-child {
-            background: #e2e8f0;
-            color: #475569;
-        }
-
-        .modal-buttons button:last-child:hover {
-            background: #cbd5e1;
-        }
+        .modal-buttons button:first-child { background: #4fc3f7; color: white; }
+        .modal-buttons button:first-child:hover { background: #29b6f6; transform: translateY(-2px); }
+        .modal-buttons button:last-child { background: #e2e8f0; color: #475569; }
+        .modal-buttons button:last-child:hover { background: #cbd5e1; }
 
         .toast-msg {
             position: fixed;
-            bottom: 25px;
-            right: 25px;
+            bottom: 25px; right: 25px;
             background: #1e2a3a;
             color: white;
             padding: 12px 20px;
@@ -341,35 +268,16 @@
             opacity: 0;
             transition: 0.2s;
         }
+        .toast-msg.show { opacity: 1; }
 
-        .toast-msg.show {
-            opacity: 1;
-        }
-
-        .loading-text {
-            text-align: center;
-            padding: 40px;
-            color: #94a3b8;
-        }
+        .loading-text { text-align: center; padding: 40px; color: #94a3b8; }
 
         @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-            .card {
-                padding: 16px;
-            }
-            th, td {
-                padding: 10px 8px;
-                font-size: 12px;
-            }
-            .header-buttons {
-                justify-content: flex-end;
-            }
-            .modal-content {
-                width: 95%;
-                padding: 16px;
-            }
+            body { padding: 10px; }
+            .card { padding: 16px; }
+            th, td { padding: 10px 8px; font-size: 12px; }
+            .header-buttons { justify-content: flex-end; }
+            .modal-content { width: 95%; padding: 16px; }
         }
     </style>
 </head>
@@ -380,7 +288,6 @@
                 <h1 id="pageTitle">📟 Устройства контроллера</h1>
             </div>
             <div class="header-buttons">
-                <!-- ✅ ДОБАВЛЕНО: Индикатор статуса подключения -->
                 <div class="connection-status">
                     <span class="status-dot offline" id="statusDot"></span>
                     <span class="status-text" id="statusText">Отключено</span>
@@ -401,12 +308,13 @@
                             <th>Порт</th>
                             <th>Статус</th>
                             <th>Параметры</th>
+                            <th>Заблокировать управление</th>
                             <th>Действие</th>
                         </tr>
                     </thead>
                     <tbody id="devicesTableBody">
                         <tr>
-                            <td colspan="7" class="loading-text">⏳ Загрузка устройств...</td>
+                            <td colspan="8" class="loading-text">⏳ Загрузка устройств...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -432,7 +340,6 @@
                 </select>
             </div>
 
-            <!-- Контейнер для динамических полей (device_params) -->
             <div id="dynamicFieldsContainer"></div>
 
             <div class="modal-buttons">
@@ -442,7 +349,8 @@
         </div>
     </div>
 
-    <!-- ✅ ДОБАВЛЕНО: Подключаем глобальные уведомления -->
+    <div id="toastMsg" class="toast-msg"></div>
+
     <script src="/static/js/notifications.js"></script>
 
     <script>
@@ -463,7 +371,7 @@
             loadDeviceTypes();
         } else {
             document.getElementById('devicesTableBody').innerHTML =
-                '<tr><td colspan="7" class="empty-state">❌ Контроллер не выбран</td></tr>';
+                '<tr><td colspan="8" class="empty-state">❌ Контроллер не выбран</td></tr>';
         }
 
         // ============ ЗАГРУЗКА УСТРОЙСТВ ============
@@ -476,13 +384,15 @@
                 const tbody = document.getElementById('devicesTableBody');
 
                 if (!devices || devices.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">📭 Нет устройств. Нажмите "+ Добавить устройство"</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = '';
                 devices.forEach(device => {
                     const isOnline = device.is_online !== undefined ? device.is_online : true;
+                    const isControlled = device.is_controlled !== false;
+
                     const row = document.createElement('tr');
                     row.className = `device-row ${isOnline ? '' : 'offline'}`;
                     row.dataset.deviceId = device.id;
@@ -500,15 +410,93 @@
                             </span>
                         </td>
                         <td class="params-cell">${escapeHtml(device.params || '{}')}</td>
+                        <td class="controlled-cell"></td>
                         <td>
                             <button class="delete-btn" onclick="deleteDevice(${device.id})">Удалить</button>
                         </td>
                     `;
                     tbody.appendChild(row);
+
+                    renderControlledToggle(row.querySelector('.controlled-cell'), device.id, isControlled);
                 });
             } catch (error) {
                 console.error('Ошибка загрузки:', error);
                 showToast('❌ Ошибка загрузки устройств');
+            }
+        }
+
+        // ============ ТУМБЛЕР "Заблокировать управление" ============
+        // Чекбокс показывает ИНВЕРСИЮ is_controlled:
+        //   - галочка ВКЛючена  => is_controlled = false (управление заблокировано)
+        //   - галочка ВЫКЛючена => is_controlled = true  (управление разрешено)
+        function renderControlledToggle(cell, deviceId, isControlled) {
+            cell.innerHTML = '';
+
+            const label = document.createElement('label');
+            label.className = 'switch';
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = !isControlled;         // инверсия
+            input.dataset.deviceId = deviceId;
+            input.onchange = (e) => toggleDeviceBlocked(deviceId, e.target.checked, e.target);
+
+            const slider = document.createElement('span');
+            slider.className = 'slider';
+
+            label.appendChild(input);
+            label.appendChild(slider);
+            cell.appendChild(label);
+
+            const badge = document.createElement('span');
+            badge.className = `badge ${isControlled ? 'ok' : 'warn'}`;
+            badge.innerHTML = isControlled
+                ? '<span class="dot"></span>Управление разрешено'
+                : '<span class="dot"></span>Управление заблокировано';
+            cell.appendChild(badge);
+        }
+
+        async function toggleDeviceBlocked(deviceId, isBlocked, inputEl) {
+            if (!inputEl || inputEl.dataset.busy === '1') return;
+            inputEl.disabled = true;
+            inputEl.dataset.busy = '1';
+
+            // Чекбокс = "заблокировать" => is_controlled = !isBlocked
+            const newControlled = !isBlocked;
+
+            try {
+                const res = await fetch(`/api/devices/${deviceId}/toggle-controlled`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_controlled: newControlled })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+                // Синхронизация с ответом сервера (обратная инверсия для UI)
+                inputEl.checked = !data.is_controlled;
+                if (devicesData[deviceId]) devicesData[deviceId].is_controlled = data.is_controlled;
+
+                // Обновляем бейдж в той же ячейке
+                const cell = inputEl.closest('td');
+                const badge = cell.querySelector('.badge');
+                if (badge) {
+                    badge.className = `badge ${data.is_controlled ? 'ok' : 'warn'}`;
+                    badge.innerHTML = data.is_controlled
+                        ? '<span class="dot"></span>Управление разрешено'
+                        : '<span class="dot"></span>Управление заблокировано';
+                }
+
+                showToast(data.is_controlled
+                    ? '🔓 Управление разрешено'
+                    : '🔒 Управление заблокировано');
+            } catch (e) {
+                console.error('toggleDeviceBlocked:', e);
+                inputEl.checked = !isBlocked; // откат в живой чекбокс
+                showToast('❌ ' + e.message);
+            } finally {
+                inputEl.disabled = false;
+                delete inputEl.dataset.busy;
             }
         }
 
@@ -532,27 +520,19 @@
             }
         }
 
-        // ============ ПОИСК ТИПА ПО ID ============
         function findTypeById(typeId) {
             return deviceTypesList.find(t => t.id == typeId);
         }
 
-        // ============ ОБРАБОТЧИК СМЕНЫ ТИПА ============
         function onDeviceTypeChange() {
             const typeId = document.getElementById('deviceTypeId').value;
             const container = document.getElementById('dynamicFieldsContainer');
             container.innerHTML = '';
 
-            if (!typeId) {
-                currentDeviceParams = {};
-                return;
-            }
+            if (!typeId) { currentDeviceParams = {}; return; }
 
             const type = findTypeById(typeId);
-            if (!type) {
-                currentDeviceParams = {};
-                return;
-            }
+            if (!type) { currentDeviceParams = {}; return; }
 
             const deviceParams = type.param_names?.device_params || {};
             currentDeviceParams = deviceParams;
@@ -603,15 +583,12 @@
             });
         }
 
-        // ============ СБОР ПАРАМЕТРОВ УСТРОЙСТВА ============
         function collectDeviceParams() {
             const params = {};
             const inputs = document.querySelectorAll('.dynamic-input');
             inputs.forEach(input => {
                 const key = input.dataset.paramKey;
-                if (key) {
-                    params[key] = input.value || '';
-                }
+                if (key) params[key] = input.value || '';
             });
 
             const fallback = document.getElementById('deviceParamsFallback');
@@ -619,31 +596,9 @@
                 try {
                     const extra = JSON.parse(fallback.value);
                     Object.assign(params, extra);
-                } catch {
-                    // Игнорируем
-                }
+                } catch {}
             }
-
             return params;
-        }
-
-        // ============ ФОРМИРОВАНИЕ PARAMS ДЛЯ СОХРАНЕНИЯ ============
-        function buildDeviceParamsForSave() {
-            const collected = collectDeviceParams();
-            const port = collected.port || '';
-
-            const { port: _, ...restParams } = collected;
-
-            if (Object.keys(restParams).length === 0) {
-                return { port: port, params: '' };
-            }
-
-            const paramsStr = Object.values(restParams).join('/');
-
-            return {
-                port: port,
-                params: paramsStr
-            };
         }
 
         // ============ СОХРАНЕНИЕ УСТРОЙСТВА ============
@@ -656,7 +611,6 @@
                 document.getElementById('deviceName').focus();
                 return;
             }
-
             if (!typeId) {
                 showToast('❌ Выберите тип устройства');
                 document.getElementById('deviceTypeId').focus();
@@ -677,50 +631,35 @@
             });
             if (hasError) return;
 
-            // ============ ПРОВЕРКА ЗАНЯТОСТИ ПОРТОВ ============
+            // Проверка занятости портов
             try {
                 const response = await fetch(`/api/devices/by-controller/${currentControllerId}`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const existingDevices = await response.json();
 
                 const usedPorts = [];
-
                 existingDevices.forEach(device => {
                     if (device.port && device.port.trim() !== '') {
                         usedPorts.push(device.port.trim());
                     }
-
                     if (device.params) {
                         try {
                             const params = typeof device.params === 'string'
                                 ? JSON.parse(device.params)
                                 : device.params;
-
                             for (const [key, value] of Object.entries(params)) {
-                                if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
-                                    usedPorts.push(value.trim());
+                                if (key.toLowerCase().includes('port') && value && String(value).trim() !== '') {
+                                    usedPorts.push(String(value).trim());
                                 }
                             }
-                        } catch (e) {
-                            // Игнорируем
-                        }
+                        } catch {}
                     }
                 });
 
-                console.log('[Port Check] Used ports:', usedPorts);
-
                 const selectedPorts = [];
-
-                const mainPortInput = document.getElementById('devicePort');
-                if (mainPortInput && mainPortInput.value.trim() !== '') {
-                    selectedPorts.push(mainPortInput.value.trim());
-                }
-
-                const dynamicInputs = document.querySelectorAll('.dynamic-input');
-                dynamicInputs.forEach(input => {
+                document.querySelectorAll('.dynamic-input').forEach(input => {
                     const value = input.value.trim();
                     if (!value) return;
-
                     const paramKey = input.dataset.paramKey || '';
                     if (paramKey.toLowerCase().includes('port') ||
                         input.closest('.form-group')?.querySelector('label')?.textContent?.toLowerCase().includes('порт')) {
@@ -728,29 +667,11 @@
                     }
                 });
 
-                const paramsInput = document.getElementById('deviceParams');
-                if (paramsInput && paramsInput.value.trim() !== '') {
-                    try {
-                        const extraParams = JSON.parse(paramsInput.value.trim());
-                        for (const [key, value] of Object.entries(extraParams)) {
-                            if (key.toLowerCase().includes('port') && value && value.trim() !== '') {
-                                selectedPorts.push(value.trim());
-                            }
-                        }
-                    } catch (e) {
-                        // Игнорируем
-                    }
-                }
-
-                console.log('[Port Check] Selected ports:', selectedPorts);
-
                 const duplicatePorts = selectedPorts.filter(port => usedPorts.includes(port));
-
                 if (duplicatePorts.length > 0) {
                     const uniqueDuplicates = [...new Set(duplicatePorts)];
                     const portsList = uniqueDuplicates.join(', ');
 
-                    // ✅ ИСПОЛЬЗУЕМ ГЛОБАЛЬНЫЙ NOTIFICATION MANAGER
                     if (window.notificationManager) {
                         window.notificationManager.showToast({
                             type: 'error',
@@ -760,8 +681,7 @@
                         showToast(`❌ Порт(ы) уже заняты: ${portsList}`);
                     }
 
-                    const allInputs = document.querySelectorAll('input[type="text"], input[type="number"]');
-                    allInputs.forEach(input => {
+                    document.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
                         const value = input.value.trim();
                         if (value && uniqueDuplicates.includes(value)) {
                             input.style.borderColor = '#ef4444';
@@ -772,51 +692,21 @@
                             }, 3000);
                         }
                     });
-
                     return;
                 }
-
-                console.log('[Port Check] ✅ All ports are available');
-
             } catch (error) {
                 console.error('[Port Check] Error checking ports:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({
-                        type: 'warning',
-                        message: '⚠️ Ошибка проверки портов, продолжаем сохранение...'
-                    });
-                } else {
-                    showToast('⚠️ Ошибка проверки портов, продолжаем сохранение...');
-                }
             }
 
-            // ============ СОХРАНЕНИЕ ============
-
+            // Собираем payload
             const collectedParams = collectDeviceParams();
             const port = collectedParams.port || '';
-
             const { port: _, ...restParams } = collectedParams;
 
-            let paramsForSave = {};
-
-            if (Object.keys(restParams).length > 0) {
-                Object.keys(restParams).forEach(key => {
-                    const value = restParams[key];
-                    if (value) {
-                        paramsForSave[key] = value;
-                    }
-                });
-            }
-
-            const paramsInput = document.getElementById('deviceParams');
-            if (paramsInput && paramsInput.style.display !== 'none' && paramsInput.value.trim()) {
-                try {
-                    const extra = JSON.parse(paramsInput.value.trim());
-                    Object.assign(paramsForSave, extra);
-                } catch (e) {
-                    // Игнорируем
-                }
-            }
+            const paramsForSave = {};
+            Object.keys(restParams).forEach(key => {
+                if (restParams[key]) paramsForSave[key] = restParams[key];
+            });
 
             const payload = {
                 name: name,
@@ -825,8 +715,6 @@
                 port: port || '',
                 params: JSON.stringify(paramsForSave)
             };
-
-            console.log('[Save] Payload:', payload);
 
             try {
                 const response = await fetch('/api/devices', {
@@ -837,45 +725,28 @@
 
                 if (response.ok) {
                     closeModal('addDeviceModal');
-
                     if (window.notificationManager) {
-                        window.notificationManager.showToast({
-                            type: 'ok',
-                            message: '✅ Устройство добавлено'
-                        });
+                        window.notificationManager.showToast({ type: 'ok', message: '✅ Устройство добавлено' });
                     } else {
                         showToast('✅ Устройство добавлено');
                     }
-
                     loadDevices();
-
                     document.getElementById('deviceName').value = '';
                     document.getElementById('deviceTypeId').value = '';
                     document.getElementById('dynamicFieldsContainer').innerHTML = '';
-                    document.getElementById('devicePort').value = '';
-                    document.getElementById('deviceParams').value = '';
                     currentDeviceParams = {};
                 } else {
                     const error = await response.json();
+                    const msg = `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`;
                     if (window.notificationManager) {
-                        window.notificationManager.showToast({
-                            type: 'error',
-                            message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
-                        });
+                        window.notificationManager.showToast({ type: 'error', message: msg });
                     } else {
-                        showToast(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+                        showToast(msg);
                     }
                 }
             } catch (error) {
                 console.error('Ошибка сохранения:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({
-                        type: 'error',
-                        message: `❌ Ошибка: ${error.message}`
-                    });
-                } else {
-                    showToast(`❌ Ошибка: ${error.message}`);
-                }
+                showToast(`❌ Ошибка: ${error.message}`);
             }
         }
 
@@ -886,49 +757,25 @@
                 const response = await fetch(`/api/devices/${deviceId}`, { method: 'DELETE' });
                 if (response.ok) {
                     if (window.notificationManager) {
-                        window.notificationManager.showToast({
-                            type: 'ok',
-                            message: '✅ Устройство удалено'
-                        });
+                        window.notificationManager.showToast({ type: 'ok', message: '✅ Устройство удалено' });
                     } else {
                         showToast('✅ Устройство удалено');
                     }
                     delete devicesData[deviceId];
                     loadDevices();
                 } else {
-                    if (window.notificationManager) {
-                        window.notificationManager.showToast({
-                            type: 'error',
-                            message: '❌ Ошибка удаления'
-                        });
-                    } else {
-                        showToast('❌ Ошибка удаления');
-                    }
+                    showToast('❌ Ошибка удаления');
                 }
             } catch (error) {
                 console.error('Ошибка удаления:', error);
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({
-                        type: 'error',
-                        message: `❌ Ошибка: ${error.message}`
-                    });
-                } else {
-                    showToast(`❌ Ошибка: ${error.message}`);
-                }
+                showToast(`❌ Ошибка: ${error.message}`);
             }
         }
 
         // ============ МОДАЛЬНЫЕ ОКНА ============
         function showAddDeviceModal() {
             if (!currentControllerId) {
-                if (window.notificationManager) {
-                    window.notificationManager.showToast({
-                        type: 'error',
-                        message: '❌ Контроллер не выбран'
-                    });
-                } else {
-                    showToast('❌ Контроллер не выбран');
-                }
+                showToast('❌ Контроллер не выбран');
                 return;
             }
             document.getElementById('addDeviceModal').classList.add('active');
@@ -965,37 +812,25 @@
                 .replace(/'/g, '&#39;');
         }
 
-        // ============ ✅ ДОБАВЛЕНО: ПОДПИСКА НА УВЕДОМЛЕНИЯ ============
+        // ============ ПОДПИСКА НА УВЕДОМЛЕНИЯ ============
         document.addEventListener('DOMContentLoaded', function() {
             if (window.notificationManager) {
-                // Подписка на уведомления
                 window.notificationManager.addListener('notification', function(data) {
                     console.log('[Devices] Уведомление:', data);
-                    // Обновляем список устройств при изменении статуса
-                    if (data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE') {
-                        loadDevices();
-                    }
-                    // Обновляем список устройств при ошибке инициализации
-                    if (data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS') {
+                    if (data.type === 'DEVICE_OFFLINE' || data.type === 'DEVICE_ONLINE' ||
+                        data.type === 'INIT_ERROR' || data.type === 'INIT_SUCCESS') {
                         loadDevices();
                     }
                 });
 
-                // Подписка на обновление статуса
                 window.notificationManager.addListener('device_status_update', function(data) {
-                    console.log('[Devices] Обновление статуса устройства:', data);
-                    // Обновляем конкретное устройство в таблице
                     updateDeviceStatusInTable(data.device_id, data.is_online);
                 });
 
-                // Подписка на обновление значений
                 window.notificationManager.addListener('device_updated', function(data) {
-                    console.log('[Devices] Обновление значений устройства:', data);
-                    // Обновляем конкретное устройство в таблице
                     updateDeviceValuesInTable(data.device_id, data.current_values);
                 });
 
-                // Подписка на статус подключения
                 window.notificationManager.addListener('connection_status', function(status) {
                     const dot = document.getElementById('statusDot');
                     const text = document.getElementById('statusText');
@@ -1012,15 +847,12 @@
             }
         });
 
-        // ============ ОБНОВЛЕНИЕ СТАТУСА В ТАБЛИЦЕ ============
         function updateDeviceStatusInTable(deviceId, isOnline) {
             const row = document.querySelector(`.device-row[data-device-id="${deviceId}"]`);
             if (!row) return;
 
-            // Обновляем класс строки
             row.className = `device-row ${isOnline ? '' : 'offline'}`;
 
-            // Обновляем статус в ячейке
             const statusCell = row.querySelector('.status-cell');
             if (statusCell) {
                 const indicator = statusCell.querySelector('.device-status-indicator');
@@ -1034,22 +866,15 @@
                     text.textContent = isOnline ? 'Онлайн' : 'Офлайн';
                 }
             }
-
-            console.log(`[Devices] Обновлен статус устройства ${deviceId}: ${isOnline ? 'онлайн' : 'офлайн'}`);
         }
 
-        // ============ ОБНОВЛЕНИЕ ЗНАЧЕНИЙ В ТАБЛИЦЕ ============
         function updateDeviceValuesInTable(deviceId, currentValues) {
             const row = document.querySelector(`.device-row[data-device-id="${deviceId}"]`);
             if (!row) return;
-
-            // Обновляем параметры (если нужно отображать значения)
             const paramsCell = row.querySelector('.params-cell');
             if (paramsCell && currentValues) {
                 paramsCell.textContent = JSON.stringify(currentValues);
             }
-
-            console.log(`[Devices] Обновлены значения устройства ${deviceId}:`, currentValues);
         }
 
         // ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML ============

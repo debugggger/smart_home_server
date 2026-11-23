@@ -5,16 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Умный дом - Панель управления</title>
 
-    <!-- Подключаем глобальные уведомления -->
     <link rel="stylesheet" href="/static/css/notifications.css">
 
     <style>
         /* ===== ОСНОВНЫЕ СТИЛИ ===== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -22,10 +17,7 @@
             padding: 20px;
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; }
 
         .header {
             display: flex;
@@ -36,10 +28,7 @@
             gap: 15px;
         }
 
-        h1 {
-            color: #1e2a3a;
-            font-size: 28px;
-        }
+        h1 { color: #1e2a3a; font-size: 28px; }
 
         .header-buttons {
             display: flex;
@@ -58,21 +47,9 @@
             font-weight: 500;
         }
 
-        .refresh-btn {
-            background: #4fc3f7;
-            color: #1e2a3a;
-        }
-
-        .menu-btn {
-            background: #64748b;
-            color: white;
-        }
-
-        .refresh-btn:hover, .menu-btn:hover {
-            transform: translateY(-2px);
-        }
-
-
+        .refresh-btn { background: #4fc3f7; color: #1e2a3a; }
+        .menu-btn { background: #64748b; color: white; }
+        .refresh-btn:hover, .menu-btn:hover { transform: translateY(-2px); }
 
         .connection-status {
             display: flex;
@@ -87,33 +64,18 @@
 
         .status-dot {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 10px; height: 10px;
             border-radius: 50%;
             transition: background-color 0.3s;
         }
+        .status-dot.online { background-color: #10b981; }
+        .status-dot.offline { background-color: #ef4444; }
+        .status-dot.error { background-color: #f59e0b; }
 
-        .status-dot.online {
-            background-color: #10b981;
-        }
+        .status-text { color: #475569; font-weight: 500; }
 
-        .status-dot.offline {
-            background-color: #ef4444;
-        }
-
-        .status-dot.error {
-            background-color: #f59e0b;
-        }
-
-        .status-text {
-            color: #475569;
-            font-weight: 500;
-        }
-
-        /* ===== КАРТОЧКИ УСТРОЙСТВ ===== */
-        .room-section {
-            margin-bottom: 30px;
-        }
+        /* ===== КАРТОЧКИ ===== */
+        .room-section { margin-bottom: 30px; }
 
         .room-header {
             background: white;
@@ -126,15 +88,8 @@
             gap: 10px;
         }
 
-        .room-header h2 {
-            color: #1e2a3a;
-            font-size: 22px;
-        }
-
-        .room-header .room-icon {
-            font-size: 28px;
-        }
-
+        .room-header h2 { color: #1e2a3a; font-size: 22px; }
+        .room-header .room-icon { font-size: 28px; }
         .room-header .devices-count {
             background: #e2e8f0;
             padding: 4px 12px;
@@ -157,17 +112,31 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             transition: transform 0.2s, box-shadow 0.2s;
             position: relative;
+            border: 2px solid transparent;
         }
-
         .device-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0,0,0,0.12);
         }
 
+        /* офлайн — красная рамка */
         .device-card.offline {
             opacity: 0.7;
-            border: 2px solid #ef4444;
+            border-color: #ef4444;
             background: #fef2f2;
+        }
+
+        /* заблокировано — жёлтая рамка */
+        .device-card.locked {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        /* офлайн + locked — обе рамки не сработают одновременно,
+           приоритет у offline (красная), но добавим оранжевый бейдж */
+        .device-card.offline .locked-badge,
+        .device-card.locked .offline-badge {
+            /* не конфликтуют, оба видны */
         }
 
         .device-card .offline-badge {
@@ -179,6 +148,16 @@
             font-weight: 600;
             margin-left: 8px;
             animation: pulse-badge 2s infinite;
+        }
+
+        .device-card .locked-badge {
+            background: #f59e0b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 8px;
         }
 
         @keyframes pulse-badge {
@@ -194,13 +173,7 @@
             padding-bottom: 10px;
             border-bottom: 1px solid #e2e8f0;
         }
-
-        .device-name {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1e2a3a;
-        }
-
+        .device-name { font-size: 18px; font-weight: 600; color: #1e2a3a; }
         .device-type {
             font-size: 12px;
             padding: 4px 10px;
@@ -209,9 +182,7 @@
             color: #475569;
         }
 
-        .device-info {
-            margin-bottom: 15px;
-        }
+        .device-info { margin-bottom: 15px; }
 
         .info-row {
             display: flex;
@@ -220,41 +191,23 @@
             border-bottom: 1px dashed #e2e8f0;
             font-size: 14px;
         }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #1e293b; font-weight: 600; }
 
-        .info-label {
-            color: #64748b;
-            font-weight: 500;
-        }
-
-        .info-value {
-            color: #1e293b;
-            font-weight: 600;
-        }
-
-        .status-online {
-            color: #10b981;
-        }
-
-        .status-offline {
-            color: #ef4444;
-        }
+        .status-online { color: #10b981; }
+        .status-offline { color: #ef4444; }
 
         .device-status-indicator {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 10px; height: 10px;
             border-radius: 50%;
             margin-right: 6px;
         }
-
         .device-status-indicator.online {
             background-color: #10b981;
             animation: pulse-online 2s infinite;
         }
-
-        .device-status-indicator.offline {
-            background-color: #ef4444;
-        }
+        .device-status-indicator.offline { background-color: #ef4444; }
 
         @keyframes pulse-online {
             0%, 100% { opacity: 1; }
@@ -267,7 +220,9 @@
             padding: 12px;
             margin-bottom: 15px;
         }
-
+        .device-card.locked .readings-section {
+            background: #fff7ed;
+        }
         .readings-title {
             font-size: 12px;
             font-weight: 600;
@@ -284,15 +239,11 @@
             border-bottom: 1px solid #e2e8f0;
             transition: background-color 0.3s;
         }
-
-        .reading-item:last-child {
-            border-bottom: none;
-        }
+        .reading-item:last-child { border-bottom: none; }
 
         .reading-item.updating {
             animation: pulse 0.5s ease-in-out;
         }
-
         @keyframes pulse {
             0% { background-color: #f0fdf4; }
             50% { background-color: #bbf7d0; }
@@ -310,18 +261,43 @@
             border: 1px solid #fecaca;
         }
 
-        .reading-name {
-            color: #475569;
+        .reading-name { color: #475569; }
+        .reading-value { font-weight: 600; color: #1e293b; }
+
+        .hex-reading {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 13px;
+            border: 2px solid #cbd5e1;
+            letter-spacing: 0.5px;
         }
 
-        .reading-value {
+        /* ===== ПЛАШКА "ЗАБЛОКИРОВАНО" ===== */
+        .locked-notice {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: #fff7ed;
+            border: 2px solid #f59e0b;
+            border-radius: 12px;
+            color: #92400e;
+            font-size: 13px;
             font-weight: 600;
-            color: #1e293b;
-        }
-
-        .controls-section {
             margin-top: 15px;
         }
+        .locked-notice .locked-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .locked-notice .locked-text {
+            line-height: 1.4;
+        }
+
+        .controls-section { margin-top: 15px; }
 
         .controls-title {
             font-size: 12px;
@@ -349,33 +325,21 @@
             transition: 0.2s;
             color: #334155;
         }
-
         .control-btn:hover:not(:disabled) {
             background: #e2e8f0;
             transform: scale(1.02);
         }
+        .control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .control-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .control-btn.primary {
-            background: #4fc3f7;
-            color: white;
-        }
-
-        .control-btn.primary:hover:not(:disabled) {
-            background: #29b6f6;
-        }
+        .control-btn.primary { background: #4fc3f7; color: white; }
+        .control-btn.primary:hover:not(:disabled) { background: #29b6f6; }
 
         .numeric-input-group {
             display: flex;
             gap: 8px;
             align-items: center;
         }
-
-       .numeric-input-group input {
+        .numeric-input-group input {
             flex: 1;
             min-width: 120px;
             padding: 6px 8px;
@@ -385,13 +349,12 @@
             box-sizing: border-box;
         }
 
-        /* ===== ВЫПАДАЮЩИЙ СПИСОК (spinT) ===== */
+        /* ===== spinT ===== */
         .spin-select-group {
             display: flex;
             gap: 8px;
             align-items: center;
         }
-
         .spin-select-group select {
             padding: 6px 10px;
             border: 1px solid #cbd5e1;
@@ -403,61 +366,260 @@
             min-width: 140px;
             max-width: 220px;
         }
+        .spin-select-group select:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .spin-select-group select:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* ===== СТРОКОВОЕ ПОЛЕ (strT) ===== */
+        /* ===== strT ===== */
         .str-input-group {
             display: flex;
             gap: 8px;
             align-items: center;
         }
-
         .str-input-group input {
-        flex: 1;
-        min-width: 140px;
-        padding: 6px 10px;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        font-size: 13px;
-        color: #1e293b;
-        background: white;
-        box-sizing: border-box;
-    }
+            flex: 1;
+            min-width: 140px;
+            padding: 6px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #1e293b;
+            background: white;
+            box-sizing: border-box;
+        }
+        .str-input-group input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .str-input-group input:disabled {
+        /* ===== sliceT ===== */
+        .slice-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 2px solid transparent;
+            transition: border-color 0.3s, background 0.3s;
+            width: 100%;
+        }
+        .slice-input-group.pending {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+        .slice-input-group .slice-label {
+            font-size: 13px;
+            color: #334155;
+            font-weight: 500;
+            flex-shrink: 0;
+            min-width: 90px;
+        }
+        .slice-input-group input[type="range"] {
+            flex: 1;
+            min-width: 100px;
+            accent-color: #4fc3f7;
+            cursor: pointer;
+        }
+        .slice-input-group input[type="range"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .slice-input-group input[type="number"] {
+            width: 70px;
+            padding: 5px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .slice-input-group input[type="number"]:focus {
+            outline: none;
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.2);
+        }
+        .slice-input-group input[type="number"]:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
+        /* ===== hexT ===== */
+        .hex-inline-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 2px solid transparent;
+            transition: border-color 0.3s, background 0.3s;
+            width: 100%;
+        }
+        .hex-inline-group.pending {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .hex-swatch-btn {
+            width: 36px;
+            height: 36px;
+            border: 2px solid #cbd5e1;
+            border-radius: 50%;
+            padding: 0;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.15s, border-color 0.15s;
+            box-shadow: inset 0 0 0 2px white;
+        }
+        .hex-swatch-btn:hover:not(:disabled) {
+            transform: scale(1.08);
+            border-color: #4fc3f7;
+        }
+        .hex-swatch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .hex-inline-group .hex-label {
+            font-size: 13px;
+            color: #334155;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .hex-inline-group .hex-code-input {
+            flex: 1;
+            min-width: 90px;
+            padding: 6px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: #475569;
+            background: white;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            box-sizing: border-box;
+        }
+        .hex-inline-group .hex-code-input:focus {
+            outline: none;
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.2);
+        }
+        .hex-inline-group .hex-code-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ===== МОДАЛКА ПАЛИТРЫ ===== */
+        .hex-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+        }
+
+        .hex-modal {
+            background: white;
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+            max-width: 360px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .hex-modal h3 { color: #1e2a3a; font-size: 17px; margin: 0; }
+
+        .hex-wheel-wrap {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hex-wheel-canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            cursor: crosshair;
+            touch-action: none;
+            display: block;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .hex-wheel-cursor {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+        }
+
+        .hex-led-preview {
+            width: 100%;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hex-led-preview::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.25) 0 4px, transparent 5px),
+                radial-gradient(circle at 40% 50%, rgba(255,255,255,0.25) 0 4px, transparent 5px),
+                radial-gradient(circle at 60% 50%, rgba(255,255,255,0.25) 0 4px, transparent 5px),
+                radial-gradient(circle at 80% 50%, rgba(255,255,255,0.25) 0 4px, transparent 5px);
+            pointer-events: none;
+        }
+        .hex-led-preview-label {
+            position: relative;
+            z-index: 1;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            padding: 2px 10px;
+            border-radius: 6px;
+        }
+
+        .hex-modal-hint {
+            font-size: 12px;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: -4px;
+        }
+
+        /* ===== boolT ===== */
         .toggle-switch {
             position: relative;
             display: inline-block;
             width: 50px;
             height: 24px;
         }
-
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
         .toggle-slider {
             position: absolute;
             cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background-color: #cbd5e1;
             transition: 0.3s;
             border-radius: 24px;
         }
-
         .toggle-slider:before {
             position: absolute;
             content: "";
@@ -469,14 +631,8 @@
             transition: 0.3s;
             border-radius: 50%;
         }
-
-        input:checked + .toggle-slider {
-            background-color: #4fc3f7;
-        }
-
-        input:checked + .toggle-slider:before {
-            transform: translateX(26px);
-        }
+        input:checked + .toggle-slider { background-color: #4fc3f7; }
+        input:checked + .toggle-slider:before { transform: translateX(26px); }
 
         .loading {
             text-align: center;
@@ -489,30 +645,14 @@
             padding: 50px;
             color: #64748b;
         }
-
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 15px; }
 
         @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-            .devices-grid {
-                grid-template-columns: 1fr;
-            }
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .header-buttons {
-                justify-content: flex-end;
-            }
-            .connection-status {
-                order: -1;
-                justify-content: center;
-            }
+            body { padding: 10px; }
+            .devices-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: stretch; }
+            .header-buttons { justify-content: flex-end; }
+            .connection-status { order: -1; justify-content: center; }
         }
     </style>
 </head>
@@ -541,6 +681,14 @@
         let deviceTypesConfig = {};
         let deviceDataCache = {};
         let notificationManager = window.notificationManager;
+
+        const AUTO_SEND_DELAY_MS = 500;
+
+        const LED_CORRECTION = {
+            saturation: 0.9,
+            value: 0.95,
+            gamma: 1.15
+        };
 
         // ============ ПОДПИСКА НА ОБНОВЛЕНИЯ ============
 
@@ -602,10 +750,6 @@
             return {};
         }
 
-        /**
-         * Приводит массив values из spinT-команды к плоскому виду:
-         *   [{ key: "0", description: "выключена" }, ...]
-         */
         function parseSpinValues(values) {
             if (!Array.isArray(values)) return [];
             const result = [];
@@ -625,27 +769,134 @@
             return result;
         }
 
+        // ============ HEX / HSV УТИЛИТЫ ============
+
+        function decToHex(dec) {
+            let n = Number(dec);
+            if (!isFinite(n) || n < 0) return '000000';
+            n = Math.floor(n) & 0xFFFFFF;
+            return n.toString(16).toUpperCase().padStart(6, '0');
+        }
+
+        function hexToDec(hex) {
+            if (hex === null || hex === undefined) return 0;
+            let s = String(hex).trim().replace(/^#/, '');
+            if (s.length === 3) s = s.split('').map(c => c + c).join('');
+            if (!/^[0-9a-fA-F]{1,6}$/.test(s)) return 0;
+            return parseInt(s, 16);
+        }
+
+        function getContrastText(hex) {
+            const h = String(hex).replace(/^#/, '');
+            if (h.length !== 6) return '#000000';
+            const r = parseInt(h.slice(0, 2), 16);
+            const g = parseInt(h.slice(2, 4), 16);
+            const b = parseInt(h.slice(4, 6), 16);
+            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return lum > 0.6 ? '#000000' : '#FFFFFF';
+        }
+
+        function toHexString(rawValue) {
+            if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+            if (typeof rawValue === 'string'
+                && /^#?[0-9a-fA-F]{3,6}$/.test(rawValue.trim())
+                && /[a-fA-F]/.test(rawValue)) {
+                let s = rawValue.trim().replace(/^#/, '');
+                if (s.length === 3) s = s.split('').map(c => c + c).join('');
+                return s.toUpperCase().padStart(6, '0');
+            }
+            return decToHex(Number(rawValue));
+        }
+
+        function isValidHexString(str) {
+            if (typeof str !== 'string') return false;
+            const s = str.trim().replace(/^#/, '');
+            return /^[0-9a-fA-F]{6}$/.test(s) || /^[0-9a-fA-F]{3}$/.test(s);
+        }
+
+        function normalizeHexInput(str) {
+            let s = String(str).trim().replace(/^#/, '').toUpperCase();
+            if (s.length === 3) s = s.split('').map(c => c + c).join('');
+            return s.padStart(6, '0').slice(0, 6);
+        }
+
+        function hexToRgb(hex) {
+            const h = normalizeHexInput(hex);
+            return {
+                r: parseInt(h.slice(0, 2), 16),
+                g: parseInt(h.slice(2, 4), 16),
+                b: parseInt(h.slice(4, 6), 16)
+            };
+        }
+
+        function rgbToHex(r, g, b) {
+            const c = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+            return (c(r) + c(g) + c(b)).toUpperCase();
+        }
+
+        function rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            const d = max - min;
+            let h = 0;
+            if (d !== 0) {
+                if (max === r) h = ((g - b) / d) % 6;
+                else if (max === g) h = (b - r) / d + 2;
+                else h = (r - g) / d + 4;
+                h *= 60;
+                if (h < 0) h += 360;
+            }
+            const s = max === 0 ? 0 : d / max;
+            const v = max;
+            return { h, s, v };
+        }
+
+        function hsvToRgb(h, s, v) {
+            h = ((h % 360) + 360) % 360;
+            const c = v * s;
+            const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+            const m = v - c;
+            let r = 0, g = 0, b = 0;
+            if (h < 60)       { r = c; g = x; b = 0; }
+            else if (h < 120) { r = x; g = c; b = 0; }
+            else if (h < 180) { r = 0; g = c; b = x; }
+            else if (h < 240) { r = 0; g = x; b = c; }
+            else if (h < 300) { r = x; g = 0; b = c; }
+            else              { r = c; g = 0; b = x; }
+            return {
+                r: Math.round((r + m) * 255),
+                g: Math.round((g + m) * 255),
+                b: Math.round((b + m) * 255)
+            };
+        }
+
+        function applyLedCorrection(hex) {
+            const { r, g, b } = hexToRgb(hex);
+            const { h, s, v } = rgbToHsv(r, g, b);
+            const s2 = Math.min(1, s * LED_CORRECTION.saturation);
+            const v2 = Math.min(1, v * LED_CORRECTION.value);
+            const { r: r2, g: g2, b: b2 } = hsvToRgb(h, s2, v2);
+            const gamma = v => Math.pow(Math.max(0, Math.min(1, v / 255)), LED_CORRECTION.gamma) * 255;
+            return rgbToHex(gamma(r2), gamma(g2), gamma(b2));
+        }
+
         // ============ ОБРАБОТКА ОБНОВЛЕНИЙ ============
 
         function handleDeviceStatusUpdate(data) {
             const deviceId = data.device_id;
             const isOnline = data.is_online;
-
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].is_online = isOnline;
             }
-
             updateDeviceCardStatus(deviceId, isOnline);
         }
 
         function handleDeviceValueUpdate(data) {
             const deviceId = data.device_id;
             const currentValues = normalizeCurrentValues(data.current_values);
-
             if (deviceDataCache[deviceId]) {
                 deviceDataCache[deviceId].current_values = currentValues;
             }
-
             updateDeviceCardValues(deviceId, currentValues);
         }
 
@@ -655,11 +906,8 @@
             const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
             if (!card) return;
 
-            if (isOnline) {
-                card.classList.remove('offline');
-            } else {
-                card.classList.add('offline');
-            }
+            if (isOnline) card.classList.remove('offline');
+            else card.classList.add('offline');
 
             const nameSpan = card.querySelector('.device-name');
             if (nameSpan) {
@@ -698,13 +946,13 @@
                         indicator.textContent = '⚠️ Устройство офлайн, показания недоступны';
                         readingsSection.appendChild(indicator);
                     }
-                } else {
-                    if (indicator) indicator.remove();
+                } else if (indicator) {
+                    indicator.remove();
                 }
             }
 
             const controls = card.querySelectorAll(
-                '.control-btn, .toggle-switch input, .numeric-input-group input, .spin-select-group select, .str-input-group input'
+                '.control-btn, .toggle-switch input, .numeric-input-group input, .spin-select-group select, .str-input-group input, .slice-input-group input, .hex-swatch-btn, .hex-code-input'
             );
             controls.forEach(el => {
                 el.disabled = !isOnline;
@@ -724,7 +972,6 @@
 
             const currentValues = normalizeCurrentValues(currentValuesRaw);
 
-            // --- обновление показаний (readings) ---
             const readingsSection = card.querySelector('.readings-section');
             if (readingsSection && config.reading_commands) {
                 const readingItems = readingsSection.querySelectorAll('.reading-item');
@@ -739,8 +986,23 @@
                     if (!valueElement) return;
 
                     const displayValue = getDisplayValue(reading, currentValues);
-                    const newValue = String(displayValue);
 
+                    if (displayValue && typeof displayValue === 'object' && displayValue.__hex) {
+                        const hex = displayValue.__hex;
+                        const textColor = getContrastText(hex);
+                        const newValue = `#${hex}`;
+                        if (valueElement.textContent.trim() !== newValue) {
+                            valueElement.innerHTML = `<span class="hex-reading"
+                                style="background:#${hex}; color:${textColor}; border-color:#${hex};">
+                                #${hex}
+                            </span>`;
+                            item.classList.add('updating');
+                            setTimeout(() => item.classList.remove('updating'), 500);
+                        }
+                        return;
+                    }
+
+                    const newValue = String(displayValue);
                     if (valueElement.textContent !== newValue) {
                         valueElement.textContent = newValue;
                         item.classList.add('updating');
@@ -749,85 +1011,144 @@
                 });
             }
 
-            // --- синхронизация выпадающих списков (spinT) ---
-            applyCurrentSpinValues(card, config, currentValues);
-
-            // --- синхронизация строковых полей (strT) ---
-            applyCurrentStringValues(card, config, currentValues);
+            const srcCfg = getSendingSource(config);
+            applyCurrentSpinValues(card, srcCfg, currentValues);
+            applyCurrentSliceValues(card, srcCfg, currentValues);
+            applyCurrentHexValues(card, srcCfg, currentValues);
+            applyCurrentBoolValues(card, srcCfg, currentValues);
         }
 
-        /**
-         * Для каждого <select data-spin-name="..."> выставляет текущее значение,
-         * если в currentValues есть соответствующее поле.
-         */
-        function applyCurrentSpinValues(card, config, currentValues) {
+        function getSendingSource(config) {
+            if (config.sending_reading_commands) {
+                return config.sending_reading_commands;
+            }
+            return config.sending_commands || { binary: [], numeric: [] };
+        }
+
+        function getValueFromCurrent(currentValues, cmd) {
+            if (currentValues === null || currentValues === undefined) return null;
+
+            if (cmd.parameter_number !== undefined && cmd.parameter_number !== null) {
+                if (Array.isArray(currentValues)) {
+                    const idx = Number(cmd.parameter_number);
+                    if (idx >= 0 && idx < currentValues.length) return currentValues[idx];
+                }
+                if (typeof currentValues === 'object' && !Array.isArray(currentValues)) {
+                    const key = String(cmd.parameter_number);
+                    if (key in currentValues) return currentValues[key];
+                }
+            }
+
+            if (typeof currentValues === 'object' && !Array.isArray(currentValues)) {
+                if (cmd.system_name && cmd.system_name in currentValues) {
+                    return currentValues[cmd.system_name];
+                }
+                if (cmd.sending_name && cmd.sending_name in currentValues) {
+                    return currentValues[cmd.sending_name];
+                }
+                if (cmd.sending_name && /^set[A-Z]/.test(cmd.sending_name)) {
+                    const stripped = cmd.sending_name.slice(3).toLowerCase();
+                    if (stripped in currentValues) return currentValues[stripped];
+                }
+                if (cmd.parameter_number !== undefined && cmd.parameter_number !== null) {
+                    const pn = Number(cmd.parameter_number);
+                    if (pn >= 1) {
+                        const k = `unknown_value${pn}`;
+                        if (k in currentValues) return currentValues[k];
+                    }
+                }
+            }
+            return null;
+        }
+
+        function applyCurrentSpinValues(card, srcCfg, currentValues) {
             const selects = card.querySelectorAll('select.spin-select[data-spin-name]');
             if (!selects.length) return;
 
             selects.forEach(select => {
-                const sysName = select.dataset.spinName;
-                if (!sysName) return;
+                const rawIdx = select.dataset.spinName;
+                if (rawIdx === '' || rawIdx === undefined) return;
 
-                let rawValue;
-                if (Array.isArray(currentValues)) {
-                    const cmd = (config.sending_commands?.numeric || [])
-                        .concat(config.sending_commands?.binary || [])
-                        .find(c => c.system_name === sysName || c.sending_name === sysName);
-                    if (!cmd || cmd.parameter_number === undefined || cmd.parameter_number === null) return;
-                    if (cmd.parameter_number >= currentValues.length) return;
-                    rawValue = currentValues[cmd.parameter_number];
-                } else if (currentValues && typeof currentValues === 'object') {
-                    if (!(sysName in currentValues)) return;
-                    rawValue = currentValues[sysName];
-                } else {
-                    return;
+                let cmd;
+                try { cmd = JSON.parse(select.dataset.spinCommand); } catch (e) { cmd = null; }
+                if (!cmd) {
+                    const allCmds = (srcCfg?.numeric || []).concat(srcCfg?.binary || []);
+                    cmd = allCmds.find(c => (c.system_name || c.sending_name) === rawIdx);
                 }
+                if (!cmd) return;
 
-                if (rawValue === null || rawValue === undefined) return;
-                const key = String(rawValue);
-
+                const raw = getValueFromCurrent(currentValues, cmd);
+                if (raw === null || raw === undefined) return;
+                const key = String(raw);
                 const optionExists = Array.from(select.options).some(o => o.value === key);
-                if (optionExists && select.value !== key) {
-                    select.value = key;
+                if (optionExists && select.value !== key) select.value = key;
+            });
+        }
+
+        function applyCurrentSliceValues(card, srcCfg, currentValues) {
+            const groups = card.querySelectorAll('.slice-input-group');
+            if (!groups.length) return;
+
+            groups.forEach(group => {
+                const stateKey = group.dataset.sliceStateKey;
+                if (!stateKey) return;
+
+                const state = sliceState.get(stateKey);
+                if (!state) return;
+                if (state.timer) return;
+                if (state.userEditing) return;
+
+                let cmd;
+                try { cmd = JSON.parse(group.dataset.sliceCommand); } catch (e) { return; }
+
+                const raw = getValueFromCurrent(currentValues, cmd);
+                if (raw === null || raw === undefined) return;
+                const val = Number(raw);
+                if (!isFinite(val)) return;
+
+                state.lastSentValue = val;
+                setSliceUI(group, val);
+            });
+        }
+
+        function applyCurrentHexValues(card, srcCfg, currentValues) {
+            const hexInputs = card.querySelectorAll('.hex-code-input');
+            if (!hexInputs.length) return;
+
+            hexInputs.forEach(input => {
+                const hexId = input.dataset.hexId;
+                const state = hexPickerState.get(hexId);
+                if (!state) return;
+                if (state.timer) return;
+                if (document.activeElement === input) return;
+
+                let cmd;
+                try { cmd = JSON.parse(input.dataset.hexCommand); } catch (e) { return; }
+
+                const raw = getValueFromCurrent(currentValues, cmd);
+                if (raw === null || raw === undefined) return;
+                const hex = toHexString(raw);
+                if (!hex) return;
+
+                state.lastSentValue = hex;
+                if (input.value.replace(/^#/, '').toUpperCase() !== hex) {
+                    setHexPickerValue(hexId, hex, { skipSchedule: true });
                 }
             });
         }
 
-        /**
-         * Для каждого <input data-str-name="..."> обновляет value,
-         * если в currentValues пришло новое значение (например после опроса устройства).
-         * Не трогаем поле, если пользователь в него сейчас печатает (в фокусе).
-         */
-        function applyCurrentStringValues(card, config, currentValues) {
-            const inputs = card.querySelectorAll('input.str-input[data-str-name]');
-            if (!inputs.length) return;
+        function applyCurrentBoolValues(card, srcCfg, currentValues) {
+            const toggles = card.querySelectorAll('input.bool-input');
+            if (!toggles.length) return;
 
-            inputs.forEach(input => {
-                if (document.activeElement === input) return; // не мешаем вводу
+            toggles.forEach(toggle => {
+                let cmd;
+                try { cmd = JSON.parse(toggle.dataset.boolCommand); } catch (e) { return; }
 
-                const sysName = input.dataset.strName;
-                if (!sysName) return;
-
-                let rawValue;
-                if (Array.isArray(currentValues)) {
-                    const cmd = (config.sending_commands?.numeric || [])
-                        .concat(config.sending_commands?.binary || [])
-                        .find(c => c.system_name === sysName || c.sending_name === sysName);
-                    if (!cmd || cmd.parameter_number === undefined || cmd.parameter_number === null) return;
-                    if (cmd.parameter_number >= currentValues.length) return;
-                    rawValue = currentValues[cmd.parameter_number];
-                } else if (currentValues && typeof currentValues === 'object') {
-                    if (!(sysName in currentValues)) return;
-                    rawValue = currentValues[sysName];
-                } else {
-                    return;
-                }
-
-                if (rawValue === null || rawValue === undefined) return;
-                const strValue = String(rawValue);
-                if (input.value !== strValue) {
-                    input.value = strValue;
-                }
+                const raw = getValueFromCurrent(currentValues, cmd);
+                if (raw === null || raw === undefined) return;
+                const isOn = !!Number(raw);
+                if (toggle.checked !== isOn) toggle.checked = isOn;
             });
         }
 
@@ -848,9 +1169,15 @@
                             config = type.param_names;
                         }
                         if (!config.reading_commands) config.reading_commands = [];
-                        if (!config.sending_commands) config.sending_commands = { binary: [], numeric: [] };
-                        if (!config.sending_commands.binary) config.sending_commands.binary = [];
-                        if (!config.sending_commands.numeric) config.sending_commands.numeric = [];
+
+                        if (!config.sending_reading_commands) {
+                            if (!config.sending_commands) config.sending_commands = { binary: [], numeric: [] };
+                            if (!config.sending_commands.binary) config.sending_commands.binary = [];
+                            if (!config.sending_commands.numeric) config.sending_commands.numeric = [];
+                        } else {
+                            if (!config.sending_reading_commands.binary) config.sending_reading_commands.binary = [];
+                            if (!config.sending_reading_commands.numeric) config.sending_reading_commands.numeric = [];
+                        }
                         deviceTypesConfig[type.id] = config;
                     } catch (e) {
                         console.error('Ошибка парсинга для типа', type.id, e);
@@ -894,8 +1221,7 @@
             const startTime = Date.now();
             await loadDeviceTypes();
             await loadDevices();
-            const elapsed = Date.now() - startTime;
-            console.log(`[Dashboard] Данные загружены за ${elapsed}мс`);
+            console.log(`[Dashboard] Данные загружены за ${Date.now() - startTime}мс`);
         }
 
         function forceRefresh() {
@@ -909,7 +1235,6 @@
             if (!currentValues) return '—';
 
             let rawValue;
-
             if (Array.isArray(currentValues)) {
                 const paramNumber = readingCommand.parameter_number;
                 if (paramNumber === undefined || paramNumber === null) return '—';
@@ -919,11 +1244,15 @@
                 const sysName = readingCommand.system_name;
                 if (!sysName || !(sysName in currentValues)) return '—';
                 rawValue = currentValues[sysName];
-            } else {
-                return '—';
-            }
+            } else return '—';
 
             if (rawValue === null || rawValue === undefined || rawValue === '') return '—';
+
+            if (readingCommand.dataType === 'hexT') {
+                const hex = toHexString(rawValue);
+                if (!hex) return '—';
+                return { __hex: hex };
+            }
 
             const returningValues = readingCommand.returning_values;
             if (Array.isArray(returningValues) && returningValues.length > 0) {
@@ -933,9 +1262,7 @@
                     if (returnMap[key] && returnMap[key].description !== undefined) {
                         return returnMap[key].description;
                     }
-                    if (returnMap[key] !== undefined) {
-                        return returnMap[key];
-                    }
+                    if (returnMap[key] !== undefined) return returnMap[key];
                 }
             }
 
@@ -945,17 +1272,26 @@
         // ============ ОТПРАВКА КОМАНД ============
 
         async function sendCommand(device, command, value = null) {
+            const cmdName = command?.sending_name || command?.system_name;
+            if (!cmdName) {
+                console.error('[sendCommand] Команда без sending_name/system_name:', command);
+                if (notificationManager) {
+                    notificationManager.showToast({
+                        type: 'error',
+                        message: '❌ Внутренняя ошибка: команда без имени'
+                    });
+                }
+                return;
+            }
+
             try {
                 const actualDevice = deviceDataCache[device.id] || device;
 
-                const payload = {
-                    command: command.sending_name || command.system_name
-                };
+                const payload = { command: cmdName };
                 if (value !== null && value !== undefined) {
                     payload.value = value;
                 }
 
-                // ---- complex_data: массив строк, передаётся как есть ----
                 if (Array.isArray(command.complex_data) && command.complex_data.length > 0) {
                     payload.complex_data = command.complex_data;
                 }
@@ -974,14 +1310,14 @@
                         });
                     }
                     return await response.json();
-                } else {
-                    const error = await response.json();
-                    if (notificationManager) {
-                        notificationManager.showToast({
-                            type: 'error',
-                            message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
-                        });
-                    }
+                }
+
+                const error = await response.json().catch(() => ({}));
+                if (notificationManager) {
+                    notificationManager.showToast({
+                        type: 'error',
+                        message: `❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`
+                    });
                 }
             } catch (error) {
                 if (notificationManager) {
@@ -998,51 +1334,29 @@
             if (value !== '' && value !== null && value !== undefined) {
                 sendCommand(device, command, value);
                 inputElement.value = '';
-            } else {
-                if (notificationManager) {
-                    notificationManager.showToast({
-                        type: 'warning',
-                        message: '❌ Введите значение'
-                    });
-                }
+            } else if (notificationManager) {
+                notificationManager.showToast({ type: 'warning', message: '❌ Введите значение' });
             }
         }
 
-        /**
-         * Для spinT: читает выбранное значение (key) из <select> и шлёт его в бэкенд.
-         */
         function sendSpinValue(device, command, selectElement) {
             if (!selectElement) return;
             const value = selectElement.value;
             if (value === '' || value === null || value === undefined) {
-                if (notificationManager) {
-                    notificationManager.showToast({
-                        type: 'warning',
-                        message: '❌ Выберите значение'
-                    });
-                }
+                if (notificationManager) notificationManager.showToast({ type: 'warning', message: '❌ Выберите значение' });
                 return;
             }
             sendCommand(device, command, value);
         }
 
-        /**
-         * Для strT: берёт строку из <input type="text"> и отправляет в бэкенд как есть.
-         * Поле очищается после успешной отправки.
-         */
         function sendStringValue(device, command, inputElement) {
             if (!inputElement) return;
             const value = inputElement.value;
             if (value !== '' && value !== null && value !== undefined) {
                 sendCommand(device, command, value);
                 inputElement.value = '';
-            } else {
-                if (notificationManager) {
-                    notificationManager.showToast({
-                        type: 'warning',
-                        message: '❌ Введите значение'
-                    });
-                }
+            } else if (notificationManager) {
+                notificationManager.showToast({ type: 'warning', message: '❌ Введите значение' });
             }
         }
 
@@ -1050,26 +1364,595 @@
             sendCommand(device, command, checkbox.checked ? 1 : 0);
         }
 
-        // ============ ОБРАБОТЧИКИ ENTER ============
-
-        /**
-         * Обработчик Enter для числового поля.
-         * Отправляет значение и очищает поле (как делала кнопка).
-         */
         function handleNumericEnter(event, device, command, inputElement) {
             if (event.key !== 'Enter') return;
             event.preventDefault();
             sendNumericValue(device, command, inputElement);
         }
 
-        /**
-         * Обработчик Enter для строкового поля (strT).
-         * Отправляет значение и очищает поле (как делала кнопка).
-         */
         function handleStringEnter(event, device, command, inputElement) {
             if (event.key !== 'Enter') return;
             event.preventDefault();
             sendStringValue(device, command, inputElement);
+        }
+
+        // ============ sliceT ============
+
+        const sliceState = new Map();
+
+        function initSliceControls(root) {
+            root.querySelectorAll('.slice-input-group').forEach(group => {
+                if (group.dataset.sliceInit === '1') return;
+                group.dataset.sliceInit = '1';
+
+                const stateKey = group.dataset.sliceStateKey;
+                const range = group.querySelector('input[type="range"]');
+                const num = group.querySelector('input[type="number"]');
+                if (!stateKey || !range || !num) return;
+
+                let cmd;
+                try { cmd = JSON.parse(group.dataset.sliceCommand); } catch (e) { return; }
+
+                const min = Number(cmd.limitMin ?? 0);
+                const max = Number(cmd.limitMax ?? 100);
+                const initial = clampSlice(Number(range.value || min), min, max);
+
+                if (!sliceState.has(stateKey)) {
+                    sliceState.set(stateKey, {
+                        timer: null,
+                        lastSentValue: initial,
+                        userEditing: false,
+                        min, max
+                    });
+                } else {
+                    const st = sliceState.get(stateKey);
+                    st.min = min; st.max = max;
+                }
+
+                range.addEventListener('input', () => {
+                    const st = sliceState.get(stateKey);
+                    if (st) st.userEditing = true;
+                    const v = clampSlice(Number(range.value), min, max);
+                    num.value = v;
+                    scheduleSliceSend(stateKey, v);
+                });
+
+                range.addEventListener('change', () => {
+                    const st = sliceState.get(stateKey);
+                    if (st) st.userEditing = false;
+                });
+
+                num.addEventListener('input', () => {
+                    const st = sliceState.get(stateKey);
+                    if (st) st.userEditing = true;
+                    let v = Number(num.value);
+                    if (num.value === '' || !isFinite(v)) return;
+                    v = clampSlice(v, min, max);
+                    range.value = v;
+                    scheduleSliceSend(stateKey, v);
+                });
+
+                num.addEventListener('change', () => {
+                    const st = sliceState.get(stateKey);
+                    if (st) st.userEditing = false;
+                    let v = clampSlice(Number(num.value), min, max);
+                    if (!isFinite(v)) v = min;
+                    num.value = v;
+                    range.value = v;
+                    scheduleSliceSend(stateKey, v);
+                });
+
+                num.addEventListener('blur', () => {
+                    const st = sliceState.get(stateKey);
+                    if (st) st.userEditing = false;
+                    let v = Number(num.value);
+                    if (!isFinite(v)) v = min;
+                    v = clampSlice(v, min, max);
+                    num.value = v;
+                    range.value = v;
+                });
+            });
+        }
+
+        function clampSlice(v, min, max) {
+            if (!isFinite(v)) return min;
+            return Math.max(min, Math.min(max, Math.round(v)));
+        }
+
+        function scheduleSliceSend(stateKey, value) {
+            const state = sliceState.get(stateKey);
+            if (!state) return;
+
+            const group = getSliceGroup(stateKey);
+            if (group) {
+                if (value !== state.lastSentValue) group.classList.add('pending');
+                else group.classList.remove('pending');
+            }
+
+            if (value === state.lastSentValue) {
+                cancelSlicePending(stateKey);
+                return;
+            }
+
+            clearTimeout(state.timer);
+            state.timer = setTimeout(() => {
+                doSliceSend(stateKey, value);
+            }, AUTO_SEND_DELAY_MS);
+        }
+
+        function doSliceSend(stateKey, value) {
+            const state = sliceState.get(stateKey);
+            const group = getSliceGroup(stateKey);
+            if (!state || !group) return;
+
+            let cmd;
+            try { cmd = JSON.parse(group.dataset.sliceCommand); } catch (e) { cancelSlicePending(stateKey); return; }
+            const deviceId = group.dataset.sliceDeviceId;
+            const device = deviceDataCache[deviceId];
+            if (!device) { cancelSlicePending(stateKey); return; }
+
+            state.lastSentValue = value;
+            state.timer = null;
+            group.classList.remove('pending');
+            sendCommand(device, cmd, value);
+        }
+
+        function cancelSlicePending(stateKey) {
+            const state = sliceState.get(stateKey);
+            if (!state) return;
+            clearTimeout(state.timer);
+            state.timer = null;
+            const group = getSliceGroup(stateKey);
+            if (group) group.classList.remove('pending');
+        }
+
+        function getSliceGroup(stateKey) {
+            const groups = document.querySelectorAll('.slice-input-group');
+            for (const g of groups) {
+                if (g.dataset.sliceStateKey === stateKey) return g;
+            }
+            return null;
+        }
+
+        function setSliceUI(group, value) {
+            const range = group.querySelector('input[type="range"]');
+            const num = group.querySelector('input[type="number"]');
+            if (range) range.value = value;
+            if (num && document.activeElement !== num) num.value = value;
+        }
+
+        // ============ hexT ============
+
+        const hexPickerState = new Map();
+
+        function initHexPickers(root) {
+            root.querySelectorAll('.hex-swatch-btn').forEach(btn => {
+                if (btn.dataset.hexInit === '1') return;
+                btn.dataset.hexInit = '1';
+                btn.addEventListener('click', () => openHexWheelModal(btn.dataset.hexId));
+            });
+
+            root.querySelectorAll('.hex-code-input').forEach(input => {
+                if (input.dataset.hexInit === '1') return;
+                input.dataset.hexInit = '1';
+
+                const hexId = input.dataset.hexId;
+                const group = input.closest('.hex-inline-group');
+
+                if (!hexPickerState.has(hexId)) {
+                    const base = normalizeHexInput(input.value);
+                    hexPickerState.set(hexId, {
+                        timer: null,
+                        lastSentValue: base,
+                        groupEl: group,
+                        currentHex: base
+                    });
+                } else {
+                    const st = hexPickerState.get(hexId);
+                    st.groupEl = group;
+                }
+
+                input.addEventListener('input', () => {
+                    let raw = input.value.replace(/[^0-9a-fA-F#]/g, '').toUpperCase();
+                    if (raw.startsWith('#')) raw = raw.slice(1);
+                    raw = raw.slice(0, 6);
+                    input.value = raw;
+
+                    if (isValidHexString(raw)) {
+                        const hex = normalizeHexInput(raw);
+                        updateHexSwatchColor(hexId, hex);
+                        scheduleHexSend(hexId, hex);
+                    } else {
+                        cancelHexPending(hexId);
+                    }
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const raw = input.value;
+                        if (isValidHexString(raw)) {
+                            flushHexSend(hexId, normalizeHexInput(raw));
+                        } else if (notificationManager) {
+                            notificationManager.showToast({ type: 'warning', message: '❌ Введите корректный hex (#RRGGBB)' });
+                        }
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const st = hexPickerState.get(hexId);
+                        if (st) setHexPickerValue(hexId, st.lastSentValue, { skipSchedule: true });
+                        cancelHexPending(hexId);
+                        input.blur();
+                    }
+                });
+
+                input.addEventListener('blur', () => {
+                    const raw = input.value;
+                    if (!isValidHexString(raw)) {
+                        const st = hexPickerState.get(hexId);
+                        if (st) setHexPickerValue(hexId, st.lastSentValue, { skipSchedule: true });
+                    }
+                });
+            });
+
+            if (!window.__hexOutsideHandlerInstalled) {
+                window.__hexOutsideHandlerInstalled = true;
+                document.addEventListener('mousedown', (e) => {
+                    hexPickerState.forEach((state, hexId) => {
+                        if (!state.groupEl) return;
+                        if (!state.groupEl.contains(e.target)) {
+                            cancelHexPending(hexId);
+                        }
+                    });
+                }, true);
+            }
+        }
+
+        function setHexPickerValue(hexId, hex, opts = {}) {
+            const normalized = normalizeHexInput(hex);
+            const group = document.querySelector(`.hex-inline-group[data-hex-id="${hexId}"]`);
+            if (!group) return;
+
+            const swatch = group.querySelector('.hex-swatch-btn');
+            const input = group.querySelector('.hex-code-input');
+            const st = hexPickerState.get(hexId);
+
+            if (swatch) swatch.style.background = `#${normalized}`;
+            if (input && document.activeElement !== input) input.value = normalized;
+            if (st) st.currentHex = normalized;
+
+            if (!opts.skipSchedule) scheduleHexSend(hexId, normalized);
+        }
+
+        function updateHexSwatchColor(hexId, hex) {
+            const group = document.querySelector(`.hex-inline-group[data-hex-id="${hexId}"]`);
+            if (!group) return;
+            const swatch = group.querySelector('.hex-swatch-btn');
+            if (swatch) swatch.style.background = `#${normalizeHexInput(hex)}`;
+        }
+
+        function scheduleHexSend(hexId, hex) {
+            const state = hexPickerState.get(hexId);
+            if (!state) return;
+
+            const normalized = normalizeHexInput(hex);
+            state.currentHex = normalized;
+
+            const group = state.groupEl;
+
+            if (normalized === state.lastSentValue) {
+                cancelHexPending(hexId);
+                return;
+            }
+
+            if (group) group.classList.add('pending');
+
+            clearTimeout(state.timer);
+            state.timer = setTimeout(() => {
+                doHexSend(hexId, state.currentHex);
+            }, AUTO_SEND_DELAY_MS);
+        }
+
+        function flushHexSend(hexId, hex) {
+            const state = hexPickerState.get(hexId);
+            if (!state) return;
+            const normalized = normalizeHexInput(hex);
+            state.currentHex = normalized;
+            if (normalized === state.lastSentValue) {
+                cancelHexPending(hexId);
+                return;
+            }
+            clearTimeout(state.timer);
+            doHexSend(hexId, normalized);
+        }
+
+        function doHexSend(hexId, hex) {
+            const state = hexPickerState.get(hexId);
+            if (!state) return;
+
+            const group = document.querySelector(`.hex-inline-group[data-hex-id="${hexId}"]`);
+            const input = group ? group.querySelector('.hex-code-input') : null;
+            if (!input) { cancelHexPending(hexId); return; }
+
+            let cmd;
+            try { cmd = JSON.parse(input.dataset.hexCommand); } catch (e) {
+                cancelHexPending(hexId);
+                return;
+            }
+
+            const device = deviceDataCache[input.dataset.hexDeviceId];
+            if (!device) { cancelHexPending(hexId); return; }
+
+            const normalized = normalizeHexInput(hex);
+            const decValue = hexToDec(normalized);
+            state.lastSentValue = normalized;
+            state.currentHex = normalized;
+            state.timer = null;
+            if (group) group.classList.remove('pending');
+
+            sendCommand(device, cmd, decValue);
+        }
+
+        function cancelHexPending(hexId) {
+            const state = hexPickerState.get(hexId);
+            if (!state) return;
+            clearTimeout(state.timer);
+            state.timer = null;
+            const group = state.groupEl;
+            if (group) group.classList.remove('pending');
+        }
+
+        // ============ Круговая палитра ============
+
+        let activeWheel = null;
+
+        function openHexWheelModal(hexId) {
+            const state = hexPickerState.get(hexId);
+            const group = document.querySelector(`.hex-inline-group[data-hex-id="${hexId}"]`);
+            if (!group) return;
+
+            const input = group.querySelector('.hex-code-input');
+            if (!input || input.disabled) return;
+
+            let cmd;
+            try { cmd = JSON.parse(input.dataset.hexCommand); } catch (e) { return; }
+
+            const startHex = normalizeHexInput(input.value || state?.currentHex || '56DB96');
+            const startRgb = hexToRgb(startHex);
+            const startHsv = rgbToHsv(startRgb.r, startRgb.g, startRgb.b);
+
+            closeHexWheelModal();
+
+            const overlay = document.createElement('div');
+            overlay.className = 'hex-modal-overlay';
+            overlay.id = 'hexWheelOverlay';
+            overlay.innerHTML = `
+                <div class="hex-modal" role="dialog" aria-modal="true">
+                    <h3>🎨 ${escapeHtml(cmd.display_name || 'Выбор цвета')}</h3>
+                    <div class="hex-wheel-wrap">
+                        <canvas class="hex-wheel-canvas" width="600" height="600"></canvas>
+                        <div class="hex-wheel-cursor"></div>
+                    </div>
+                    <div class="hex-led-preview">
+                        <span class="hex-led-preview-label"></span>
+                    </div>
+                    <div class="hex-modal-hint">Цвет отправится автоматически после выбора</div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            const canvas = overlay.querySelector('.hex-wheel-canvas');
+            const ctx = canvas.getContext('2d');
+            const cursor = overlay.querySelector('.hex-wheel-cursor');
+            const preview = overlay.querySelector('.hex-led-preview');
+            const previewLabel = overlay.querySelector('.hex-led-preview-label');
+
+            activeWheel = {
+                overlay,
+                hexId,
+                h: startHsv.h,
+                s: startHsv.s,
+                v: 1,
+                canvas,
+                ctx,
+                cursor,
+                preview,
+                previewLabel,
+                timer: null,
+                userSelected: false
+            };
+
+            drawColorWheel(ctx, canvas.width);
+            positionWheelCursor();
+            updateWheelPreview();
+
+            const pickFromEvent = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX ?? (e.touches && e.touches[0].clientX)) - rect.left;
+                const y = (e.clientY ?? (e.touches && e.touches[0].clientY)) - rect.top;
+                const cx = rect.width / 2;
+                const cy = rect.height / 2;
+                const dx = x - cx;
+                const dy = y - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const radius = rect.width / 2;
+
+                if (dist > radius) return;
+
+                let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                let hue = (angle + 360) % 360;
+                hue = (360 - hue) % 360;
+
+                const sat = Math.min(1, dist / radius);
+
+                activeWheel.h = hue;
+                activeWheel.s = sat;
+                activeWheel.userSelected = true;
+                updateWheelPreview();
+                positionWheelCursor();
+            };
+
+            const scheduleAutoSend = () => {
+                if (!activeWheel || !activeWheel.userSelected) return;
+                clearTimeout(activeWheel.timer);
+                activeWheel.timer = setTimeout(() => {
+                    if (!activeWheel) return;
+                    const hex = activeWheelHex();
+                    const id = activeWheel.hexId;
+                    //closeHexWheelModal();
+                    setHexPickerValue(id, hex, { skipSchedule: true });
+                    const st = hexPickerState.get(id);
+                    if (st) {
+                        st.currentHex = normalizeHexInput(hex);
+                        if (normalizeHexInput(hex) !== st.lastSentValue) {
+                            doHexSend(id, hex);
+                        }
+                    }
+                }, AUTO_SEND_DELAY_MS);
+            };
+
+            let dragging = false;
+            canvas.addEventListener('mousedown', (e) => {
+                dragging = true;
+                if (activeWheel) { clearTimeout(activeWheel.timer); activeWheel.timer = null; }
+                pickFromEvent(e);
+                e.preventDefault();
+            });
+            window.addEventListener('mousemove', window.__hexWheelMouseMove = (e) => {
+                if (!dragging || !activeWheel) return;
+                pickFromEvent(e);
+            });
+            window.addEventListener('mouseup', window.__hexWheelMouseUp = () => {
+                if (!dragging) return;
+                dragging = false;
+                scheduleAutoSend();
+            });
+
+            canvas.addEventListener('touchstart', (e) => {
+                dragging = true;
+                if (activeWheel) { clearTimeout(activeWheel.timer); activeWheel.timer = null; }
+                pickFromEvent(e);
+                e.preventDefault();
+            }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => {
+                if (!dragging) return;
+                pickFromEvent(e);
+                e.preventDefault();
+            }, { passive: false });
+            canvas.addEventListener('touchend', () => {
+                if (!dragging) return;
+                dragging = false;
+                scheduleAutoSend();
+            });
+
+            overlay.addEventListener('mousedown', (e) => {
+                if (e.target === overlay) closeHexWheelModal();
+            });
+
+            document.addEventListener('keydown', hexWheelEscHandler);
+        }
+
+        function hexWheelEscHandler(e) {
+            if (e.key === 'Escape') closeHexWheelModal();
+        }
+
+        function closeHexWheelModal() {
+            if (window.__hexWheelMouseMove) {
+                window.removeEventListener('mousemove', window.__hexWheelMouseMove);
+                window.__hexWheelMouseMove = null;
+            }
+            if (window.__hexWheelMouseUp) {
+                window.removeEventListener('mouseup', window.__hexWheelMouseUp);
+                window.__hexWheelMouseUp = null;
+            }
+            document.removeEventListener('keydown', hexWheelEscHandler);
+
+            if (activeWheel && activeWheel.timer) {
+                clearTimeout(activeWheel.timer);
+                activeWheel.timer = null;
+            }
+
+            const overlay = document.getElementById('hexWheelOverlay');
+            if (overlay) overlay.remove();
+            activeWheel = null;
+        }
+
+        function activeWheelHex() {
+            if (!activeWheel) return '000000';
+            const { h, s, v } = activeWheel;
+            const { r, g, b } = hsvToRgb(h, s, v);
+            return rgbToHex(r, g, b);
+        }
+
+        function updateWheelPreview() {
+            if (!activeWheel) return;
+            const hex = activeWheelHex();
+            const ledHex = applyLedCorrection(hex);
+            const textColor = getContrastText(ledHex);
+            activeWheel.preview.style.background = `#${ledHex}`;
+            activeWheel.previewLabel.style.color = textColor;
+            activeWheel.previewLabel.style.background = 'rgba(255,255,255,0.15)';
+            activeWheel.previewLabel.textContent = `#${hex}`;
+        }
+
+        function positionWheelCursor() {
+            if (!activeWheel) return;
+            const rect = activeWheel.canvas.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const radius = rect.width / 2;
+
+            const angleRad = (360 - activeWheel.h) * Math.PI / 180;
+            const dist = activeWheel.s * radius;
+            const x = cx + Math.cos(angleRad) * dist;
+            const y = cy + Math.sin(angleRad) * dist;
+
+            activeWheel.cursor.style.left = `${x}px`;
+            activeWheel.cursor.style.top = `${y}px`;
+        }
+
+        function drawColorWheel(ctx, size) {
+            const cx = size / 2;
+            const cy = size / 2;
+            const radius = size / 2;
+
+            ctx.clearRect(0, 0, size, size);
+
+            const img = ctx.createImageData(size, size);
+            const data = img.data;
+
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const dx = x - cx;
+                    const dy = y - cy;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const idx = (y * size + x) * 4;
+
+                    if (dist > radius) {
+                        data[idx + 3] = 0;
+                        continue;
+                    }
+
+                    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                    let hue = (angle + 360) % 360;
+                    hue = (360 - hue) % 360;
+
+                    const sat = Math.min(1, dist / radius);
+                    const { r, g, b } = hsvToRgb(hue, sat, 1);
+
+                    let alpha = 255;
+                    if (dist > radius - 1.5) {
+                        alpha = Math.max(0, Math.round(255 * (radius - dist) / 1.5));
+                    }
+
+                    data[idx] = r;
+                    data[idx + 1] = g;
+                    data[idx + 2] = b;
+                    data[idx + 3] = alpha;
+                }
+            }
+
+            ctx.putImageData(img, 0, 0);
         }
 
         // ============ ОТОБРАЖЕНИЕ ============
@@ -1100,33 +1983,60 @@
             let html = '';
 
             for (const [roomName, devices] of Object.entries(rooms)) {
-                html += `
-                    <div class="room-section">
-                        <div class="room-header">
-                            <span class="room-icon">🏠</span>
-                            <h2>${escapeHtml(roomName)}</h2>
-                            <span class="devices-count">${devices.length} устройств</span>
-                        </div>
-                        <div class="devices-grid">
-                `;
+            // Сортировка внутри комнаты:
+            //   0 — активные (online + is_controlled)
+            //   1 — заблокированные (is_controlled === false), независимо от online
+            //   2 — офлайн (is_online === false), но управляемые
+            // Внутри группы — по имени (стабильно и предсказуемо).
+            const sortedDevices = [...devices].sort((a, b) => {
+                const prio = (d) => {
+                    const online = d.is_online !== undefined ? d.is_online : true;
+                    const controlled = d.is_controlled !== undefined ? d.is_controlled : true;
+                    if (!controlled) return 1;   // заблокированные — всегда выше офлайн
+                    if (!online) return 2;       // офлайн
+                    return 0;                    // активные
+                };
+                const pa = prio(a), pb = prio(b);
+                if (pa !== pb) return pa - pb;
+                return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+            });
 
-                for (const device of devices) {
+            html += `
+                <div class="room-section">
+                    <div class="room-header">
+                        <span class="room-icon">🏠</span>
+                        <h2>${escapeHtml(roomName)}</h2>
+                        <span class="devices-count">${sortedDevices.length} устройств</span>
+                    </div>
+                    <div class="devices-grid">
+            `;
+
+                for (const device of sortedDevices) {
                     const isOnline = device.is_online !== undefined ? device.is_online : true;
+                    const isControlled = device.is_controlled !== undefined ? device.is_controlled : true;
+                    const isLocked = !isControlled;
+
                     const config = deviceTypesConfig[device.type_id] || {
                         reading_commands: [],
                         sending_commands: { binary: [], numeric: [] }
                     };
 
                     const hasReadings = config.reading_commands && config.reading_commands.length > 0;
-                    const hasBinary = config.sending_commands?.binary?.length > 0;
-                    const hasNumeric = config.sending_commands?.numeric?.length > 0;
+                    const srcCfg = getSendingSource(config);
+                    const hasBinary = srcCfg?.binary?.length > 0;
+                    const hasNumeric = srcCfg?.numeric?.length > 0;
+
+                    const cardClasses = ['device-card'];
+                    if (!isOnline) cardClasses.push('offline');
+                    if (isLocked) cardClasses.push('locked');
 
                     html += `
-                        <div class="device-card ${isOnline ? '' : 'offline'}" data-device-id="${device.id}">
+                        <div class="${cardClasses.join(' ')}" data-device-id="${device.id}" data-is-controlled="${isControlled}">
                             <div class="device-header">
                                 <span class="device-name">
                                     ${escapeHtml(device.name)}
                                     ${!isOnline ? '<span class="offline-badge">OFFLINE</span>' : ''}
+                                    ${isLocked ? '<span class="locked-badge">ЗАБЛОКИРОВАНО</span>' : ''}
                                 </span>
                                 <span class="device-type">${escapeHtml(device.type_name || 'Unknown')}</span>
                             </div>
@@ -1157,26 +2067,48 @@
                         for (const reading of config.reading_commands) {
                             const displayValue = getDisplayValue(reading, device.current_values);
                             const sysName = reading.system_name || '';
+
+                            let valueHtml;
+                            if (displayValue && typeof displayValue === 'object' && displayValue.__hex) {
+                                const hex = displayValue.__hex;
+                                const textColor = getContrastText(hex);
+                                valueHtml = `<span class="hex-reading"
+                                                   style="background:#${hex}; color:${textColor}; border-color:#${hex};">
+                                                   #${hex}
+                                             </span>`;
+                            } else {
+                                valueHtml = escapeHtml(String(displayValue));
+                            }
+
                             html += `
                                 <div class="reading-item" data-system-name="${escapeHtml(sysName)}">
                                     <span class="reading-name">${escapeHtml(reading.display_name || sysName)}:</span>
-                                    <span class="reading-value">${escapeHtml(String(displayValue))}</span>
+                                    <span class="reading-value">${valueHtml}</span>
                                 </div>
                             `;
                         }
                         html += `</div>`;
                     }
 
-                    if (hasBinary || hasNumeric) {
+                    // ====== КОНТРОЛЫ ======
+                    if (isLocked) {
+                        // Устройство заблокировано — контролы НЕ рендерим,
+                        // показываем плашку
+                        html += `
+                            <div class="locked-notice">
+                                <span class="locked-icon">🔒</span>
+                                <span class="locked-text">Устройство заблокировано.<br>Управление недоступно.</span>
+                            </div>
+                        `;
+                    } else if (hasBinary || hasNumeric) {
                         html += `
                             <div class="controls-section">
                                 <div class="controls-title">🎮 Управление</div>
                                 <div class="device-controls">
                         `;
 
-                        // ----- binary: обычные кнопки -----
                         if (hasBinary) {
-                            for (const cmd of config.sending_commands.binary) {
+                            for (const cmd of srcCfg.binary) {
                                 const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
                                 const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
                                 html += `
@@ -1187,19 +2119,27 @@
                             }
                         }
 
-                        // ----- numeric: boolT (тумблер), spinT (селект), strT (строка), число -----
                         if (hasNumeric) {
-                            for (const cmd of config.sending_commands.numeric) {
+                            for (const cmd of srcCfg.numeric) {
                                 const deviceJson = JSON.stringify(device).replace(/"/g, '&quot;');
                                 const cmdJson = JSON.stringify(cmd).replace(/"/g, '&quot;');
+                                const cmdForAttr = JSON.stringify(cmd).replace(/'/g, "&#39;");
                                 const inputId = `input_${device.id}_${Date.now()}_${Math.random()}`
                                     .replace(/[^a-zA-Z0-9_]/g, '_');
 
+                                const curVal = getValueFromCurrent(device.current_values, cmd);
+
                                 if (cmd.dataType === 'boolT') {
+                                    const isOn = curVal !== null && curVal !== undefined && !!Number(curVal);
                                     html += `
                                         <div style="display: flex; align-items: center; gap: 8px;">
                                             <label class="toggle-switch">
-                                                <input type="checkbox" onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})' ${!isOnline ? 'disabled' : ''}>
+                                                <input type="checkbox"
+                                                       class="bool-input"
+                                                       data-bool-command='${cmdForAttr}'
+                                                       onchange='onToggleChange(this, ${deviceJson}, ${cmdJson})'
+                                                       ${isOn ? 'checked' : ''}
+                                                       ${!isOnline ? 'disabled' : ''}>
                                                 <span class="toggle-slider"></span>
                                             </label>
                                             <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}</span>
@@ -1207,45 +2147,117 @@
                                     `;
                                 } else if (cmd.dataType === 'spinT') {
                                     const spinOptions = parseSpinValues(cmd.values);
-                                    const sysName = cmd.system_name || cmd.sending_name || '';
                                     let optionsHtml = '';
                                     spinOptions.forEach(opt => {
+                                        const sel = (curVal !== null && curVal !== undefined && String(curVal) === opt.key) ? 'selected' : '';
                                         optionsHtml += `
-                                            <option value="${escapeHtml(opt.key)}">${escapeHtml(opt.description)}</option>
+                                            <option value="${escapeHtml(opt.key)}" ${sel}>${escapeHtml(opt.description)}</option>
                                         `;
                                     });
+                                    const spinName = (cmd.system_name || cmd.sending_name || '');
                                     html += `
                                         <div class="spin-select-group">
                                             <span style="font-size: 13px;">${escapeHtml(cmd.display_name)}:</span>
                                             <select class="spin-select"
-                                                    data-spin-name="${escapeHtml(sysName)}"
+                                                    data-spin-name="${escapeHtml(spinName)}"
+                                                    data-spin-command='${cmdForAttr}'
                                                     onchange='sendSpinValue(${deviceJson}, ${cmdJson}, this)'
                                                     ${!isOnline ? 'disabled' : ''}>
                                                 ${optionsHtml}
                                             </select>
                                         </div>
                                     `;
+                                } else if (cmd.dataType === 'sliceT') {
+                                    const min = Number(cmd.limitMin ?? 0);
+                                    const max = Number(cmd.limitMax ?? 100);
+
+                                    let initial = min;
+                                    if (curVal !== null && curVal !== undefined) {
+                                        const n = Number(curVal);
+                                        if (isFinite(n)) initial = Math.max(min, Math.min(max, n));
+                                    }
+
+                                    const stateKey = `${device.id}_${cmd.sending_name || cmd.system_name || inputId}`;
+
+                                    html += `
+                                        <div class="slice-input-group"
+                                             data-slice-device-id="${device.id}"
+                                             data-slice-state-key="${escapeHtml(stateKey)}"
+                                             data-slice-command='${cmdForAttr}'>
+                                            <span class="slice-label">${escapeHtml(cmd.display_name)}</span>
+                                            <input type="range"
+                                                   min="${min}" max="${max}" step="1"
+                                                   value="${initial}"
+                                                   ${!isOnline ? 'disabled' : ''}>
+                                            <input type="number"
+                                                   min="${min}" max="${max}" step="1"
+                                                   value="${initial}"
+                                                   ${!isOnline ? 'disabled' : ''}>
+                                        </div>
+                                    `;
+                                } else if (cmd.dataType === 'hexT') {
+                                    let initialHex = '56DB96';
+                                    if (Array.isArray(cmd.complex_data)) {
+                                        for (const item of cmd.complex_data) {
+                                            if (item && item.color && item.color.defaultValue) {
+                                                initialHex = String(item.color.defaultValue).replace(/^#/, '').toUpperCase();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    initialHex = normalizeHexInput(initialHex);
+
+                                    if (curVal !== null && curVal !== undefined) {
+                                        const h = toHexString(curVal);
+                                        if (h) initialHex = h;
+                                    }
+
+                                    const hexId = `hex_${device.id}_${cmd.sending_name || inputId}`.replace(/[^a-zA-Z0-9_]/g, '_');
+
+                                    html += `
+                                        <div class="hex-inline-group" data-hex-id="${hexId}">
+                                            <button type="button"
+                                                    class="hex-swatch-btn"
+                                                    data-hex-id="${hexId}"
+                                                    style="background:#${initialHex};"
+                                                    title="Открыть палитру"
+                                                    ${!isOnline ? 'disabled' : ''}></button>
+                                            <span class="hex-label">${escapeHtml(cmd.display_name)}</span>
+                                            <input type="text"
+                                                   class="hex-code-input"
+                                                   data-hex-id="${hexId}"
+                                                   data-hex-device-id="${device.id}"
+                                                   data-hex-command='${cmdForAttr}'
+                                                   value="${initialHex}"
+                                                   maxlength="7"
+                                                   spellcheck="false"
+                                                   autocomplete="off"
+                                                   ${!isOnline ? 'disabled' : ''}>
+                                        </div>
+                                    `;
                                 } else if (cmd.dataType === 'strT') {
-                                    const sysName = cmd.system_name || cmd.sending_name || '';
+                                    const strVal = (curVal !== null && curVal !== undefined) ? String(curVal) : '';
                                     html += `
                                         <div class="str-input-group">
                                             <input type="text"
                                                    id="${inputId}"
                                                    class="str-input"
-                                                   data-str-name="${escapeHtml(sysName)}"
+                                                   data-str-name="${escapeHtml(cmd.system_name || cmd.sending_name || '')}"
                                                    placeholder="${escapeHtml(cmd.display_name)}"
+                                                   value="${escapeHtml(strVal)}"
                                                    onkeydown='handleStringEnter(event, ${deviceJson}, ${cmdJson}, this)'
                                                    ${!isOnline ? 'disabled' : ''}>
                                         </div>
                                     `;
                                 } else {
-                                    // обычное числовое поле — отправка по Enter, без кнопки
+                                    const numVal = (curVal !== null && curVal !== undefined) ? String(curVal) : '';
                                     html += `
                                         <div class="numeric-input-group">
                                             <input type="number"
                                                    id="${inputId}"
                                                    placeholder="${escapeHtml(cmd.display_name)}"
                                                    step="any"
+                                                   value="${escapeHtml(numVal)}"
                                                    onkeydown='handleNumericEnter(event, ${deviceJson}, ${cmdJson}, this)'
                                                    ${!isOnline ? 'disabled' : ''}>
                                         </div>
@@ -1263,6 +2275,9 @@
             }
 
             container.innerHTML = html;
+
+            initSliceControls(container);
+            initHexPickers(container);
         }
 
         // ============ ИНИЦИАЛИЗАЦИЯ ============

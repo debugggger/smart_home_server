@@ -117,7 +117,6 @@ class AppKafkaHandler:
 
                 if self.app_api_device_value_update_callback:
                     self.app_api_device_value_update_callback(device_id, current_values_json)
-
                 print(f"[App Kafka] Device table updated successfully")
 
         except Exception as e:
@@ -126,14 +125,15 @@ class AppKafkaHandler:
     def _build_current_values_json(self, device_id, values):
         """
         Формирует словарь вида {system_name: value, ...} на основе:
-          - device.type_id -> device_types.param_name (JSON с reading_commands)
-          - parameter_number из reading_commands сопоставляется с индексом в values
+          - device.type_id -> device_types.param_name
+          - reading_commands:            parameter_number -> system_name
+          - sending_reading_commands:    parameter_number -> system_name
+            (numeric + binary; по этим ключам обновляется UI)
         Если для индекса нет соответствующего parameter_number/system_name,
         используется ключ unknown_value{N}.
         """
         device = self.db.get_device_by_id(device_id)
         if not device:
-            # fallback — без маппинга
             return {f"unknown_value{i + 1}": v for i, v in enumerate(values)}
 
         device_type = self.db.get_device_type_by_id(device.type_id)
@@ -149,18 +149,35 @@ class AppKafkaHandler:
             except (TypeError, ValueError) as e:
                 print(f"[App Kafka] Failed to parse param_names for type {device_type.id}: {e}")
                 param_config = {}
+        if not isinstance(param_config, dict):
+            param_config = {}
 
         # Строим маппинг parameter_number -> system_name
         number_to_system_name = {}
-        reading_commands = param_config.get('reading_commands', []) or []
-        for cmd in reading_commands:
+
+        # 1) reading_commands
+        for cmd in param_config.get('reading_commands') or []:
             if not isinstance(cmd, dict):
                 continue
             num = cmd.get('parameter_number')
             sys_name = cmd.get('system_name')
             if num is None or sys_name is None:
                 continue
-            number_to_system_name[num] = sys_name
+            number_to_system_name[int(num)] = str(sys_name)
+
+        # 2) sending_reading_commands (numeric + binary)
+        src = param_config.get('sending_reading_commands') or {}
+        if isinstance(src, dict):
+            for group in ('numeric', 'binary'):
+                for cmd in src.get(group) or []:
+                    if not isinstance(cmd, dict):
+                        continue
+                    num = cmd.get('parameter_number')
+                    sys_name = cmd.get('system_name')
+                    if num is None or sys_name is None:
+                        continue
+                    # reading_commands имеет приоритет, если уже задан
+                    number_to_system_name.setdefault(int(num), str(sys_name))
 
         result = {}
         unknown_counter = 0
@@ -171,8 +188,7 @@ class AppKafkaHandler:
                 unknown_counter += 1
                 system_name = f"unknown_value{unknown_counter}"
 
-            # если system_name вдруг повторяется — не перезаписываем, добавляем unknown
-            # (на случай дубликатов в reading_commands)
+            # если system_name вдруг повторяется — не перезаписываем
             if system_name in result:
                 unknown_counter += 1
                 system_name = f"unknown_value{unknown_counter}"
